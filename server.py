@@ -490,12 +490,15 @@ class Handler(SimpleHTTPRequestHandler):
         state = db.load_db()
         name = payload.get("name")
         item_id = payload.get("itemId")
+        if name not in ("grocery", "reminders"):
+            return send_json(self, {"error": "Invalid list"}, 400)
         items = state.setdefault("lists", {}).setdefault(name, [])
-        for item in items:
+        for i, item in enumerate(items):
             if item.get("id") == item_id:
-                item["done"] = not bool(item.get("done"))
+                # Checking off clears the item (grocery/reminder complete)
+                items.pop(i)
                 db.save_db(state)
-                return send_json(self, {"item": item, "state": db.public_state(state)})
+                return send_json(self, {"removed": True, "itemId": item_id, "state": db.public_state(state)})
         send_json(self, {"error": "Item not found"}, 404)
 
     def whiteboard_save(self, payload: dict):

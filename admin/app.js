@@ -541,13 +541,17 @@
         </form>
         <div class="list">
           ${(d.lists?.[name] || [])
+            .filter((item) => !item.done)
             .map(
               (item) => `
             <button class="item" data-list-toggle="${name}" data-id="${item.id}" style="text-align:left;width:100%;cursor:pointer">
-              <div class="title">${item.done ? "✅" : "⬜️"} ${item.text}</div>
+              <div class="row">
+                <div class="title">⬜️ ${item.text}</div>
+                <span class="muted" style="flex-shrink:0">Tap to clear</span>
+              </div>
             </button>`
             )
-            .join("")}
+            .join("") || `<p class="muted">No items — add above</p>`}
         </div>
       </section>`;
     return block("grocery", "Groceries") + block("reminders", "Reminders");
@@ -1032,8 +1036,13 @@
 
     $$("[data-list-toggle]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        await AdminAPI.toggleListItem(state.token, btn.dataset.listToggle, btn.dataset.id);
-        await refresh();
+        try {
+          await AdminAPI.toggleListItem(state.token, btn.dataset.listToggle, btn.dataset.id);
+          toast("Cleared");
+          await refresh();
+        } catch (err) {
+          toast(apiErrorMessage(err));
+        }
       });
     });
 
