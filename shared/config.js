@@ -6,6 +6,9 @@ window.FAMILY_CONFIG = {
   display: {
     width: 1080,
     height: 1920,
+    /* Pi kiosk desktop rotation: left | right | normal | inverted
+       (also set in scripts/pi/kiosk.env as FAMILY_BOARD_ROTATE) */
+    rotate: "left",
   },
 
   /* Open-Meteo + NWS alerts use lat/lon. Update for your home. */

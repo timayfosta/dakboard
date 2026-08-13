@@ -153,6 +153,59 @@ body.night-mode {
   cursor: none;
 }
 
+.list-undo-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 10100;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  max-width: min(94vw, 520px);
+  padding: 0.65rem 0.75rem 0.65rem 1rem;
+  background: rgba(20, 20, 20, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.list-undo-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.list-undo-msg {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 0.88rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-undo-btn {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 10px;
+  padding: 0.45rem 0.75rem;
+  background: var(--coral);
+  color: #000;
+  font-weight: 800;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+body.kiosk .list-undo-toast {
+  bottom: 1rem;
+}
+
 .screensaver-layer {
   position: fixed;
   inset: 0;

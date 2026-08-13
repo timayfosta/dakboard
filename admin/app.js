@@ -1052,19 +1052,38 @@
         e.preventDefault();
         const name = form.dataset.listAdd;
         const text = new FormData(form).get("text");
-        await AdminAPI.addListItem(name, text);
-        form.reset();
-        toast("Item added");
-        await refresh();
+        try {
+          const res = await AdminAPI.addListItem(name, text);
+          form.reset();
+          await refresh();
+          if (res.item && window.ListUndo) {
+            ListUndo.offer(`Added "${text}"`, async () => {
+              await AdminAPI.toggleListItem(state.token, name, res.item.id);
+              await refresh();
+            });
+          } else {
+            toast("Item added");
+          }
+        } catch (err) {
+          toast(apiErrorMessage(err));
+        }
       });
     });
 
     $$("[data-list-toggle]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         try {
-          await AdminAPI.toggleListItem(state.token, btn.dataset.listToggle, btn.dataset.id);
-          toast("Cleared");
+          const name = btn.dataset.listToggle;
+          const res = await AdminAPI.toggleListItem(state.token, name, btn.dataset.id);
           await refresh();
+          if (res.item && window.ListUndo) {
+            ListUndo.offer(`Removed "${res.item.text}"`, async () => {
+              await AdminAPI.restoreListItem(name, res.item, res.index);
+              await refresh();
+            });
+          } else {
+            toast("Cleared");
+          }
         } catch (err) {
           toast(apiErrorMessage(err));
         }

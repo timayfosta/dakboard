@@ -1,14 +1,26 @@
 #!/usr/bin/env bash
-# Chromium kiosk for Family Board — API is started by systemd (family-board-api.service)
+# Chromium kiosk for Family Board — fullscreen app window + portrait rotation
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+
+# Optional overrides: scripts/pi/kiosk.env
+if [[ -f "$ROOT/scripts/pi/kiosk.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT/scripts/pi/kiosk.env"
+fi
+
 URL="${FAMILY_BOARD_URL:-http://127.0.0.1:8765/screens/calendar.html?kiosk=1}"
 PORT="${FAMILY_BOARD_PORT:-8765}"
 HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
 SKIP_SERVER="${FAMILY_BOARD_SKIP_SERVER:-1}"
+PROFILE_DIR="${FAMILY_BOARD_CHROMIUM_PROFILE:-$HOME/.config/family-board-kiosk}"
+ROTATE="${FAMILY_BOARD_ROTATE:-left}"
 
-cd "$ROOT"
+export DISPLAY="${DISPLAY:-:0}"
+export XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
+export FAMILY_BOARD_ROTATE="${ROTATE}"
 
 BROWSER=""
 for candidate in chromium chromium-browser google-chrome; do
@@ -60,24 +72,39 @@ else
   start_local_server
 fi
 
-export DISPLAY="${DISPLAY:-:0}"
+# Portrait desktop for vertical TV
+if [[ -x "$ROOT/scripts/pi/rotate-display.sh" ]]; then
+  bash "$ROOT/scripts/pi/rotate-display.sh" || true
+fi
+
+# Disable screen blanking / power-save
 xset s off >/dev/null 2>&1 || true
 xset -dpms >/dev/null 2>&1 || true
 xset s noblank >/dev/null 2>&1 || true
 
+mkdir -p "$PROFILE_DIR"
+
+# Fullscreen app-style Chromium (no browser chrome)
 exec "$BROWSER" \
-  --kiosk \
+  --user-data-dir="$PROFILE_DIR" \
+  --class=FamilyBoardKiosk \
   --app="$URL" \
+  --kiosk \
+  --start-fullscreen \
+  --window-position=0,0 \
   --noerrdialogs \
   --disable-infobars \
   --disable-session-crashed-bubble \
   --disable-restore-session-state \
+  --disable-features=TranslateUI,InfiniteSessionRestore,PasswordManagerOnboarding \
   --check-for-update-interval=31536000 \
   --autoplay-policy=no-user-gesture-required \
   --disable-translate \
-  --disable-features=TranslateUI \
   --no-first-run \
+  --no-default-browser-check \
+  --password-store=basic \
   --fast \
   --fast-start \
   --disable-pinch \
-  --overscroll-history-navigation=0
+  --overscroll-history-navigation=0 \
+  --force-device-scale-factor=1

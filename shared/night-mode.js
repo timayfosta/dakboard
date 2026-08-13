@@ -79,6 +79,15 @@
     scheduleBoundaryCheck();
   }
 
+  function isDisplayPage() {
+    return (
+      document.body.classList.contains("tv-stage") ||
+      document.body.classList.contains("wb-page") ||
+      document.body.classList.contains("kiosk") ||
+      new URLSearchParams(location.search).has("kiosk")
+    );
+  }
+
   async function refreshSettings() {
     if (!window.FamilyAPI?.getState) return;
     try {
@@ -90,7 +99,7 @@
   }
 
   function init() {
-    if (!document.body.classList.contains("tv-stage") && !document.body.classList.contains("wb-page")) {
+    if (!isDisplayPage()) {
       return;
     }
     ensureLayer();
@@ -98,8 +107,12 @@
     scheduleBoundaryCheck();
     refreshSettings();
     setInterval(apply, 15000);
+    setInterval(refreshSettings, 30000);
     document.addEventListener("family-settings-update", (e) => {
       applySettings(e.detail?.nightMode);
+    });
+    document.addEventListener("family-state-update", (e) => {
+      applySettings(e.detail?.settings?.nightMode);
     });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") apply();

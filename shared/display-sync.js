@@ -22,8 +22,17 @@
     }
   }
 
+  function isDisplayPage() {
+    return (
+      document.body.classList.contains("tv-stage") ||
+      document.body.classList.contains("wb-page") ||
+      document.body.classList.contains("kiosk") ||
+      new URLSearchParams(location.search).has("kiosk")
+    );
+  }
+
   function init() {
-    if (!document.body.classList.contains("tv-stage") && !document.body.classList.contains("wb-page")) {
+    if (!isDisplayPage()) {
       return;
     }
     sync();

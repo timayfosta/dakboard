@@ -29,6 +29,8 @@ const API = {
     API.request("/api/family/lists/add", { method: "POST", body: { name, text } }),
   toggleListItem: (token, name, itemId) =>
     API.request("/api/family/lists/toggle", { method: "POST", token, body: { name, itemId } }),
+  restoreListItem: (name, item, index) =>
+    API.request("/api/family/lists/restore", { method: "POST", body: { name, item, index } }),
   deleteKid: (token, id) => API.request(`/api/family/kids/${id}`, { method: "DELETE", token }),
   deleteChore: (token, id) => API.request(`/api/family/chores/${id}`, { method: "DELETE", token }),
   deleteReward: (token, id) => API.request(`/api/family/rewards/${id}`, { method: "DELETE", token }),

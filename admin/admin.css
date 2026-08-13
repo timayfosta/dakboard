@@ -503,6 +503,11 @@ button, input, select, textarea {
   transform: translateX(-50%) translateY(0);
 }
 
+.list-undo-toast {
+  bottom: calc(var(--nav-h) + var(--safe-bottom) + 12px);
+  z-index: 35;
+}
+
 .install-banner {
   background: var(--install-grad);
   border: 1px solid var(--line);

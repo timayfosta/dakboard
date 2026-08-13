@@ -4,11 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Family Board — Home</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
   <script src="../shared/config.js"></script>
   <script src="../shared/display-init.js"></script>
+  <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="../shared/base.css" />
   <link rel="stylesheet" href="../shared/touch-input.css" />
   <style>
@@ -632,7 +630,7 @@
       padding: 0.34rem 0.08rem;
       border: none;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      cursor: default;
+      cursor: pointer;
       font-weight: 700;
       font-size: 0.78rem;
       flex-shrink: 0;
@@ -765,7 +763,7 @@
                 <span class="list-source" id="grocerySource">Sync</span>
               </div>
               <div class="list-scroll">
-                <ul class="checklist" id="groceryList"></ul>
+                <ul class="checklist" id="groceryList" data-list="grocery"></ul>
                 <button type="button" class="list-add-btn" data-open-list="grocery">+ Add grocery</button>
               </div>
             </section>
@@ -775,7 +773,7 @@
                 <span class="list-source" id="reminderSource">Sync</span>
               </div>
               <div class="list-scroll">
-                <ul class="checklist" id="reminderList"></ul>
+                <ul class="checklist" id="reminderList" data-list="reminders"></ul>
                 <button type="button" class="list-add-btn" data-open-list="reminders">+ Add reminder</button>
               </div>
             </section>
@@ -790,6 +788,7 @@
   <script src="../shared/calendar-colors.js"></script>
   <script src="../shared/calendar.js"></script>
   <script src="../shared/family-api.js"></script>
+  <script src="../shared/list-undo.js"></script>
   <script src="../shared/display-sync.js"></script>
   <script src="../shared/live-reload.js"></script>
   <script src="../shared/night-mode.js"></script>
@@ -1090,6 +1089,44 @@
       return (items || []).filter((item) => !item.done);
     }
 
+    function syncListStateFromApi(state) {
+      listState.grocery.items = state.lists?.grocery || [];
+      listState.reminders.items = state.lists?.reminders || [];
+      listsFp = JSON.stringify({
+        grocery: listState.grocery.items,
+        reminders: listState.reminders.items,
+      });
+      renderChecklist("grocery");
+      renderChecklist("reminders");
+    }
+
+    async function clearListItem(kind, itemId) {
+      const res = await FamilyAPI.toggleListItem(kind, itemId);
+      syncListStateFromApi(res.state);
+      if (res.item && window.ListUndo) {
+        ListUndo.offer(`Removed "${res.item.text}"`, async () => {
+          const undo = await FamilyAPI.restoreListItem(kind, res.item, res.index);
+          syncListStateFromApi(undo.state);
+        });
+      }
+    }
+
+    function wireChecklists() {
+      document.querySelectorAll(".checklist[data-list]").forEach((ul) => {
+        if (ul.dataset.bound === "1") return;
+        ul.dataset.bound = "1";
+        ul.addEventListener("click", async (e) => {
+          const li = e.target.closest("li[data-id]");
+          if (!li) return;
+          try {
+            await clearListItem(ul.dataset.list, li.dataset.id);
+          } catch (err) {
+            console.warn("Failed to clear list item", err);
+          }
+        });
+      });
+    }
+
     function renderChecklist(kind) {
       const listId = kind === "grocery" ? "groceryList" : "reminderList";
       const state = listState[kind];
@@ -1122,6 +1159,7 @@
           </li>`
         )
         .join("");
+      wireChecklists();
     }
 
     function wireListAddButtons() {
@@ -1135,14 +1173,13 @@
             onSubmit: async (text) => {
               try {
                 const res = await FamilyAPI.addListItem(kind, text);
-                listState.grocery.items = res.state.lists.grocery || [];
-                listState.reminders.items = res.state.lists.reminders || [];
-                listsFp = JSON.stringify({
-                  grocery: listState.grocery.items,
-                  reminders: listState.reminders.items,
-                });
-                renderChecklist("grocery");
-                renderChecklist("reminders");
+                syncListStateFromApi(res.state);
+                if (res.item && window.ListUndo) {
+                  ListUndo.offer(`Added "${text}"`, async () => {
+                    const undo = await FamilyAPI.toggleListItem(kind, res.item.id);
+                    syncListStateFromApi(undo.state);
+                  });
+                }
               } catch (err) {
                 console.warn("Failed to add list item", err);
               }
@@ -1191,6 +1228,7 @@
     }
 
     wireListAddButtons();
+    wireChecklists();
 
     updateClock();
     loadWeather();

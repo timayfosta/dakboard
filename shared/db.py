@@ -146,7 +146,29 @@ def load_db() -> dict[str, Any]:
             state = default_state()
             DATA_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
             return deepcopy(state)
-        return json.loads(DATA_PATH.read_text(encoding="utf-8"))
+        try:
+            raw = DATA_PATH.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            if not isinstance(data, dict):
+                raise ValueError("family.json root must be an object")
+            return data
+        except (json.JSONDecodeError, ValueError, OSError) as exc:
+            # Keep a backup and reseeds so the server can still boot on Pi
+            backup = DATA_PATH.with_suffix(f".bad-{int(time.time())}.json")
+            try:
+                DATA_PATH.replace(backup)
+            except OSError:
+                backup = None
+            state = default_state()
+            DATA_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            print(
+                f"[db] WARNING: could not read {DATA_PATH} ({exc}). "
+                f"Re-seeded defaults"
+                + (f"; backup at {backup}" if backup else "")
+                + ".",
+                flush=True,
+            )
+            return deepcopy(state)
 
 
 def bump_revision(state: dict[str, Any]) -> None:

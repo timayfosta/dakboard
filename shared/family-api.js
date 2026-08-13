@@ -39,6 +39,17 @@
     return data;
   }
 
+  async function restoreListItem(name, item, index) {
+    const res = await fetch("/api/family/lists/restore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, item, index }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Restore failed");
+    return data;
+  }
+
   async function redeemReward(rewardId, kidId) {
     const res = await fetch("/api/family/rewards/redeem", {
       method: "POST",
@@ -78,6 +89,7 @@
     toggleChore,
     toggleListItem,
     addListItem,
+    restoreListItem,
     redeemReward,
     getWhiteboard,
     saveWhiteboard,

@@ -28,9 +28,20 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "shared"))
 
-import db  # noqa: E402
-import deploy  # noqa: E402
-import screensaver_albums  # noqa: E402
+try:
+    import db  # noqa: E402
+    import deploy  # noqa: E402
+    import screensaver_albums  # noqa: E402
+except ImportError as exc:
+    print(
+        "ERROR: failed to import shared/*.py modules.\n"
+        f"  Looked in: {ROOT / 'shared'}\n"
+        f"  Detail: {exc}\n"
+        "  Fix: run from the full Family Board folder (must contain server.py + shared/).\n"
+        "  Example:  cd ~/family-board && python3 server.py",
+        flush=True,
+    )
+    raise SystemExit(1) from exc
 
 PORT = 8765
 CHECK_STYLES = frozenset({"circle", "square", "star", "heart", "diamond"})
@@ -244,6 +255,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self.chore_toggle(payload)
         if path == "/api/family/lists/add":
             return self.list_add(payload)
+        if path == "/api/family/lists/toggle":
+            return self.list_toggle(payload)
+        if path == "/api/family/lists/restore":
+            return self.list_restore(payload)
         if path == "/api/family/rewards/redeem":
             return self.reward_redeem(payload)
         if path == "/api/family/whiteboard":
@@ -270,11 +285,6 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.list_replace(payload)
-        if path == "/api/family/lists/toggle":
-            if not require_admin(self):
-                return
-            return self.list_toggle(payload)
-
         if path == "/api/family/settings":
             if not require_admin(self):
                 return
@@ -515,10 +525,38 @@ class Handler(SimpleHTTPRequestHandler):
         for i, item in enumerate(items):
             if item.get("id") == item_id:
                 # Checking off clears the item (grocery/reminder complete)
-                items.pop(i)
+                removed = items.pop(i)
                 db.save_db(state)
-                return send_json(self, {"removed": True, "itemId": item_id, "state": db.public_state(state)})
+                return send_json(
+                    self,
+                    {
+                        "removed": True,
+                        "itemId": item_id,
+                        "item": removed,
+                        "index": i,
+                        "state": db.public_state(state),
+                    },
+                )
         send_json(self, {"error": "Item not found"}, 404)
+
+    def list_restore(self, payload: dict):
+        state = db.load_db()
+        name = payload.get("name")
+        item = payload.get("item")
+        if name not in ("grocery", "reminders") or not isinstance(item, dict):
+            return send_json(self, {"error": "Invalid list"}, 400)
+        if not item.get("id"):
+            return send_json(self, {"error": "item required"}, 400)
+        items = state.setdefault("lists", {}).setdefault(name, [])
+        if any(existing.get("id") == item.get("id") for existing in items):
+            return send_json(self, {"ok": True, "state": db.public_state(state)})
+        index = payload.get("index")
+        if isinstance(index, int) and 0 <= index <= len(items):
+            items.insert(index, item)
+        else:
+            items.insert(0, item)
+        db.save_db(state)
+        send_json(self, {"ok": True, "state": db.public_state(state)})
 
     def whiteboard_save(self, payload: dict):
         strokes = payload.get("strokes")
@@ -907,17 +945,53 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    # Ensure DB exists
-    db.load_db()
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"Family Board API v{API_VERSION} on port {PORT}")
-    print(f"Family Board  -> http://127.0.0.1:{PORT}/")
-    print(f"Admin PWA     -> http://127.0.0.1:{PORT}/admin/  (tunnel: /phone/)")
-    print(f"Health check  -> http://127.0.0.1:{PORT}/api/health")
-    print(f"Family API    -> http://127.0.0.1:{PORT}/api/family/state")
-    print(f"Calendar ICS  -> http://127.0.0.1:{PORT}/api/calendar")
+    import errno
+    import os
+
+    # Always run from the repo root so relative static paths work on Pi/systemd
+    os.chdir(ROOT)
+    PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+    (ROOT / "data").mkdir(parents=True, exist_ok=True)
+
+    if sys.version_info < (3, 9):
+        print(
+            f"ERROR: Python 3.9+ required (found {sys.version.split()[0]}). "
+            "On Raspberry Pi OS: sudo apt install python3",
+            flush=True,
+        )
+        raise SystemExit(1)
+
+    try:
+        db.load_db()
+    except Exception as exc:  # noqa: BLE001
+        print(f"ERROR: could not initialize data/family.json: {exc}", flush=True)
+        raise SystemExit(1) from exc
+
+    try:
+        server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    except OSError as exc:
+        if getattr(exc, "errno", None) in (errno.EADDRINUSE, 98, 10048):
+            print(
+                f"\nERROR: port {PORT} is already in use.\n"
+                "Free it, then try again:\n"
+                f"  sudo fuser -k {PORT}/tcp\n"
+                "  # or: sudo systemctl stop family-board-api\n"
+                "  python3 server.py\n",
+                flush=True,
+            )
+            raise SystemExit(1) from exc
+        print(f"ERROR: could not bind to 0.0.0.0:{PORT}: {exc}", flush=True)
+        raise SystemExit(1) from exc
+
+    print(f"Family Board API v{API_VERSION} on port {PORT}", flush=True)
+    print(f"Family Board  -> http://127.0.0.1:{PORT}/", flush=True)
+    print(f"Admin PWA     -> http://127.0.0.1:{PORT}/admin/  (tunnel: /phone/)", flush=True)
+    print(f"Health check  -> http://127.0.0.1:{PORT}/api/health", flush=True)
+    print(f"Family API    -> http://127.0.0.1:{PORT}/api/family/state", flush=True)
+    print(f"Calendar ICS  -> http://127.0.0.1:{PORT}/api/calendar", flush=True)
+    print(f"Root          -> {ROOT}", flush=True)
     try:
         server.serve_forever()
-    except OSError as exc:
-        print(f"\nPort {PORT} already in use. Run: npm start  (or: python scripts/restart_server.py)")
-        raise SystemExit(1) from exc
+    except KeyboardInterrupt:
+        print("\nShutting down.", flush=True)
+        server.server_close()
