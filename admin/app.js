@@ -1322,7 +1322,7 @@
   });
 
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/admin/sw.js?v=9").then((reg) => {
+    navigator.serviceWorker.register("sw.js?v=10").then((reg) => {
       reg.update();
     }).catch(() => {});
   }

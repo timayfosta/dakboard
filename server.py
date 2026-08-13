@@ -104,6 +104,27 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
+    def _phone_redirect(self) -> bool:
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path != "/phone":
+            return False
+        loc = "/phone/"
+        if parsed.query:
+            loc += "?" + parsed.query
+        self.send_response(301)
+        self.send_header("Location", loc)
+        self.end_headers()
+        return True
+
+    def _rewrite_phone_to_admin(self) -> None:
+        """Map /phone/* to admin files — Cloudflare quick tunnels often block /admin/* paths."""
+        parsed = urllib.parse.urlparse(self.path)
+        if not parsed.path.startswith("/phone/"):
+            return
+        suffix = parsed.path[len("/phone") :]
+        query = ("?" + parsed.query) if parsed.query else ""
+        self.path = f"/admin{suffix}{query}"
+
     def end_headers(self):
         if self.path.startswith("/api/"):
             self.send_header("Cache-Control", "no-store")
@@ -122,6 +143,9 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
 
     def do_GET(self):
+        if self._phone_redirect():
+            return
+        self._rewrite_phone_to_admin()
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
 
@@ -784,7 +808,7 @@ if __name__ == "__main__":
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"Family Board API v{API_VERSION} on port {PORT}")
     print(f"Family Board  -> http://127.0.0.1:{PORT}/")
-    print(f"Admin PWA     -> http://127.0.0.1:{PORT}/admin/")
+    print(f"Admin PWA     -> http://127.0.0.1:{PORT}/admin/  (tunnel: /phone/)")
     print(f"Health check  -> http://127.0.0.1:{PORT}/api/health")
     print(f"Family API    -> http://127.0.0.1:{PORT}/api/family/state")
     print(f"Calendar ICS  -> http://127.0.0.1:{PORT}/api/calendar")
