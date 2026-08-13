@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Family Board — Chores</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+  <script src="../shared/config.js"></script>
+  <script src="../shared/display-init.js"></script>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <style>
+    .screen { gap: 0.4rem; overflow: hidden; }
+
+    .hero {
+      flex-shrink: 0;
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      min-width: 0;
+    }
+
+    .kid-title {
+      font-family: var(--font-display);
+      font-size: clamp(1.9rem, 5.8cqw, 2.75rem);
+      font-weight: 800;
+      line-height: 1.05;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-shadow: 0 2px 18px color-mix(in srgb, var(--kid-accent, var(--coral)) 45%, transparent);
+    }
+
+    .kid-title .title-stars {
+      color: var(--sunny);
+    }
+
+    .star-pill[hidden] {
+      display: none;
+    }
+
+    .titlebar-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-shrink: 0;
+    }
+
+    .view-btn {
+      border: 1px solid var(--line);
+      background: #141414;
+      color: var(--ink-soft);
+      border-radius: 999px;
+      padding: 0.55rem 0.95rem;
+      font-weight: 800;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .view-btn.active {
+      color: #000;
+      background: var(--mint);
+      border-color: var(--mint);
+    }
+
+    .star-pill {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1rem;
+      background: rgba(245, 200, 76, 0.14);
+      border: 1px solid rgba(245, 200, 76, 0.32);
+      color: var(--sunny);
+      border-radius: 999px;
+      padding: 0.4rem 0.7rem;
+      white-space: nowrap;
+    }
+
+    .star-pill.bump { animation: star-bump 0.35s ease; }
+
+    @keyframes star-bump {
+      50% { transform: scale(1.1); }
+    }
+
+    .progress-strip {
+      display: grid;
+      gap: 0.32rem;
+      background: linear-gradient(180deg, #141414, #101010);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 0.45rem 0.55rem 0.5rem;
+    }
+
+    .progress-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .progress-label {
+      font-weight: 800;
+      font-size: 0.8rem;
+      color: var(--ink-soft);
+      min-width: 0;
+    }
+
+    .progress-pct {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 0.88rem;
+      color: var(--kid-accent, var(--mint));
+      flex-shrink: 0;
+    }
+
+    .progress-track {
+      height: 14px;
+      border-radius: 999px;
+      background: #1f1f1f;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      overflow: hidden;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--kid-accent, var(--mint)) 85%, #000),
+        var(--kid-accent, var(--mint)),
+        color-mix(in srgb, var(--kid-accent, var(--mint)) 65%, #fff)
+      );
+      transition: width 0.5s cubic-bezier(0.34, 1.25, 0.64, 1);
+      box-shadow: 0 0 14px color-mix(in srgb, var(--kid-accent, var(--mint)) 45%, transparent);
+    }
+
+    .quest {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: #111;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 0.4rem;
+      overflow: hidden;
+      gap: 0;
+    }
+
+    .chore-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 0.1rem;
+    }
+
+    .chore-list.active-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .chore-list.active-list::-webkit-scrollbar,
+    .chore-list.done-list::-webkit-scrollbar {
+      display: none;
+    }
+
+    .chore-list.done-list {
+      overflow-x: hidden;
+      overflow-y: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      min-height: 0;
+      flex: 1 1 auto;
+    }
+
+    .quest.chore-animating .chore-list,
+    .quest.chore-animating .done-zone {
+      overflow: hidden;
+    }
+
+    .done-zone {
+      flex-shrink: 0;
+      max-height: 42%;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border-top: 1px dashed rgba(255, 255, 255, 0.12);
+      margin-top: 0.25rem;
+      padding-top: 0.3rem;
+    }
+
+    .done-zone[hidden] { display: none; }
+
+    .done-zone-label {
+      flex-shrink: 0;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mint);
+      padding: 0 0.15rem 0.25rem;
+      opacity: 0.85;
+    }
+
+    .chore {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 0.55rem;
+      align-items: center;
+      background: #1a1a1a;
+      border: 2px solid transparent;
+      border-radius: 14px;
+      padding: 0.55rem 0.6rem;
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.12s ease;
+      user-select: none;
+    }
+
+    .chore:active:not(.done) { transform: scale(0.99); }
+
+    .chore.done {
+      border-color: rgba(61, 220, 151, 0.35);
+      background: rgba(61, 220, 151, 0.07);
+      opacity: 0.88;
+    }
+
+    .chore.done .chore-text h3 {
+      text-decoration: line-through;
+      text-decoration-thickness: 2px;
+      text-decoration-color: rgba(255, 255, 255, 0.28);
+      color: var(--ink-soft);
+    }
+
+    .chore.done .check {
+      background: var(--mint);
+      border-color: var(--mint);
+      color: #000;
+    }
+
+    .chore.is-leaving,
+    .chore.is-returning {
+      pointer-events: none;
+      z-index: 3;
+      position: relative;
+    }
+
+    .chore.anim-sink { animation: anim-sink 1.25s ease-in forwards; }
+    .chore.anim-slide-left { animation: anim-slide-left 1.2s ease-in forwards; }
+    .chore.anim-slide-right { animation: anim-slide-right 1.2s ease-in forwards; }
+    .chore.anim-spiral { animation: anim-spiral 1.3s ease-in forwards; }
+    .chore.anim-bounce { animation: anim-bounce 1.35s ease-in forwards; }
+    .chore.anim-zip { animation: anim-zip 1.15s cubic-bezier(0.45, 0, 0.85, 1) forwards; }
+    .chore.anim-fold { animation: anim-fold 1.2s ease-in forwards; }
+    .chore.anim-arc-left { animation: anim-arc-left 1.25s ease-in forwards; }
+    .chore.anim-arc-right { animation: anim-arc-right 1.25s ease-in forwards; }
+    .chore.anim-tumble { animation: anim-tumble 1.35s ease-in forwards; }
+    .chore.anim-shrink { animation: anim-shrink 1.2s ease-in forwards; }
+    .chore.anim-wobble { animation: anim-wobble 1.4s ease-in forwards; }
+    .chore.anim-flip { animation: anim-flip 1.25s ease-in forwards; }
+    .chore.anim-drift { animation: anim-drift 1.45s ease-in-out forwards; }
+    .chore.anim-rocket { animation: anim-rocket 1.15s cubic-bezier(0.25, 0.7, 0.35, 1) forwards; }
+
+    .chore.is-returning.anim-sink { animation: anim-sink-r 0.85s ease-out forwards; }
+    .chore.is-returning.anim-slide-left { animation: anim-slide-left-r 0.85s ease-out forwards; }
+    .chore.is-returning.anim-slide-right { animation: anim-slide-right-r 0.85s ease-out forwards; }
+    .chore.is-returning.anim-spiral { animation: anim-spiral-r 0.88s ease-out forwards; }
+    .chore.is-returning.anim-bounce { animation: anim-bounce-r 0.9s ease-out forwards; }
+    .chore.is-returning.anim-zip { animation: anim-zip-r 0.8s ease-out forwards; }
+    .chore.is-returning.anim-fold { animation: anim-fold-r 0.82s ease-out forwards; }
+    .chore.is-returning.anim-arc-left { animation: anim-arc-left-r 0.85s ease-out forwards; }
+    .chore.is-returning.anim-arc-right { animation: anim-arc-right-r 0.85s ease-out forwards; }
+    .chore.is-returning.anim-tumble { animation: anim-tumble-r 0.88s ease-out forwards; }
+    .chore.is-returning.anim-shrink { animation: anim-shrink-r 0.82s ease-out forwards; }
+    .chore.is-returning.anim-wobble { animation: anim-wobble-r 0.9s ease-out forwards; }
+    .chore.is-returning.anim-flip { animation: anim-flip-r 0.82s ease-out forwards; }
+    .chore.is-returning.anim-drift { animation: anim-drift-r 0.88s ease-out forwards; }
+    .chore.is-returning.anim-rocket { animation: anim-rocket-r 0.78s ease-out forwards; }
+
+    @keyframes anim-sink { to { transform: translateY(220px); opacity: 0.12; } }
+    @keyframes anim-slide-left { to { transform: translate(-70px, 200px) rotate(-14deg); opacity: 0.08; } }
+    @keyframes anim-slide-right { to { transform: translate(70px, 200px) rotate(14deg); opacity: 0.08; } }
+    @keyframes anim-spiral { to { transform: translateY(190px) rotate(540deg) scale(0.65); opacity: 0.1; } }
+    @keyframes anim-bounce { 35% { transform: translateY(55px); } 65% { transform: translateY(35px); } to { transform: translateY(210px); opacity: 0.08; } }
+    @keyframes anim-zip { to { transform: translateY(240px) scale(0.8); opacity: 0; } }
+    @keyframes anim-fold { to { transform: translateY(175px) scaleY(0.15); opacity: 0.12; } }
+    @keyframes anim-arc-left { 50% { transform: translate(-40px, 90px); } to { transform: translate(-20px, 205px); opacity: 0.1; } }
+    @keyframes anim-arc-right { 50% { transform: translate(40px, 90px); } to { transform: translate(20px, 205px); opacity: 0.1; } }
+    @keyframes anim-tumble { to { transform: translateY(200px) rotate(720deg); opacity: 0.08; } }
+    @keyframes anim-shrink { to { transform: translateY(180px) scale(0.3); opacity: 0.06; } }
+    @keyframes anim-wobble { 25% { transform: translateY(45px) rotate(-7deg); } 50% { transform: translateY(95px) rotate(7deg); } 75% { transform: translateY(145px) rotate(-5deg); } to { transform: translateY(215px); opacity: 0.08; } }
+    @keyframes anim-flip { to { transform: translateY(195px) rotateX(720deg); opacity: 0.1; } }
+    @keyframes anim-drift { 50% { transform: translate(22px, 95px); opacity: 0.45; } to { transform: translate(-12px, 225px); opacity: 0.08; } }
+    @keyframes anim-rocket { 25% { transform: translateY(-16px) scale(1.04); } to { transform: translateY(235px) scale(0.85); opacity: 0; } }
+
+    @keyframes anim-sink-r { from { transform: translateY(160px); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-slide-left-r { from { transform: translate(-55px, 140px) rotate(-10deg); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-slide-right-r { from { transform: translate(55px, 140px) rotate(10deg); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-spiral-r { from { transform: translateY(130px) rotate(-360deg) scale(0.7); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-bounce-r { from { transform: translateY(110px); opacity: 0.12; } 60% { transform: translateY(-10px); } to { transform: none; opacity: 1; } }
+    @keyframes anim-zip-r { from { transform: translateY(150px) scale(0.75); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes anim-fold-r { from { transform: translateY(110px) scaleY(0.2); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-arc-left-r { from { transform: translate(-28px, 130px); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-arc-right-r { from { transform: translate(28px, 130px); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-tumble-r { from { transform: translateY(120px) rotate(-540deg); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-shrink-r { from { transform: translateY(105px) scale(0.35); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-wobble-r { from { transform: translateY(120px); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-flip-r { from { transform: translateY(115px) rotateX(-360deg); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-drift-r { from { transform: translate(-14px, 140px); opacity: 0.1; } to { transform: none; opacity: 1; } }
+    @keyframes anim-rocket-r { from { transform: translateY(170px) scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
+
+    .chore-ico {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 1.35rem;
+      background: #101010;
+      border: 1px solid var(--line);
+    }
+
+    .chore-text h3 {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .chore-list.active-list .chore {
+      padding: 0.7rem 0.75rem;
+    }
+
+    .chore-list.active-list .chore-text {
+      text-align: center;
+    }
+
+    .chore-list.active-list .chore-text h3 {
+      font-size: clamp(1.35rem, 4.2cqw, 1.9rem);
+      line-height: 1.12;
+    }
+
+    .chore-list.active-list .chore-text p {
+      font-size: 0.82rem;
+    }
+
+    .chore-text p {
+      color: var(--ink-soft);
+      font-weight: 700;
+      font-size: 0.74rem;
+      margin-top: 0.12rem;
+      line-height: 1.25;
+    }
+
+    .stars-badge {
+      color: var(--sunny);
+      font-family: var(--font-display);
+      font-weight: 800;
+    }
+
+    .check {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.22);
+      background: #141414;
+      display: grid;
+      place-items: center;
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: transparent;
+    }
+
+    .check.check-square {
+      border-radius: 10px;
+    }
+
+    .check.check-star,
+    .check.check-heart,
+    .check.check-diamond {
+      color: rgba(255, 255, 255, 0.28);
+      font-size: 1.25rem;
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .chore.done .check.check-star {
+      color: var(--sunny);
+      border-color: rgba(245, 200, 76, 0.55);
+      background: rgba(245, 200, 76, 0.12);
+    }
+
+    .chore.done .check.check-heart {
+      color: #ff7a9a;
+      border-color: rgba(255, 122, 154, 0.55);
+      background: rgba(255, 122, 154, 0.12);
+    }
+
+    .chore.done .check.check-diamond {
+      color: var(--sky);
+      border-color: rgba(90, 167, 255, 0.55);
+      background: rgba(90, 167, 255, 0.12);
+    }
+
+    .chore.done .check.check-square {
+      border-radius: 10px;
+    }
+
+    .empty {
+      margin: auto;
+      text-align: center;
+      color: var(--ink-soft);
+      font-weight: 800;
+      padding: 1.5rem 1rem;
+    }
+
+    .empty .big { font-size: 2rem; margin-bottom: 0.35rem; }
+
+    .all-grid {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      gap: 0.35rem;
+      overflow: hidden;
+    }
+
+    .kid-panel {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: #151515;
+      border: 2px solid color-mix(in srgb, var(--kid, var(--coral)) 55%, #333);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .kid-panel-head {
+      flex-shrink: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      padding: 0.55rem 0.45rem;
+      background: color-mix(in srgb, var(--kid, var(--coral)) 12%, #111);
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(1rem, 2.8cqw, 1.25rem);
+      line-height: 1.1;
+      text-align: center;
+    }
+
+    .kid-panel-head .stars {
+      color: var(--sunny);
+      font-size: inherit;
+    }
+
+    .kid-panel-list {
+      list-style: none;
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      padding: 0.25rem;
+    }
+
+    .all-grid .chore {
+      padding: 0.45rem 0.4rem;
+      gap: 0.35rem;
+      border-radius: 10px;
+    }
+
+    .all-grid .chore-text {
+      text-align: center;
+    }
+
+    .all-grid .chore-text h3 {
+      font-size: clamp(0.92rem, 2.4cqw, 1.08rem);
+      line-height: 1.15;
+    }
+
+    .all-grid .chore-ico {
+      width: 34px;
+      height: 34px;
+      font-size: 1.05rem;
+      border-radius: 8px;
+    }
+
+    .all-grid .chore-text p { font-size: 0.62rem; display: none; }
+    .all-grid .check { width: 30px; height: 30px; font-size: 0.95rem; }
+
+    .panel-empty {
+      margin: auto;
+      text-align: center;
+      font-weight: 800;
+      font-size: 0.72rem;
+      color: var(--ink-soft);
+      padding: 0.5rem;
+    }
+
+    /* All-kids view — full quest area, incomplete chores only */
+    .screen.all-kids-view {
+      gap: 0.3rem;
+    }
+
+    .screen.all-kids-view .progress-strip,
+    .screen.all-kids-view .dock {
+      display: none;
+    }
+
+    .screen.all-kids-view .quest {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+      border: none;
+      background: transparent;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .screen.all-kids-view .all-grid {
+      position: absolute;
+      inset: 0;
+      flex: none;
+      height: auto;
+      align-content: stretch;
+    }
+
+    .quest > [hidden] {
+      display: none !important;
+    }
+
+    .dock {
+      flex-shrink: 0;
+      background: #0d0d0d;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 0.35rem;
+    }
+
+    .profiles {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(88px, 1fr);
+      gap: 0.35rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .profiles::-webkit-scrollbar { display: none; }
+
+    .profile {
+      border: 2px solid transparent;
+      background: #171717;
+      border-radius: 12px;
+      padding: 0.35rem 0.28rem 0.32rem;
+      text-align: center;
+      color: var(--ink);
+      min-height: 92px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.12rem;
+    }
+
+    .profile.active {
+      border-color: var(--active, var(--coral));
+      background: #1c1c1c;
+    }
+
+    .profile .name-line {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.2rem;
+      min-height: 0;
+      padding: 0 0.1rem;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(1.05rem, 3cqw, 1.28rem);
+      line-height: 1.05;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .profile .name-line .name-stars {
+      color: var(--sunny);
+      flex-shrink: 0;
+    }
+
+    .profile .meta {
+      margin-top: 0;
+      font-size: clamp(0.72rem, 2cqw, 0.82rem);
+      font-weight: 800;
+      color: var(--ink-soft);
+      flex-shrink: 0;
+    }
+
+    .profile .bar {
+      margin-top: 0.22rem;
+      height: 4px;
+      border-radius: 999px;
+      background: #2a2a2a;
+      overflow: hidden;
+    }
+
+    .profile .bar > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: var(--active, var(--mint));
+      transition: width 0.3s ease;
+    }
+
+    .cheer {
+      position: absolute;
+      left: 50%;
+      bottom: 8rem;
+      transform: translateX(-50%) translateY(8px);
+      background: #1a1a1a;
+      border: 1px solid var(--line);
+      color: var(--mint);
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1rem;
+      padding: 0.55rem 0.9rem;
+      border-radius: 12px;
+      opacity: 0;
+      transition: 0.2s ease;
+      z-index: 30;
+      pointer-events: none;
+    }
+
+    .cheer.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .win-overlay,
+    .reminder-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 35;
+      background: rgba(0,0,0,0.75);
+      place-items: center;
+      padding: 1.2rem;
+    }
+
+    .win-overlay.show,
+    .reminder-overlay.show { display: grid; }
+
+    .modal-card {
+      background: #151515;
+      border: 2px solid var(--line);
+      border-radius: 22px;
+      padding: 1.2rem 1rem;
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+      animation: modal-in 0.28s ease both;
+    }
+
+    .modal-card.win { border-color: var(--sunny); }
+    .modal-card.remind { border-color: var(--alert-soft); text-align: left; }
+
+    @keyframes modal-in {
+      from { opacity: 0; transform: scale(0.94) translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .modal-card .boom { font-size: 2.4rem; line-height: 1; text-align: center; }
+
+    .modal-card h3 {
+      font-family: var(--font-display);
+      font-size: 1.55rem;
+      margin: 0.35rem 0 0.2rem;
+      text-align: center;
+    }
+
+    .modal-card p {
+      color: var(--ink-soft);
+      font-weight: 700;
+      font-size: 0.88rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .modal-card ul {
+      list-style: none;
+      display: grid;
+      gap: 0.35rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .modal-card li {
+      background: #1c1c1c;
+      border-radius: 10px;
+      padding: 0.45rem 0.55rem;
+      font-weight: 700;
+      font-size: 0.82rem;
+    }
+
+    .modal-card button {
+      width: 100%;
+      padding: 0.65rem;
+      border-radius: 12px;
+      background: var(--coral);
+      border: none;
+      color: #000;
+      font-weight: 800;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body class="tv-stage">
+  <div class="tv-frame">
+    <div class="screen">
+      <div class="hero">
+        <div class="titlebar">
+          <h1 class="kid-title" id="kidTitle">Pick a kid</h1>
+          <div class="titlebar-actions">
+            <button type="button" class="view-btn" id="viewToggle" aria-pressed="false">👥 All kids</button>
+            <div class="star-pill" id="kidStars">★ 0</div>
+          </div>
+        </div>
+        <div class="progress-strip">
+          <div class="progress-meta">
+            <div class="progress-label" id="progressLabel">Tap a kid below</div>
+            <div class="progress-pct" id="progressPct">0%</div>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+        </div>
+      </div>
+
+      <section class="quest" aria-label="Chore list">
+        <ul class="chore-list active-list" id="activeChores"></ul>
+        <div class="done-zone" id="doneZone" hidden>
+          <div class="done-zone-label">Done ✓</div>
+          <ul class="chore-list done-list" id="doneChores"></ul>
+        </div>
+        <div class="all-grid" id="allGrid" hidden></div>
+      </section>
+
+      <nav class="dock" aria-label="Kids">
+        <div class="profiles" id="profiles" role="tablist"></div>
+      </nav>
+    </div>
+
+    <div class="cheer" id="cheer" aria-live="polite"></div>
+
+    <div class="win-overlay" id="winOverlay">
+      <div class="modal-card win">
+        <div class="boom">🏆</div>
+        <h3 id="winTitle">All done!</h3>
+        <p id="winBody">Every quest crushed for today.</p>
+        <button type="button" id="winClose">Awesome!</button>
+      </div>
+    </div>
+
+    <div class="reminder-overlay" id="reminderOverlay">
+      <div class="modal-card remind">
+        <h3 id="remindTitle">Reminder</h3>
+        <p id="remindBody"></p>
+        <ul id="remindList"></ul>
+        <button type="button" id="remindClose">Got it!</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="confetti" id="fxRoot" aria-hidden="true"></div>
+
+  <script src="../shared/fx.js"></script>
+  <script src="../shared/family-api.js"></script>
+  <script src="../shared/display-sync.js"></script>
+  <script src="../shared/night-mode.js"></script>
+  <script src="../shared/screensaver.js"></script>
+  <script src="../shared/screens.js"></script>
+  <script src="../shared/kiosk-nav.js"></script>
+  <script>
+    const CHEERS = ["Nice!", "Star power!", "Crushed it!", "Legend!", "Boom!", "Quest done!"];
+
+    const PERIOD_HINTS = {
+      morning: "🌅 Morning — before lunch",
+      afternoon: "☀️ Afternoon task",
+      evening: "🌙 Evening — before bed",
+      chore: "✨ Anytime today",
+    };
+
+    const REMIND_AFTER = {
+      afternoon: { period: "morning", label: "morning chores" },
+      evening: { period: "afternoon", label: "afternoon chores" },
+      night: { period: "evening", label: "evening chores" },
+    };
+
+    const DONE_ANIMS = [
+      "anim-sink",
+      "anim-slide-left",
+      "anim-slide-right",
+      "anim-spiral",
+      "anim-bounce",
+      "anim-zip",
+      "anim-fold",
+      "anim-arc-left",
+      "anim-arc-right",
+      "anim-tumble",
+      "anim-shrink",
+      "anim-wobble",
+      "anim-flip",
+      "anim-drift",
+      "anim-rocket",
+    ];
+
+    const state = {
+      data: null,
+      kidId: null,
+      viewAll: false,
+      busy: false,
+      fingerprints: { kids: "", chores: "", all: "", data: "" },
+    };
+
+    if (new URLSearchParams(location.search).has("kiosk")) {
+      document.body.classList.add("kiosk");
+    }
+
+    function fingerprint(obj) {
+      return JSON.stringify(obj);
+    }
+
+    function activeKids() {
+      return (state.data?.kids || []).filter((k) => k.active !== false);
+    }
+
+    function ensureDefaultKid() {
+      const kids = activeKids();
+      if (!kids.length) {
+        state.kidId = null;
+        return;
+      }
+      if (!state.kidId || !kids.some((k) => k.id === state.kidId)) {
+        state.kidId = kids[0].id;
+      }
+    }
+
+    function choresForKid(kidId) {
+      return (state.data?.chores || []).filter(
+        (c) => c.active !== false && (c.kidIds || []).includes(kidId)
+      );
+    }
+
+    function isDone(choreId, kidId) {
+      return !!state.data?.completions?.[`${choreId}:${kidId}`];
+    }
+
+    function incompleteChores(kidId) {
+      return choresForKid(kidId).filter((c) => !isDone(c.id, kidId));
+    }
+
+    function completedChores(kidId) {
+      return choresForKid(kidId).filter((c) => isDone(c.id, kidId));
+    }
+
+    function splitChores(kidId) {
+      const all = choresForKid(kidId);
+      const todo = all.filter((c) => !isDone(c.id, kidId));
+      const done = all.filter((c) => isDone(c.id, kidId));
+      return { todo, done };
+    }
+
+    function pickDoneAnim() {
+      return DONE_ANIMS[Math.floor(Math.random() * DONE_ANIMS.length)];
+    }
+
+    function waitChoreAnim(el) {
+      return new Promise((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          resolve();
+        };
+        el.addEventListener("animationend", finish, { once: true });
+        setTimeout(finish, 1550);
+      });
+    }
+
+    async function playChoreMove(el, leaving) {
+      const quest = document.querySelector(".quest");
+      quest?.classList.add("chore-animating");
+      try {
+        const anim = pickDoneAnim();
+        el.classList.remove(...DONE_ANIMS, "is-leaving", "is-returning");
+        void el.offsetWidth;
+        el.classList.add(leaving ? "is-leaving" : "is-returning", anim);
+        await waitChoreAnim(el);
+        el.classList.remove(...DONE_ANIMS, "is-leaving", "is-returning");
+      } finally {
+        quest?.classList.remove("chore-animating");
+      }
+    }
+
+    function progress(kidId) {
+      const all = choresForKid(kidId);
+      const remaining = incompleteChores(kidId).length;
+      const done = all.length - remaining;
+      return {
+        done,
+        total: all.length,
+        remaining,
+        pct: all.length ? done / all.length : 0,
+      };
+    }
+
+    function choreDescription(chore) {
+      if (chore.hint) return chore.hint;
+      return PERIOD_HINTS[chore.period || "chore"] || PERIOD_HINTS.chore;
+    }
+
+    function winKey(kidId) {
+      return `fb-chore-win:${state.data?.today}:${kidId}`;
+    }
+
+    function remindKey(kidId, period) {
+      return `fb-chore-remind:${state.data?.today}:${kidId}:${period}`;
+    }
+
+    function daySegment() {
+      const m = new Date().getHours() * 60 + new Date().getMinutes();
+      if (m >= 21 * 60) return "night";
+      if (m >= 17 * 60) return "evening";
+      if (m >= 12 * 60) return "afternoon";
+      return "morning";
+    }
+
+    function cheer(msg) {
+      const el = document.getElementById("cheer");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(cheer._t);
+      cheer._t = setTimeout(() => el.classList.remove("show"), 1600);
+    }
+
+    function setProgressBar(pct, color) {
+      const fill = document.getElementById("progressFill");
+      fill.style.width = `${Math.round(Math.max(0, Math.min(1, pct)) * 100)}%`;
+      if (color) {
+        document.documentElement.style.setProperty("--kid-accent", color);
+      }
+      document.getElementById("progressPct").textContent = `${Math.round(pct * 100)}%`;
+    }
+
+    function renderHeader() {
+      const kid = activeKids().find((k) => k.id === state.kidId);
+      const titleEl = document.getElementById("kidTitle");
+      const starsEl = document.getElementById("kidStars");
+      const labelEl = document.getElementById("progressLabel");
+
+      if (state.viewAll) {
+        titleEl.textContent = "Everyone's Quests";
+        document.documentElement.style.setProperty("--kid-accent", "var(--mint)");
+        starsEl.hidden = false;
+        starsEl.textContent = "★ Team";
+        labelEl.textContent = "All kids · tap chores to complete";
+        setProgressBar(
+          activeKids().reduce((acc, k) => acc + progress(k.id).pct, 0) / Math.max(1, activeKids().length),
+          "var(--mint)"
+        );
+        return;
+      }
+
+      if (!kid) {
+        titleEl.textContent = "Pick a kid";
+        starsEl.hidden = false;
+        starsEl.textContent = "★ 0";
+        labelEl.textContent = "Tap a character below";
+        setProgressBar(0);
+        return;
+      }
+
+      const balance = state.data.balances[kid.id] || 0;
+      titleEl.innerHTML = `${kid.emoji || "⭐"} ${kid.name}'s Quests · <span class="title-stars">★${balance}</span>`;
+      starsEl.hidden = true;
+      const { done, total, remaining } = progress(kid.id);
+      labelEl.textContent =
+        total === 0
+          ? "No quests yet"
+          : remaining === 0
+            ? "All done for today!"
+            : `${remaining} quest${remaining === 1 ? "" : "s"} left · ${done}/${total} done`;
+      setProgressBar(total ? done / total : 0, kid.color);
+    }
+
+    function maybeCelebrate(kid) {
+      const { done, total } = progress(kid.id);
+      if (!total || done !== total) return;
+      if (localStorage.getItem(winKey(kid.id))) return;
+      localStorage.setItem(winKey(kid.id), "1");
+      FamilyFX.starBurst(document.getElementById("fxRoot"));
+      document.getElementById("winTitle").textContent = `${kid.name} cleared the board!`;
+      document.getElementById("winBody").textContent = `All quests done · ★${state.data.balances[kid.id] || 0} in the bank`;
+      document.getElementById("winOverlay").classList.add("show");
+    }
+
+    function checkReminders() {
+      if (!state.data || state.viewAll) return;
+      const seg = daySegment();
+      const cfg = REMIND_AFTER[seg];
+      if (!cfg) return;
+
+      for (const kid of activeKids()) {
+        if (localStorage.getItem(remindKey(kid.id, cfg.period))) continue;
+        const missed = choresForKid(kid.id).filter(
+          (c) => (c.period || "chore") === cfg.period && !isDone(c.id, kid.id)
+        );
+        if (!missed.length) continue;
+
+        localStorage.setItem(remindKey(kid.id, cfg.period), "1");
+        document.getElementById("remindTitle").textContent = `${kid.emoji} ${kid.name} — ${cfg.label}`;
+        document.getElementById("remindBody").textContent =
+          `These weren't finished on time. Completing now earns half stars ⭐`;
+        document.getElementById("remindList").innerHTML = missed
+          .map((c) => `<li>${c.icon || "✅"} ${c.title}</li>`)
+          .join("");
+        document.getElementById("reminderOverlay").classList.add("show");
+        if (state.kidId !== kid.id) {
+          state.kidId = kid.id;
+          state.fingerprints.kids = "";
+          state.fingerprints.chores = "";
+          renderProfiles(true);
+        }
+        break;
+      }
+    }
+
+    function checkMark(chore, done) {
+      const style = chore.checkStyle || "circle";
+      if (!done) {
+        const empty = { circle: "", square: "", star: "☆", heart: "♡", diamond: "◇" };
+        return empty[style] || "";
+      }
+      const filled = { circle: "✓", square: "✓", star: "★", heart: "♥", diamond: "◆" };
+      return filled[style] || "✓";
+    }
+
+    function choreRowHtml(chore, kidId, done) {
+      const style = chore.checkStyle || "circle";
+      return `
+        <li class="chore${done ? " done" : ""}" data-id="${chore.id}" data-kid="${kidId}" role="button" tabindex="0" aria-pressed="${done}">
+          <div class="chore-ico">${chore.icon || "✅"}</div>
+          <div class="chore-text">
+            <h3>${chore.title}</h3>
+            <p><span class="stars-badge">★ ${chore.stars || 1}</span> · ${choreDescription(chore)}</p>
+          </div>
+          <div class="check check-${style}">${checkMark(chore, done)}</div>
+        </li>`;
+    }
+
+    async function toggleChore(choreId, kidId, el) {
+      if (state.busy) return;
+      state.busy = true;
+      const wasDone = el?.classList.contains("done");
+      try {
+        let animPromise = Promise.resolve();
+        if (el) {
+          const chore = (state.data?.chores || []).find((c) => c.id === el.dataset.id);
+          if (!wasDone) {
+            el.querySelector(".check").textContent = checkMark(chore || {}, true);
+            el.classList.add("done");
+            animPromise = playChoreMove(el, true);
+          } else {
+            el.querySelector(".check").textContent = checkMark(chore || {}, false);
+            el.classList.remove("done");
+            animPromise = playChoreMove(el, false);
+          }
+        }
+
+        const [res] = await Promise.all([FamilyAPI.toggleChore(choreId, kidId), animPromise]);
+        state.data = res.state;
+        state.fingerprints.data = fingerprint({
+          kids: state.data.kids,
+          chores: state.data.chores,
+          balances: state.data.balances,
+          completions: state.data.completions,
+          today: state.data.today,
+        });
+        state.fingerprints.kids = "";
+        state.fingerprints.chores = "";
+        state.fingerprints.all = "";
+
+        if (res.done && el) {
+          FamilyFX.starBurst(document.getElementById("fxRoot"), el);
+          const label = res.late ? `+${res.starsEarned}★ late` : `+${res.starsEarned}★`;
+          FamilyFX.floatLabel(el, label);
+          cheer(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
+        }
+
+        renderAll(true);
+        const kid = activeKids().find((k) => k.id === kidId);
+        if (kid) maybeCelebrate(kid);
+      } catch (err) {
+        cheer("Can't sync — is the server running?");
+        console.warn(err);
+        renderAll(true);
+      } finally {
+        state.busy = false;
+      }
+    }
+
+    function bindChore(el) {
+      if (el.dataset.bound === "1") return;
+      el.dataset.bound = "1";
+      const run = () => toggleChore(el.dataset.id, el.dataset.kid, el);
+      el.addEventListener("click", run);
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          run();
+        }
+      });
+    }
+
+    function renderChores(force) {
+      const activeList = document.getElementById("activeChores");
+      const doneList = document.getElementById("doneChores");
+      const doneZone = document.getElementById("doneZone");
+      const grid = document.getElementById("allGrid");
+
+      if (state.viewAll) {
+        activeList.hidden = true;
+        doneZone.hidden = true;
+        grid.hidden = false;
+        renderAllGrid(force);
+        return;
+      }
+
+      activeList.hidden = false;
+      grid.hidden = true;
+
+      const kid = activeKids().find((k) => k.id === state.kidId);
+      if (!kid) {
+        doneZone.hidden = true;
+        activeList.innerHTML = `<li class="empty"><div class="big">👋</div>Tap a kid below</li>`;
+        doneList.innerHTML = "";
+        return;
+      }
+
+      const { todo, done } = splitChores(kid.id);
+      const fp = fingerprint([...todo.map((c) => c.id), ...done.map((c) => c.id)]);
+      if (!force && fp === state.fingerprints.chores) return;
+      state.fingerprints.chores = fp;
+
+      activeList.innerHTML = todo.length
+        ? todo.map((c) => choreRowHtml(c, kid.id, false)).join("")
+        : `<li class="empty"><div class="big">${done.length ? "🎉" : "✨"}</div>${done.length ? "All quests complete!" : "No quests yet"}</li>`;
+
+      doneZone.hidden = !done.length;
+      doneList.innerHTML = done.map((c) => choreRowHtml(c, kid.id, true)).join("");
+
+      activeList.querySelectorAll(".chore").forEach(bindChore);
+      doneList.querySelectorAll(".chore").forEach(bindChore);
+    }
+
+    function renderAllGrid(force) {
+      const grid = document.getElementById("allGrid");
+      const kids = activeKids();
+      const fp = fingerprint(
+        kids.map((k) => {
+          const { todo } = splitChores(k.id);
+          return [k.id, ...todo.map((c) => c.id)];
+        })
+      );
+      if (!force && fp === state.fingerprints.all) return;
+      state.fingerprints.all = fp;
+
+      grid.innerHTML = kids
+        .map((kid) => {
+          const { todo } = splitChores(kid.id);
+          return `
+            <div class="kid-panel" style="--kid:${kid.color}">
+              <div class="kid-panel-head">
+                <span class="kid-panel-name">${kid.emoji} ${kid.name}</span>
+                <span class="stars">· ★${state.data.balances[kid.id] || 0}</span>
+              </div>
+              <ul class="kid-panel-list">
+                ${
+                  todo.length
+                    ? todo.map((c) => choreRowHtml(c, kid.id, false)).join("")
+                    : `<li class="panel-empty">All done! 🎉</li>`
+                }
+              </ul>
+            </div>`;
+        })
+        .join("");
+
+      grid.querySelectorAll(".chore").forEach(bindChore);
+    }
+
+    function renderProfiles(force) {
+      const kids = activeKids();
+      if (!kids.length) return;
+      ensureDefaultKid();
+
+      const fp = fingerprint(
+        kids.map((k) => {
+          const p = progress(k.id);
+          return [k.id, p.done, p.total, state.data.balances[k.id] || 0, state.kidId];
+        })
+      );
+      if (!force && fp === state.fingerprints.kids) return;
+      state.fingerprints.kids = fp;
+
+      const root = document.getElementById("profiles");
+      root.innerHTML = kids
+        .map((kid) => {
+          const { done, total, pct } = progress(kid.id);
+          const active = !state.viewAll && kid.id === state.kidId;
+          return `
+            <button class="profile${active ? " active" : ""}" data-kid="${kid.id}" style="--active:${kid.color}" role="tab" aria-selected="${active}">
+              <div class="name-line">${kid.emoji || "⭐"} ${kid.name} <span class="name-stars">★${state.data.balances[kid.id] || 0}</span></div>
+              <div class="meta">${done}/${total} done</div>
+              <div class="bar"><span style="width:${Math.round(pct * 100)}%"></span></div>
+            </button>`;
+        })
+        .join("");
+
+      root.querySelectorAll("[data-kid]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (state.viewAll) {
+            state.viewAll = false;
+            updateViewToggle();
+          }
+          if (state.kidId === btn.dataset.kid) return;
+          state.kidId = btn.dataset.kid;
+          state.fingerprints.kids = "";
+          state.fingerprints.chores = "";
+          renderAll(true);
+        });
+      });
+    }
+
+    function updateViewToggle() {
+      const btn = document.getElementById("viewToggle");
+      const on = state.viewAll;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.textContent = on ? "👤 One kid" : "👥 All kids";
+      document.querySelector(".screen")?.classList.toggle("all-kids-view", on);
+    }
+
+    function renderAll(force) {
+      ensureDefaultKid();
+      renderHeader();
+      renderProfiles(force);
+      renderChores(force);
+      if (!state.viewAll) checkReminders();
+    }
+
+    async function load(forceRender) {
+      try {
+        const data = await FamilyAPI.getState();
+        const nextFp = fingerprint({
+          kids: data.kids,
+          chores: data.chores,
+          balances: data.balances,
+          completions: data.completions,
+          today: data.today,
+        });
+        if (!forceRender && nextFp === state.fingerprints.data) return;
+        state.fingerprints.data = nextFp;
+        if (state.data?.today && state.data.today !== data.today) {
+          Object.keys(localStorage).forEach((k) => {
+            if (k.startsWith("fb-chore-win:") || k.startsWith("fb-chore-remind:")) {
+              if (!k.includes(data.today)) localStorage.removeItem(k);
+            }
+          });
+        }
+        state.data = data;
+        if (forceRender) {
+          state.fingerprints.kids = "";
+          state.fingerprints.chores = "";
+          state.fingerprints.all = "";
+        }
+        renderAll(forceRender);
+      } catch (err) {
+        if (!state.data) {
+          document.getElementById("activeChores").innerHTML =
+            `<li class="empty"><div class="big">🔌</div>Can't reach Family API.<br/>Run <strong>python server.py</strong></li>`;
+        }
+        console.warn(err);
+      }
+    }
+
+    document.getElementById("viewToggle").addEventListener("click", () => {
+      state.viewAll = !state.viewAll;
+      updateViewToggle();
+      state.fingerprints.chores = "";
+      state.fingerprints.all = "";
+      renderAll(true);
+    });
+
+    document.getElementById("winClose").addEventListener("click", () => {
+      document.getElementById("winOverlay").classList.remove("show");
+    });
+
+    document.getElementById("remindClose").addEventListener("click", () => {
+      document.getElementById("reminderOverlay").classList.remove("show");
+    });
+
+    load(true);
+    setInterval(() => load(false), 2000);
+    setInterval(() => checkReminders(), 60000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") load(false);
+    });
+  </script>
+</body>
+</html>

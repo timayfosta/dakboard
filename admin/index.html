@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Family Admin" />
+  <title>Family Board Admin</title>
+  <link rel="manifest" href="/admin/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/admin/icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin/admin.css?v=12" />
+</head>
+<body>
+  <div id="loginView" class="login">
+    <section class="card">
+      <h1 style="font-family:var(--display);font-size:1.8rem;margin-bottom:0.35rem">Family Admin</h1>
+      <p class="muted" style="margin-bottom:0.9rem">Manage chores, lists, and rewards from your phone.</p>
+      <form id="loginForm">
+        <div class="field">
+          <label>Password</label>
+          <input name="password" type="password" autocomplete="current-password" required placeholder="Admin password" />
+        </div>
+        <button class="btn block" type="submit">Log in</button>
+      </form>
+      <p class="muted" style="margin-top:0.75rem">Default password is <strong>family</strong> until you change it in secrets.</p>
+    </section>
+  </div>
+
+  <div id="appView" class="app hidden">
+    <header class="top">
+      <div>
+        <h1>Family Admin</h1>
+        <div class="sub" id="familyMeta">Loading…</div>
+      </div>
+    </header>
+    <main class="content" id="tabContent"></main>
+    <nav class="nav" aria-label="Admin sections">
+      <button data-tab="lists" class="active"><span class="ico">🛒</span>Lists</button>
+      <button data-tab="chores"><span class="ico">✅</span>Chores</button>
+      <button data-tab="rewards"><span class="ico">🎁</span>Rewards</button>
+      <button data-tab="kids"><span class="ico">👨‍👩‍👧‍👦</span>Kids</button>
+      <button data-tab="more"><span class="ico">⋯</span>More</button>
+    </nav>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/shared/screens.js"></script>
+  <script src="/admin/api.js?v=12"></script>
+  <script src="/admin/app.js?v=12"></script>
+</body>
+</html>

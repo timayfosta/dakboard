@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Family Board — Whiteboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="../shared/whiteboard.css" />
+</head>
+<body class="wb-page">
+  <canvas id="wbCanvas" aria-label="Drawing canvas"></canvas>
+  <div class="wb-toolbar" id="wbToolbar"></div>
+
+  <script src="../shared/family-api.js"></script>
+  <script src="../shared/display-sync.js"></script>
+  <script src="../shared/night-mode.js"></script>
+  <script src="../shared/screensaver.js"></script>
+  <script src="../shared/whiteboard.js"></script>
+  <script src="../shared/screens.js"></script>
+  <script src="../shared/kiosk-nav.js"></script>
+  <script>
+    if (new URLSearchParams(location.search).has("kiosk")) {
+      document.body.classList.add("kiosk");
+    }
+
+    Whiteboard.init({
+      canvas: document.getElementById("wbCanvas"),
+      toolbar: document.getElementById("wbToolbar"),
+    });
+  </script>
+</body>
+</html>

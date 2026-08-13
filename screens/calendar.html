@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Family Board — Home</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+  <script src="../shared/config.js"></script>
+  <script src="../shared/display-init.js"></script>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="../shared/touch-input.css" />
+  <style>
+    .screen .panel {
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .clock-card {
+      padding: 0.35rem 0.55rem;
+    }
+
+    .weather-strip {
+      padding: 0.3rem 0.25rem;
+    }
+
+    .alert-banner {
+      display: none;
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 30%;
+      z-index: 50;
+      padding: 1rem 1.1rem 1.2rem;
+      color: #fff;
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.97), rgba(249, 115, 22, 0.93));
+    }
+    .alert-banner.show { display: flex; flex-direction: column; gap: 0.4rem; }
+    .alert-banner .eyebrow {
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      opacity: 0.92;
+    }
+    .alert-banner h2 {
+      font-family: var(--font-display);
+      font-size: 1.65rem;
+      font-weight: 800;
+      line-height: 1.05;
+    }
+    .alert-banner p {
+      font-weight: 700;
+      font-size: 0.98rem;
+      line-height: 1.35;
+      max-width: 48ch;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+    }
+
+    .header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      flex-shrink: 0;
+      min-height: 0;
+    }
+
+    .clock-card {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 1.1rem;
+      padding: 0.35rem 0.55rem;
+      min-width: 0;
+      overflow: hidden;
+      container-type: inline-size;
+    }
+
+    .clock-card .time {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(3rem, 24cqw, 5.5rem);
+      line-height: 0.9;
+      letter-spacing: -0.04em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .clock-card .date-stack {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.06rem;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .clock-card .day-line {
+      font-family: var(--font-display);
+      font-size: clamp(1.05rem, 8cqw, 1.65rem);
+      font-weight: 800;
+      line-height: 1.05;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .clock-card .date-line {
+      font-family: var(--font-display);
+      font-size: clamp(0.95rem, 7cqw, 1.45rem);
+      font-weight: 800;
+      line-height: 1.05;
+      color: var(--ink-soft);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .weather-strip {
+      min-width: 0;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.3rem 0.4rem;
+      container-type: inline-size;
+    }
+
+    .wx-now-compact {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      min-width: 0;
+      flex: 1 1 0;
+    }
+
+    .wx-icon {
+      width: clamp(58px, 16cqw, 84px);
+      height: clamp(58px, 16cqw, 84px);
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    .wx-icon .wx-svg,
+    .fday .wx-svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .wx-now-compact .temp {
+      font-family: var(--font-display);
+      font-size: clamp(3rem, 20cqw, 4.75rem);
+      font-weight: 800;
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .forecast {
+      display: flex;
+      gap: 0.18rem;
+      flex: 1.15 1 0;
+      min-width: 0;
+      justify-content: flex-end;
+      overflow: hidden;
+    }
+
+    .fday {
+      flex: 1 1 0;
+      min-width: 0;
+      max-width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0.12rem;
+      text-align: center;
+      padding: 0.25rem 0.15rem 0.2rem;
+      line-height: 1.05;
+    }
+
+    .fday.today .hi {
+      color: var(--coral);
+    }
+
+    .fday .d {
+      font-weight: 800;
+      font-size: clamp(0.52rem, 2.4cqw, 0.64rem);
+      color: var(--ink-soft);
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.1;
+      width: 100%;
+    }
+
+    .fday .ico {
+      width: clamp(34px, 8.5cqw, 46px);
+      height: clamp(34px, 8.5cqw, 46px);
+      display: grid;
+      place-items: center;
+      margin: 0.05rem 0;
+    }
+
+    .fday .temps {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.28rem;
+      width: 100%;
+    }
+
+    .fday .hi {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(0.72rem, 3.4cqw, 0.92rem);
+      line-height: 1;
+    }
+
+    .fday .lo {
+      font-weight: 700;
+      font-size: clamp(0.62rem, 2.8cqw, 0.78rem);
+      color: var(--ink-soft);
+      line-height: 1;
+    }
+
+    .body {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.55rem;
+    }
+
+    .agenda {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      padding: 0.55rem 0.35rem 0.55rem;
+    }
+
+    .agenda h2,
+    .block-title {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 800;
+      margin-bottom: 0.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .source-pill,
+    .list-source {
+      font-family: var(--font-body);
+      font-size: 0.68rem;
+      font-weight: 800;
+      color: var(--ink-soft);
+    }
+
+    .agenda-clip {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      mask-image: linear-gradient(180deg, #000 0%, #000 78%, transparent 100%);
+      -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 78%, transparent 100%);
+    }
+
+    .agenda-clip::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 3.5rem;
+      pointer-events: none;
+      background: linear-gradient(180deg, transparent, #111);
+    }
+
+    .day-group + .day-group { margin-top: 0.75rem; }
+
+    .day-head {
+      display: flex;
+      align-items: baseline;
+      gap: 0.45rem;
+      padding: 0.35rem 0.12rem 0.5rem;
+      margin-bottom: 0.15rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.5rem;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+
+    .day-head .date-num {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--ink-soft);
+      letter-spacing: 0;
+    }
+
+    .agenda-rows {
+      list-style: none;
+      padding-top: 0.1rem;
+    }
+
+    .agenda-row {
+      display: grid;
+      grid-template-columns: 4.2rem 1fr;
+      gap: 0.5rem;
+      align-items: start;
+      padding: 0.42rem 0.1rem 0.42rem 0.35rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      border-left: 3px solid var(--kid-color, transparent);
+    }
+
+    .agenda-row:last-child { border-bottom: none; }
+
+    .agenda-row .time {
+      font-weight: 800;
+      font-size: 0.78rem;
+      color: var(--kid-color, var(--sky));
+      padding-top: 0.1rem;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .agenda-row .title {
+      font-weight: 700;
+      font-size: 0.98rem;
+      line-height: 1.25;
+    }
+
+    .agenda-row .kid-tag {
+      display: inline-block;
+      margin-right: 0.35rem;
+      font-size: 0.95rem;
+      line-height: 1;
+    }
+
+    .agenda-row.all-day .time {
+      color: var(--kid-color, var(--sunny));
+    }
+
+    .empty-note {
+      color: var(--ink-soft);
+      font-weight: 700;
+      padding: 0.6rem 0.1rem;
+    }
+
+    .right-col {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .month-panel {
+      width: 100%;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      padding: 0.35rem 0.25rem 0.3rem;
+      container-type: inline-size;
+    }
+
+    .month-panel .block-title {
+      margin-bottom: 0.15rem;
+      flex-shrink: 0;
+      justify-content: flex-start;
+      padding: 0.1rem 0.05rem 0.5rem;
+      min-height: clamp(2.8rem, 14cqw, 3.9rem);
+      align-items: flex-end;
+    }
+
+    .month-label {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(2.7rem, 13cqw, 3.7rem);
+      color: var(--ink);
+      line-height: 1;
+    }
+
+    .month-grid-wrap {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      container-type: size;
+    }
+
+    .cal-grid {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: auto repeat(6, 1fr);
+      gap: 0.02rem;
+    }
+
+    .dow {
+      text-align: center;
+      font-family: var(--font-display);
+      font-size: clamp(1.44rem, min(11cqw, 20cqh), 2.1rem);
+      font-weight: 800;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .day {
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(1.9rem, min(17cqw, 30cqh), 2.9rem);
+      line-height: 1;
+      color: var(--ink-soft);
+      background: transparent;
+      padding: 0;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .day.empty { background: transparent; }
+
+    .day.today {
+      color: var(--coral);
+      border: 1.5px solid var(--coral);
+      background: rgba(255, 122, 89, 0.1);
+    }
+
+    .lists {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.45rem;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .list-panel {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      padding: 0.35rem 0.2rem;
+    }
+
+    .list-panel .block-title {
+      font-size: 0.92rem;
+      margin-bottom: 0.22rem;
+      flex-shrink: 0;
+    }
+
+    .list-scroll {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding-bottom: 0.15rem;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .checklist {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.22rem;
+      flex-shrink: 0;
+    }
+
+    .checklist li {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.35rem;
+      align-items: center;
+      background: transparent;
+      border-radius: 0;
+      padding: 0.34rem 0.08rem;
+      border: none;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      cursor: default;
+      font-weight: 700;
+      font-size: 0.78rem;
+      flex-shrink: 0;
+    }
+
+    .checklist li:last-child {
+      border-bottom: none;
+    }
+
+    .checklist li .txt {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .checklist li.empty-list {
+      cursor: default;
+      color: var(--ink-soft);
+      grid-template-columns: 1fr;
+      background: transparent;
+      border: none;
+    }
+
+    .checklist .list-dot {
+      color: var(--ink-soft);
+      font-size: 0.95rem;
+      line-height: 1;
+      width: 14px;
+      text-align: center;
+    }
+
+    .box {
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+      border: 1.5px solid rgba(255, 255, 255, 0.18);
+      background: transparent;
+      display: grid;
+      place-items: center;
+      font-size: 0.8rem;
+      color: #000;
+    }
+
+    .checklist li.done .box {
+      background: var(--mint);
+      border-color: var(--mint);
+    }
+
+    .add-row {
+      display: none;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.5);
+      animation: live 2s ease-in-out infinite;
+      display: inline-block;
+      margin-right: 0.35rem;
+    }
+
+    @keyframes live {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.45); }
+      50% { box-shadow: 0 0 0 5px rgba(61, 220, 151, 0); }
+    }
+  </style>
+</head>
+<body class="tv-stage">
+  <div class="tv-frame">
+    <div class="alert-banner" id="alertBanner" role="alert" aria-live="assertive">
+      <div class="eyebrow" id="alertEyebrow">Weather alert</div>
+      <h2 id="alertTitle">Severe weather</h2>
+      <p id="alertBody"></p>
+    </div>
+
+    <div class="screen">
+      <header class="header">
+        <section class="panel clock-card" aria-label="Time and date">
+          <div class="time" id="clock">—:—</div>
+          <div class="date-stack">
+            <div class="day-line" id="dayLabel">—</div>
+            <div class="date-line" id="dateLabel">—</div>
+          </div>
+        </section>
+
+        <section class="panel weather-strip" aria-label="Weather">
+          <div class="wx-now-compact">
+            <div class="wx-icon" id="wxIcon" aria-hidden="true"></div>
+            <div class="temp" id="wxTemp">--°</div>
+          </div>
+          <div class="forecast" id="forecast" aria-label="5 day forecast"></div>
+        </section>
+      </header>
+
+      <div class="body">
+        <section class="panel agenda" aria-label="Weekly agenda">
+          <div class="agenda-clip">
+            <div id="agendaList"></div>
+          </div>
+        </section>
+
+        <div class="right-col">
+          <section class="panel month-panel" aria-label="Monthly calendar">
+            <div class="block-title">
+              <span class="month-label" id="monthLabel"></span>
+            </div>
+            <div class="month-grid-wrap">
+              <div class="cal-grid" id="calGrid"></div>
+            </div>
+          </section>
+
+          <div class="lists">
+            <section class="panel list-panel" aria-label="Grocery list">
+              <div class="block-title">
+                <span>Groceries</span>
+                <span class="list-source" id="grocerySource">Sync</span>
+              </div>
+              <div class="list-scroll">
+                <ul class="checklist" id="groceryList"></ul>
+                <button type="button" class="list-add-btn" data-open-list="grocery">+ Add grocery</button>
+              </div>
+            </section>
+            <section class="panel list-panel" aria-label="Reminders">
+              <div class="block-title">
+                <span>Reminders</span>
+                <span class="list-source" id="reminderSource">Sync</span>
+              </div>
+              <div class="list-scroll">
+                <ul class="checklist" id="reminderList"></ul>
+                <button type="button" class="list-add-btn" data-open-list="reminders">+ Add reminder</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../shared/weather-icons.js"></script>
+  <script src="../shared/touch-input.js"></script>
+  <script src="../shared/calendar-colors.js"></script>
+  <script src="../shared/calendar.js"></script>
+  <script src="../shared/family-api.js"></script>
+  <script src="../shared/display-sync.js"></script>
+  <script src="../shared/night-mode.js"></script>
+  <script src="../shared/screensaver.js"></script>
+  <script src="../shared/alerts.js"></script>
+  <script src="../shared/screens.js"></script>
+  <script src="../shared/kiosk-nav.js"></script>
+  <script>
+    const CFG = window.FAMILY_CONFIG;
+    let events = [];
+    let agendaKids = CFG.kids || [];
+    const listState = {
+      grocery: { items: [] },
+      reminders: { items: [] },
+    };
+
+    if (new URLSearchParams(location.search).has("kiosk")) {
+      document.body.classList.add("kiosk");
+    }
+
+    function setWxIcon(el, code) {
+      if (!el) return;
+      el.innerHTML = WeatherIcons.svg(code);
+    }
+
+    function pad(n) {
+      return String(n).padStart(2, "0");
+    }
+
+    function updateClock() {
+      const now = new Date();
+      const h = now.getHours();
+      const nextTime = `${h % 12 || 12}:${pad(now.getMinutes())} ${h >= 12 ? "PM" : "AM"}`;
+      const weekday = now.toLocaleDateString(undefined, { weekday: "long" });
+      const rest = now.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+      const clock = document.getElementById("clock");
+      const dayLabel = document.getElementById("dayLabel");
+      const dateLabel = document.getElementById("dateLabel");
+      if (clock.textContent !== nextTime) clock.textContent = nextTime;
+      if (dayLabel.textContent !== weekday) dayLabel.textContent = weekday;
+      if (dateLabel.textContent !== rest) dateLabel.textContent = rest;
+    }
+
+    let weatherFp = "";
+
+    async function loadWeather() {
+      const { latitude, longitude, tempUnit, windUnit, timezone } = CFG.weather;
+      const temp = tempUnit === "celsius" ? "celsius" : "fahrenheit";
+      const wind = windUnit === "kmh" ? "kmh" : "mph";
+      const tz = timezone || "America/Chicago";
+      const url =
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
+        `&current=temperature_2m,weather_code,wind_speed_10m` +
+        `&daily=weather_code,temperature_2m_max,temperature_2m_min` +
+        `&temperature_unit=${temp}&wind_speed_unit=${wind}&timezone=${encodeURIComponent(tz)}&forecast_days=5`;
+      try {
+        const data = await (await fetch(url)).json();
+        const fp = JSON.stringify({
+          code: data.current.weather_code,
+          t: data.current.temperature_2m,
+          w: data.current.wind_speed_10m,
+          daily: data.daily,
+        });
+        if (fp === weatherFp) return;
+        weatherFp = fp;
+
+        setWxIcon(document.getElementById("wxIcon"), data.current.weather_code);
+        document.getElementById("wxTemp").textContent = `${Math.round(data.current.temperature_2m)}°`;
+
+        const root = document.getElementById("forecast");
+        const today = new Date();
+        root.innerHTML = data.daily.time
+          .map((iso, i) => {
+            const d = new Date(`${iso}T12:00:00`);
+            const code = data.daily.weather_code[i];
+            const name =
+              i === 0
+                ? "Today"
+                : d.toLocaleDateString(undefined, { weekday: "short" });
+            const isToday =
+              d.getDate() === today.getDate() &&
+              d.getMonth() === today.getMonth();
+            return `
+              <div class="fday${isToday ? " today" : ""}">
+                <div class="d">${name}</div>
+                <div class="ico">${WeatherIcons.svg(code)}</div>
+                <div class="temps">
+                  <span class="hi">${Math.round(data.daily.temperature_2m_max[i])}°</span>
+                  <span class="lo">${Math.round(data.daily.temperature_2m_min[i])}°</span>
+                </div>
+              </div>`;
+          })
+          .join("");
+      } catch {
+        document.getElementById("wxTemp").textContent = "--°";
+      }
+    }
+
+    async function loadAlerts() {
+      const banner = document.getElementById("alertBanner");
+      const demo = new URLSearchParams(location.search).has("demoAlert");
+      try {
+        const alerts = demo
+          ? [{
+              event: "Severe Thunderstorm Warning",
+              severity: "Severe",
+              headline: "DEMO: Severe thunderstorms capable of damaging winds and large hail are moving through your area.",
+              description: "",
+            }]
+          : await FamilyAlerts.fetchAlerts(CFG);
+        if (!alerts.length) {
+          banner.classList.remove("show");
+          return;
+        }
+        const top = alerts[0];
+        document.getElementById("alertEyebrow").textContent = `${top.severity} · ${top.event}`;
+        document.getElementById("alertTitle").textContent = top.event;
+        document.getElementById("alertBody").textContent = top.headline || top.description;
+        banner.classList.add("show");
+      } catch (err) {
+        console.warn("Alert fetch failed", err);
+        banner.classList.remove("show");
+      }
+    }
+
+    function renderMonth() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      document.getElementById("monthLabel").textContent = now.toLocaleDateString(undefined, {
+        month: "long",
+        year: "numeric",
+      });
+
+      const grid = document.getElementById("calGrid");
+      grid.innerHTML = "";
+      ["S", "M", "T", "W", "T", "F", "S"].forEach((d) => {
+        const el = document.createElement("div");
+        el.className = "dow";
+        el.textContent = d;
+        grid.appendChild(el);
+      });
+
+      const startDow = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      for (let i = 0; i < startDow; i++) {
+        const empty = document.createElement("div");
+        empty.className = "day empty";
+        grid.appendChild(empty);
+      }
+      for (let day = 1; day <= daysInMonth; day++) {
+        const cell = document.createElement("div");
+        cell.className = "day" + (day === now.getDate() ? " today" : "");
+        cell.textContent = day;
+        grid.appendChild(cell);
+      }
+      const dayCells = 42;
+      const filled = startDow + daysInMonth;
+      for (let i = filled; i < dayCells; i++) {
+        const empty = document.createElement("div");
+        empty.className = "day empty";
+        grid.appendChild(empty);
+      }
+    }
+
+    function dayKey(d) {
+      return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    }
+
+    function dayHeading(d) {
+      const now = FamilyCalendar.startOfDay(new Date());
+      const day = FamilyCalendar.startOfDay(d);
+      const diff = Math.round((day - now) / 86400000);
+      const dateNum = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      if (diff === 0) return { label: "Today", showDate: false };
+      if (diff === 1) return { label: "Tomorrow", showDate: false };
+      return {
+        label: d.toLocaleDateString(undefined, { weekday: "long" }),
+        dateNum,
+        showDate: true,
+      };
+    }
+
+    function formatTime(ev) {
+      if (ev.allDay) return "All day";
+      return ev.start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    }
+
+    function renderAgenda() {
+      const root = document.getElementById("agendaList");
+      // Pull extra events; clip/fade hides overflow instead of scrolling
+      const items = FamilyCalendar.upcoming(events, 40);
+      if (!items.length) {
+        root.innerHTML = `<div class="empty-note">No upcoming events</div>`;
+        return;
+      }
+
+      const groups = [];
+      const map = new Map();
+      items.forEach((ev) => {
+        const key = dayKey(ev.start);
+        if (!map.has(key)) {
+          const g = { key, start: FamilyCalendar.startOfDay(ev.start), events: [] };
+          map.set(key, g);
+          groups.push(g);
+        }
+        map.get(key).events.push(ev);
+      });
+
+      root.innerHTML = groups
+        .map((g) => {
+          const head = dayHeading(g.start);
+          const dateHtml = head.showDate
+            ? `<span class="date-num">${head.dateNum}</span>`
+            : "";
+          const rows = g.events
+            .map((ev) => {
+              const kid = FamilyCalendarColors.matchKid(ev.title, agendaKids);
+              const kidStyle = kid ? `--kid-color:${kid.color}` : "";
+              const kidTag = kid ? `<span class="kid-tag">${kid.emoji || ""}</span>` : "";
+              return `
+              <li class="agenda-row${ev.allDay ? " all-day" : ""}" style="${kidStyle}">
+                <div class="time">${formatTime(ev)}</div>
+                <div class="title">${kidTag}${ev.title}</div>
+              </li>`;
+            })
+            .join("");
+          return `
+            <section class="day-group">
+              <div class="day-head">
+                <span>${head.label}</span>
+                ${dateHtml}
+              </div>
+              <ul class="agenda-rows">${rows}</ul>
+            </section>`;
+        })
+        .join("");
+    }
+
+    function listItemsForDisplay(items) {
+      return (items || []).filter((item) => !item.done);
+    }
+
+    function renderChecklist(kind) {
+      const listId = kind === "grocery" ? "groceryList" : "reminderList";
+      const state = listState[kind];
+      const root = document.getElementById(listId);
+      const items = listItemsForDisplay(state.items);
+
+      if (!items.length) {
+        root.dataset.ids = "";
+        root.innerHTML = `<li class="empty-list">No items yet — tap + Add below</li>`;
+        return;
+      }
+
+      const ids = items.map((item) => item.id).join("|");
+      if (root.dataset.ids === ids && root.querySelector("li[data-id]")) {
+        items.forEach((item) => {
+          const li = root.querySelector(`li[data-id="${item.id}"]`);
+          if (!li) return;
+          li.querySelector(".txt").textContent = item.text;
+        });
+        return;
+      }
+
+      root.dataset.ids = ids;
+      root.innerHTML = items
+        .map(
+          (item) => `
+          <li data-id="${item.id}">
+            <span class="list-dot" aria-hidden="true">•</span>
+            <span class="txt">${item.text}</span>
+          </li>`
+        )
+        .join("");
+    }
+
+    function wireListAddButtons() {
+      document.querySelectorAll("[data-open-list]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const kind = btn.dataset.openList;
+          const isGrocery = kind === "grocery";
+          TouchInput.open({
+            title: isGrocery ? "Add grocery" : "Add reminder",
+            placeholder: isGrocery ? "e.g. Milk, Bread…" : "e.g. Call dentist…",
+            onSubmit: async (text) => {
+              try {
+                const res = await FamilyAPI.addListItem(kind, text);
+                listState.grocery.items = res.state.lists.grocery || [];
+                listState.reminders.items = res.state.lists.reminders || [];
+                listsFp = JSON.stringify({
+                  grocery: listState.grocery.items,
+                  reminders: listState.reminders.items,
+                });
+                renderChecklist("grocery");
+                renderChecklist("reminders");
+              } catch (err) {
+                console.warn("Failed to add list item", err);
+              }
+            },
+          });
+        });
+      });
+    }
+
+    let eventsFp = "";
+    let listsFp = "";
+
+    async function loadCalendar() {
+      const result = await FamilyCalendar.loadEvents(CFG);
+      const fp = JSON.stringify(
+        (result.events || []).map((e) => [e.id, e.title, +e.start, +e.end, e.allDay])
+      );
+      if (fp === eventsFp) return;
+      eventsFp = fp;
+      events = result.events;
+      renderAgenda();
+      renderMonth();
+    }
+
+    async function loadLists() {
+      try {
+        const data = await FamilyAPI.getState();
+        agendaKids = data.kids?.length ? data.kids : CFG.kids || [];
+        const nextGrocery = data.lists?.grocery || [];
+        const nextReminders = data.lists?.reminders || [];
+        const fp = JSON.stringify({ grocery: nextGrocery, reminders: nextReminders });
+        if (fp === listsFp) return;
+        listsFp = fp;
+        listState.grocery.items = nextGrocery;
+        listState.reminders.items = nextReminders;
+        renderChecklist("grocery");
+        renderChecklist("reminders");
+        renderAgenda();
+      } catch (err) {
+        console.warn("Family API lists unavailable.", err);
+        document.getElementById("groceryList").innerHTML =
+          `<li class="empty-list">Can't reach server — run <strong>python server.py</strong></li>`;
+        document.getElementById("reminderList").innerHTML =
+          `<li class="empty-list">Can't reach server</li>`;
+      }
+    }
+
+    wireListAddButtons();
+
+    updateClock();
+    loadWeather();
+    loadAlerts();
+    loadCalendar();
+    loadLists();
+
+    // Realtime-ish refresh cadence (Pi kiosk friendly)
+    setInterval(updateClock, 1000);
+    setInterval(loadWeather, 5 * 60 * 1000);
+    setInterval(loadAlerts, 3 * 60 * 1000);
+    setInterval(loadCalendar, 60 * 1000);
+    setInterval(loadLists, 2500);
+    // Month highlight only needs day-rollover checks
+    setInterval(() => {
+      const day = new Date().getDate();
+      if (loadLists._day !== day) {
+        loadLists._day = day;
+        renderMonth();
+      }
+    }, 30 * 1000);
+
+    // Refresh when coming back online / tab visible
+    window.addEventListener("online", () => {
+      loadWeather();
+      loadCalendar();
+      loadLists();
+      loadAlerts();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        updateClock();
+        loadWeather();
+        loadCalendar();
+        loadLists();
+      }
+    });
+  </script>
+</body>
+</html>

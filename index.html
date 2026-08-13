@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Family Board — Screens</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="shared/base.css" />
+  <style>
+    body {
+      overflow: auto;
+      background:
+        radial-gradient(ellipse 80% 40% at 10% 0%, rgba(90, 167, 255, 0.18), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg2));
+    }
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 1rem;
+      display: grid;
+      gap: 0.85rem;
+    }
+    .hero { text-align: center; padding: 1.3rem 1rem; }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 8vw, 2.8rem);
+      font-weight: 800;
+      line-height: 1;
+    }
+    .hero p { color: var(--ink-soft); font-weight: 700; margin-top: 0.4rem; }
+    a.card {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      background: var(--panel-strong);
+      border-radius: 22px;
+      padding: 1.15rem 1.1rem;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+    a.card:hover { border-color: var(--coral); }
+    .kicker {
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: var(--ink-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    a.card h2 {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin: 0.2rem 0 0.35rem;
+    }
+    a.card p, .note {
+      font-weight: 700;
+      color: var(--ink-soft);
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="panel hero">
+      <h1>Family Board</h1>
+      <p>Dark portrait screens · server-backed family hub</p>
+    </section>
+
+    <a class="card" href="admin/">
+      <div class="kicker">Phone admin · PWA</div>
+      <h2>Family Admin</h2>
+      <p>Log in from iPhone/Android, then Add to Home Screen. Manage kids, chores, lists, rewards.</p>
+    </a>
+
+    <a class="card" href="screens/calendar.html?kiosk=1">
+      <div class="kicker">Kiosk · TV / Pi</div>
+      <h2>Start kiosk rotation</h2>
+      <p>Calendar, chores, rewards, and whiteboard rotate automatically. Swipe or tap dots to switch.</p>
+    </a>
+
+    <a class="card" href="screens/calendar.html">
+      <div class="kicker">Screen 1 · Home</div>
+      <h2>Calendar + Weather + Lists</h2>
+      <p>Google Calendar weekly agenda, monthly highlight, groceries & reminders.</p>
+    </a>
+    <a class="card" href="screens/chores.html">
+      <div class="kicker">Screen 2</div>
+      <h2>Chore Quests</h2>
+      <p>6 kids, tap quests, streaks, star bank.</p>
+    </a>
+    <a class="card" href="screens/rewards.html">
+      <div class="kicker">Screen 3</div>
+      <h2>Reward Shop</h2>
+      <p>Spend earned stars on family rewards.</p>
+    </a>
+    <a class="card" href="screens/whiteboard.html">
+      <div class="kicker">Screen 4</div>
+      <h2>Family Whiteboard</h2>
+      <p>Draw on the TV — colors, pen sizes, eraser. Syncs across displays.</p>
+    </a>
+
+    <p class="note panel">
+      Start with <strong>python server.py</strong>.
+      Admin PWA: <strong>/admin/</strong> (password default <strong>family</strong>).
+      Kiosk: <strong>/screens/calendar.html?kiosk=1</strong> (swipe between screens).
+      Pi install: <strong>sudo bash scripts/pi/install-kiosk.sh</strong>.
+      HTTPS for phone install: see <strong>docs/deploy.md</strong> (Cloudflare Tunnel).
+    </p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Family Board — Rewards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
+  <script src="../shared/config.js"></script>
+  <script src="../shared/display-init.js"></script>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <style>
+    .top {
+      flex-shrink: 0;
+    }
+
+    .top h1 {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .top p {
+      color: var(--ink-soft);
+      font-weight: 700;
+      margin: 0.25rem 0 0.85rem;
+    }
+
+    .picker {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+
+    .pick {
+      border: 3px solid transparent;
+      border-radius: 18px;
+      background: #141414;
+      padding: 0.55rem 0.35rem;
+      text-align: center;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .pick.active {
+      background: #1a1a1a;
+      border-color: var(--active, var(--coral));
+      transform: translateY(-2px);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--active, var(--coral)) 25%, transparent);
+    }
+
+    .pick .emoji { font-size: 1.55rem; line-height: 1; }
+    .pick .name {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 0.95rem;
+    }
+    .pick .bal {
+      font-weight: 800;
+      font-size: 0.8rem;
+      color: #b77800;
+    }
+
+    .shop {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .shop-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .shop-head h2 {
+      font-family: var(--font-display);
+      font-size: 1.45rem;
+      font-weight: 800;
+    }
+
+    .balance-pill {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.15rem;
+      background: rgba(255, 201, 74, 0.4);
+      color: #b77800;
+      border-radius: 999px;
+      padding: 0.4rem 0.85rem;
+    }
+
+    .reward-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.65rem;
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
+      align-content: start;
+    }
+
+    .reward {
+      border: 2px solid transparent;
+      border-radius: 20px;
+      background: var(--panel-strong);
+      padding: 0.9rem 0.8rem 0.85rem;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      min-height: 140px;
+      transition: transform 0.15s ease, border-color 0.2s ease, opacity 0.2s ease;
+    }
+
+    .reward:active { transform: scale(0.97); }
+
+    .reward.locked {
+      opacity: 0.55;
+    }
+
+    .reward .icon {
+      font-size: 1.9rem;
+      line-height: 1;
+    }
+
+    .reward .title {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.1rem;
+      line-height: 1.15;
+      flex: 1;
+    }
+
+    .reward .cost {
+      font-weight: 800;
+      color: #b77800;
+      background: rgba(255, 201, 74, 0.35);
+      border-radius: 999px;
+      padding: 0.3rem 0.65rem;
+      width: fit-content;
+      font-size: 0.95rem;
+    }
+
+    .recent {
+      flex-shrink: 0;
+      max-height: 28%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .recent h2 {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      font-weight: 800;
+      margin-bottom: 0.55rem;
+      flex-shrink: 0;
+    }
+
+    .recent-list {
+      list-style: none;
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .recent-list li {
+      background: #141414;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 0.55rem 0.7rem;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 0.92rem;
+    }
+
+    .recent-list .meta {
+      color: var(--ink-soft);
+      white-space: nowrap;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 1.4rem;
+      transform: translateX(-50%) translateY(20px);
+      background: #1e3a4c;
+      color: #fff;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.15rem;
+      padding: 0.85rem 1.2rem;
+      border-radius: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      z-index: 30;
+      max-width: 90%;
+      text-align: center;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body class="tv-stage">
+  <div class="tv-frame">
+  <div class="screen">
+    <section class="panel top">
+      <h1>🎁 Reward Shop</h1>
+      <p>Spend stars you earned on chore quests</p>
+      <div class="picker" id="picker" role="tablist"></div>
+    </section>
+
+    <section class="panel shop" aria-label="Rewards">
+      <div class="shop-head">
+        <h2>Tap to redeem</h2>
+        <div class="balance-pill" id="balancePill">★ 0</div>
+      </div>
+      <div class="reward-grid" id="rewardGrid"></div>
+    </section>
+
+    <section class="panel recent" aria-label="Recent redemptions">
+      <h2>Recent wins</h2>
+      <ul class="recent-list" id="recentList"></ul>
+    </section>
+  </div>
+  </div>
+
+  <div class="toast" id="toast" aria-live="polite"></div>
+  <div class="confetti" id="confetti" aria-hidden="true"></div>
+
+  <script src="../shared/family-api.js"></script>
+  <script src="../shared/display-sync.js"></script>
+  <script src="../shared/night-mode.js"></script>
+  <script src="../shared/screensaver.js"></script>
+  <script src="../shared/fx.js"></script>
+  <script src="../shared/screens.js"></script>
+  <script src="../shared/kiosk-nav.js"></script>
+  <script>
+    const state = { data: null, kidId: null, fp: "" };
+
+    if (new URLSearchParams(location.search).has("kiosk")) {
+      document.body.classList.add("kiosk");
+    }
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.classList.remove("show"), 2400);
+    }
+
+    function activeKids() {
+      return (state.data?.kids || []).filter((k) => k.active !== false);
+    }
+
+    function activeRewards() {
+      return (state.data?.rewards || []).filter((r) => r.active !== false);
+    }
+
+    function renderPicker() {
+      const kids = activeKids();
+      if (!kids.length) {
+        document.getElementById("picker").innerHTML =
+          `<p style="color:var(--ink-soft);font-weight:700">Add kids in Admin</p>`;
+        return;
+      }
+      if (!state.kidId || !kids.find((k) => k.id === state.kidId)) {
+        state.kidId = kids[0].id;
+      }
+
+      const root = document.getElementById("picker");
+      const ids = kids.map((k) => k.id).join("|");
+      if (root.dataset.ids !== ids) {
+        root.dataset.ids = ids;
+        root.innerHTML = kids
+          .map((kid) => {
+            const active = kid.id === state.kidId;
+            return `
+              <button class="pick${active ? " active" : ""}" data-kid="${kid.id}" style="--active:${kid.color}">
+                <div class="emoji">${kid.emoji || "⭐"}</div>
+                <div class="name">${kid.name}</div>
+                <div class="bal">★ ${state.data.balances[kid.id] || 0}</div>
+              </button>`;
+          })
+          .join("");
+        root.querySelectorAll("[data-kid]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            state.kidId = btn.dataset.kid;
+            state.fp = "";
+            renderAll();
+          });
+        });
+        return;
+      }
+
+      kids.forEach((kid) => {
+        const btn = root.querySelector(`[data-kid="${kid.id}"]`);
+        if (!btn) return;
+        btn.classList.toggle("active", kid.id === state.kidId);
+        btn.querySelector(".bal").textContent = `★ ${state.data.balances[kid.id] || 0}`;
+      });
+    }
+
+    function renderShop() {
+      const kid = activeKids().find((k) => k.id === state.kidId);
+      const bal = kid ? state.data.balances[kid.id] || 0 : 0;
+      document.getElementById("balancePill").textContent = `★ ${bal}`;
+
+      const grid = document.getElementById("rewardGrid");
+      const rewards = activeRewards();
+      if (!kid) {
+        grid.dataset.ids = "";
+        grid.innerHTML = `<p style="color:var(--ink-soft);font-weight:700;padding:1rem">Pick a kid above</p>`;
+        return;
+      }
+      if (!rewards.length) {
+        grid.dataset.ids = "";
+        grid.innerHTML = `<p style="color:var(--ink-soft);font-weight:700;padding:1rem">Add rewards in Admin</p>`;
+        return;
+      }
+
+      const ids = rewards.map((r) => r.id).join("|");
+      if (grid.dataset.ids === ids && grid.querySelector("[data-reward]")) {
+        rewards.forEach((r) => {
+          const btn = grid.querySelector(`[data-reward="${r.id}"]`);
+          if (!btn) return;
+          const can = bal >= r.cost;
+          btn.classList.toggle("locked", !can);
+          btn.querySelector(".icon").textContent = r.icon || "🎁";
+          btn.querySelector(".title").textContent = r.title;
+          btn.querySelector(".cost").textContent = `★ ${r.cost}`;
+        });
+        return;
+      }
+
+      grid.dataset.ids = ids;
+      grid.innerHTML = rewards
+        .map((r) => {
+          const can = bal >= r.cost;
+          return `
+            <button class="reward${can ? "" : " locked"}" data-reward="${r.id}">
+              <div class="icon">${r.icon || "🎁"}</div>
+              <div class="title">${r.title}</div>
+              <div class="cost">★ ${r.cost}</div>
+            </button>`;
+        })
+        .join("");
+
+      grid.querySelectorAll("[data-reward]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const reward = rewards.find((r) => r.id === btn.dataset.reward);
+          if (!reward) return;
+          const currentKid = activeKids().find((k) => k.id === state.kidId);
+          if (!currentKid) return;
+          const currentBal = state.data.balances[currentKid.id] || 0;
+          if (currentBal < reward.cost) {
+            toast(`Need ${reward.cost - currentBal} more stars, ${currentKid.name}!`);
+            return;
+          }
+          try {
+            await FamilyAPI.redeemReward(reward.id, currentKid.id);
+            state.fp = "";
+            state.data = await FamilyAPI.getState();
+            FamilyFX.celebrate(document.getElementById("confetti"), btn);
+            toast(`${currentKid.emoji || ""} ${currentKid.name} unlocked ${reward.icon || "🎁"} ${reward.title}!`);
+            renderAll();
+          } catch (err) {
+            toast(err.message || "Couldn't redeem — is the server running?");
+            console.warn(err);
+          }
+        });
+      });
+    }
+
+    function renderRecent() {
+      const list = document.getElementById("recentList");
+      const items = state.data?.redemptions || [];
+      if (!items.length) {
+        list.innerHTML = `<li><span>No redemptions yet — earn stars on the chore screen!</span></li>`;
+        return;
+      }
+      list.innerHTML = items
+        .slice(0, 8)
+        .map((item) => {
+          const when = new Date(item.at).toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+          return `<li><span>${item.icon || "🎁"} ${item.kidName}: ${item.title}</span><span class="meta">★${item.cost} · ${when}</span></li>`;
+        })
+        .join("");
+    }
+
+    function renderAll() {
+      renderPicker();
+      renderShop();
+      renderRecent();
+    }
+
+    async function load() {
+      try {
+        const data = await FamilyAPI.getState();
+        const fp = JSON.stringify({
+          kids: data.kids,
+          rewards: data.rewards,
+          balances: data.balances,
+          redemptions: data.redemptions,
+          kidId: state.kidId,
+        });
+        if (fp === state.fp) return;
+        state.fp = fp;
+        state.data = data;
+        renderAll();
+      } catch (err) {
+        if (!state.data) {
+          document.getElementById("rewardGrid").innerHTML =
+            `<p style="color:var(--ink-soft);font-weight:700;padding:1rem">Can't reach Family API.<br/>Run <strong>python server.py</strong></p>`;
+        }
+        console.warn(err);
+      }
+    }
+
+    load();
+    setInterval(load, 2000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") load();
+    });
+  </script>
+</body>
+</html>

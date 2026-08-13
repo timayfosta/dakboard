@@ -1,0 +1,10 @@
+name = "family-board-calendar"
+main = "workers/calendar-proxy.js"
+compatibility_date = "2024-01-01"
+
+# After deploy, set googleCalendar.proxyUrl in shared/config.js to:
+#   https://<your-worker>.<account>.workers.dev
+
+[vars]
+# Do NOT put the iCal URL here — use a secret:
+#   npx wrangler secret put ICS_URL

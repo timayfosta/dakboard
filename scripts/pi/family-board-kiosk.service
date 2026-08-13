@@ -1,0 +1,17 @@
+[Unit]
+Description=Family Board Chromium kiosk
+After=graphical.target family-board-api.service
+Wants=family-board-api.service
+
+[Service]
+Type=simple
+User=pi
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+WorkingDirectory=/home/pi/family-board
+ExecStart=/home/pi/family-board/scripts/pi/start-kiosk.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target

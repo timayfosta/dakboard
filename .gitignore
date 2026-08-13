@@ -1,0 +1,16 @@
+# Local / private secrets — never commit
+shared/secrets.local.js
+.env
+.env.*
+!.env.example
+
+# Runtime data
+data/*
+!data/.gitkeep
+
+node_modules/
+.wrangler/
+dist/
+__pycache__/
+*.pyc
+.DS_Store

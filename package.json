@@ -1,0 +1,10 @@
+{
+  "name": "family-board",
+  "private": true,
+  "scripts": {
+    "start": "python scripts/restart_server.py",
+    "start:plain": "python server.py",
+    "tasks:auth": "python scripts/google_tasks_auth.py",
+    "tasks:lists": "python scripts/google_tasks_auth.py --lists"
+  }
+}

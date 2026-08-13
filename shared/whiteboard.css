@@ -1,0 +1,207 @@
+/* Full-screen whiteboard — no TV scaling, canvas = viewport */
+html.wb-page,
+body.wb-page {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+  background: #161616;
+}
+
+body.wb-page {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+}
+
+body.wb-page.kiosk {
+  cursor: none;
+}
+
+#wbCanvas {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+  z-index: 1;
+}
+
+.wb-toolbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  padding: 0.4rem 0.5rem;
+  padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
+  background: rgba(10, 10, 10, 0.92);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  touch-action: manipulation;
+}
+
+.wb-tools-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.wb-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.wb-left {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.wb-color-hint {
+  font-weight: 800;
+  font-size: clamp(0.58rem, 1.8vw, 0.68rem);
+  line-height: 1.2;
+  color: var(--ink-soft);
+  max-width: 3.4rem;
+}
+
+.wb-color-picker {
+  position: relative;
+  flex-shrink: 0;
+  width: clamp(44px, 9vw, 52px);
+  height: clamp(44px, 9vw, 52px);
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  cursor: pointer;
+  display: block;
+}
+
+.wb-color-swatch {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.wb-color-picker input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.wb-utensils {
+  display: flex;
+  gap: 0.28rem;
+  justify-content: center;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.wb-utensils::-webkit-scrollbar {
+  display: none;
+}
+
+.wb-utensil {
+  flex: 0 0 auto;
+  width: clamp(44px, 9vw, 52px);
+  height: clamp(44px, 9vw, 52px);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #171717;
+  font-size: clamp(1.05rem, 3.8vw, 1.3rem);
+  line-height: 1;
+  color: var(--ink-soft);
+  display: grid;
+  place-items: center;
+}
+
+.wb-utensil.active {
+  color: var(--ink);
+  border-color: var(--coral);
+  background: rgba(255, 122, 89, 0.12);
+}
+
+.wb-utensil:active {
+  transform: scale(0.96);
+}
+
+.wb-right {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  justify-self: end;
+}
+
+.wb-sizes {
+  display: flex;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+}
+
+.wb-size {
+  width: clamp(44px, 9vw, 52px);
+  height: clamp(44px, 9vw, 52px);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #171717;
+  display: grid;
+  place-items: center;
+}
+
+.wb-size span {
+  display: block;
+  border-radius: 50%;
+}
+
+.wb-size.active {
+  border-color: var(--coral);
+  background: rgba(255, 122, 89, 0.12);
+}
+
+.wb-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.wb-tool {
+  width: clamp(44px, 9vw, 52px);
+  height: clamp(44px, 9vw, 52px);
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #171717;
+  font-weight: 800;
+  font-size: clamp(1rem, 3.5vw, 1.2rem);
+  color: var(--ink-soft);
+  display: grid;
+  place-items: center;
+}
+
+.wb-tool.wb-clear {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.wb-tool:active {
+  transform: scale(0.97);
+}
+

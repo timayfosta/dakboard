@@ -1,0 +1,179 @@
+.touch-input-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.82);
+  display: none;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0.4rem;
+}
+
+.touch-input-overlay.open {
+  display: flex;
+}
+
+.touch-input-sheet {
+  width: 100%;
+  flex: 1 1 auto;
+  max-height: 90%;
+  min-height: 52%;
+  background: #121212;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px 20px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: rise 0.25s ease both;
+  container-type: size;
+}
+
+.touch-input-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem 0.4rem;
+  flex-shrink: 0;
+}
+
+.touch-input-head h3 {
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 4cqw, 1.2rem);
+  font-weight: 800;
+}
+
+.touch-input-close {
+  width: clamp(40px, 10cqw, 48px);
+  height: clamp(40px, 10cqw, 48px);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #1a1a1a;
+  font-size: 1.2rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.touch-input-preview {
+  margin: 0 0.7rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #0a0a0a;
+  font-weight: 700;
+  font-size: clamp(0.95rem, 3.5cqw, 1.1rem);
+  min-height: clamp(2.4rem, 8cqh, 3.2rem);
+  line-height: 1.35;
+  word-break: break-word;
+  flex-shrink: 0;
+}
+
+.touch-input-preview.empty {
+  color: var(--ink-soft);
+}
+
+.touch-input-body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.4rem 0.7rem 0.45rem;
+}
+
+.touch-keyboard {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(5, 1fr);
+  gap: clamp(0.22rem, 1.2cqh, 0.4rem);
+}
+
+.touch-kb-row {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: clamp(0.18rem, 1cqw, 0.32rem);
+  min-height: 0;
+}
+
+.touch-kb-row.row-9 {
+  grid-template-columns: repeat(9, 1fr);
+}
+
+.touch-key {
+  min-height: 0;
+  height: 100%;
+  border-radius: clamp(8px, 2cqw, 12px);
+  border: 1px solid var(--line);
+  background: #1c1c1c;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(1.1rem, min(5.5cqw, 10cqh), 2rem);
+  line-height: 1;
+  padding: 0;
+}
+
+.touch-kb-bottom {
+  grid-template-columns: 1fr auto;
+}
+
+.touch-key.space {
+  font-size: clamp(0.95rem, min(4cqw, 8cqh), 1.35rem);
+  letter-spacing: 0.04em;
+}
+
+.touch-key.clear-key {
+  min-width: clamp(72px, 18cqw, 100px);
+  font-size: clamp(0.85rem, min(3.5cqw, 7cqh), 1.15rem);
+}
+
+.touch-key:active {
+  background: #2a2a2a;
+  transform: scale(0.96);
+}
+
+.touch-input-foot {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 0.45rem;
+  padding: 0.5rem 0.7rem 0.65rem;
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+}
+
+.touch-input-foot button {
+  min-height: clamp(46px, 11cqh, 58px);
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: clamp(0.95rem, 3.5cqw, 1.05rem);
+}
+
+.touch-input-foot .cancel {
+  border: 1px solid var(--line);
+  background: #1a1a1a;
+}
+
+.touch-input-foot .submit {
+  border: none;
+  background: var(--coral);
+  color: #000;
+}
+
+.touch-input-foot .submit:disabled {
+  opacity: 0.45;
+}
+
+.list-add-btn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--coral);
+  border-radius: 0;
+  padding: 0.45rem 0.1rem;
+  font-weight: 800;
+  font-size: 0.88rem;
+  flex-shrink: 0;
+}
+
+.list-add-btn:active {
+  transform: scale(0.98);
+}
