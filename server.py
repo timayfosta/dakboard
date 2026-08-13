@@ -35,6 +35,8 @@ import screensaver_albums  # noqa: E402
 PORT = 8765
 CHECK_STYLES = frozenset({"circle", "square", "star", "heart", "diamond"})
 API_VERSION = 2
+BOOT_ID = uuid.uuid4().hex
+STARTED_AT = int(time.time() * 1000)
 PHOTOS_DIR = ROOT / "data" / "photos"
 SECRETS = ROOT / "shared" / "secrets.local.js"
 SESSIONS: dict[str, float] = {}  # token -> expires_at
@@ -136,7 +138,12 @@ class Handler(SimpleHTTPRequestHandler):
     def end_headers(self):
         if self.path.startswith("/api/"):
             self.send_header("Cache-Control", "no-store")
-        elif self.path.startswith("/admin/"):
+        elif (
+            self.path.startswith("/admin/")
+            or self.path.startswith("/phone/")
+            or self.path.startswith("/screens/")
+            or self.path.startswith("/shared/")
+        ):
             self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
@@ -158,12 +165,24 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/calendar":
             return self.proxy_calendar()
         if path == "/api/health":
+            head = deploy.git_head()
             return send_json(
                 self,
                 {
                     "ok": True,
                     "version": API_VERSION,
-                    "features": ["settings", "screensaver", "whiteboard", "nightMode", "rotation"],
+                    "bootId": BOOT_ID,
+                    "startedAt": STARTED_AT,
+                    "git": {
+                        "sha": head.get("sha") or "",
+                        "branch": head.get("branch") or "",
+                    },
+                    "deploy": {
+                        "gitRepo": deploy.is_git_repo(),
+                        "webhookConfigured": bool(load_secrets().get("deployWebhookSecret")),
+                        "last": deploy.get_last_result(),
+                    },
+                    "features": ["settings", "screensaver", "whiteboard", "nightMode", "rotation", "liveReload"],
                 },
             )
         if path == "/api/auth/me":

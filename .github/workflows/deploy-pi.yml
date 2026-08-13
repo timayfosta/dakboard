@@ -3,6 +3,7 @@ name: Deploy to Pi
 on:
   push:
     branches: [main, master]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -14,8 +15,21 @@ jobs:
           host: ${{ secrets.PI_HOST }}
           username: ${{ secrets.PI_USER }}
           key: ${{ secrets.PI_SSH_KEY }}
+          script_stop: true
           script: |
             set -euo pipefail
-            cd ~/family-board
-            git pull --ff-only
-            sudo systemctl restart family-board-api
+            ROOT=""
+            for candidate in "$HOME/family-board" "$HOME/dakboard" "$HOME/Projects/dakboard"; do
+              if [[ -d "$candidate/.git" ]]; then
+                ROOT="$candidate"
+                break
+              fi
+            done
+            if [[ -z "$ROOT" ]]; then
+              echo "Could not find git repo (tried ~/family-board, ~/dakboard, ~/Projects/dakboard)" >&2
+              exit 1
+            fi
+            echo "Deploying in $ROOT"
+            cd "$ROOT"
+            bash scripts/deploy_update.sh
+            echo "Deploy finished. Open clients will auto-reload via /api/health bootId."

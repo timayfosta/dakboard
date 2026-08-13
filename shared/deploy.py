@@ -18,10 +18,48 @@ def is_git_repo() -> bool:
     return (ROOT / ".git").exists()
 
 
+def git_head() -> dict[str, Any]:
+    if not is_git_repo():
+        return {"ok": False}
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        branch = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        return {
+            "ok": sha.returncode == 0,
+            "sha": (sha.stdout or "").strip(),
+            "branch": (branch.stdout or "").strip(),
+        }
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return {"ok": False}
+
+
 def git_pull() -> dict[str, Any]:
     if not is_git_repo():
         return {"ok": False, "error": "Not a git repository — use git clone on the Pi, not rsync-only install"}
     try:
+        # Fetch first so push-triggered deploys see remote commits reliably
+        subprocess.run(
+            ["git", "fetch", "--prune", "origin"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
         proc = subprocess.run(
             ["git", "pull", "--ff-only"],
             cwd=ROOT,
@@ -38,12 +76,15 @@ def git_pull() -> dict[str, Any]:
     out = (proc.stdout or "").strip()
     err = (proc.stderr or "").strip()
     ok = proc.returncode == 0
+    head = git_head()
     return {
         "ok": ok,
         "stdout": out,
         "stderr": err,
         "returncode": proc.returncode,
         "alreadyUpToDate": ok and "Already up to date" in out,
+        "sha": head.get("sha") or "",
+        "branch": head.get("branch") or "",
     }
 
 

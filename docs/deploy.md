@@ -42,19 +42,20 @@ The **Family Whiteboard** (`screens/whiteboard.html`) saves drawings to the Pi a
 
 ## Auto-deploy on git push
 
+Pushing to GitHub does **not** update phones/TVs by itself. The Pi must pull + restart, then open clients auto-reload.
+
+**Flow after this is configured:**
+
+1. You push to `main` / `master`
+2. GitHub Actions (or webhook) runs `git pull` + restarts `family-board-api`
+3. Admin PWA + TV screens notice the new `bootId` from `/api/health` and **reload themselves** (within a few seconds)
+
 The Pi must be a **git clone** (not rsync-only) for pull-to-update:
 
 ```bash
 git clone https://github.com/YOU/dakboard.git ~/family-board
 cd ~/family-board
 sudo bash scripts/pi/install-kiosk.sh
-```
-
-Add to `shared/secrets.local.js` on the Pi:
-
-```js
-deployWebhookSecret: "pick-a-long-random-string",
-deployBranch: "main",   // optional — defaults to main
 ```
 
 ### Option A — GitHub Actions (recommended for home Pi)
@@ -65,28 +66,39 @@ Works without exposing the Pi to the internet. Add repository secrets:
 |--------|--------|
 | `PI_HOST` | Pi IP or Tailscale hostname |
 | `PI_USER` | `pi` |
-| `PI_SSH_KEY` | Private SSH key (read-only deploy key on Pi) |
+| `PI_SSH_KEY` | Private SSH key that can SSH into the Pi |
 
-On push to `main`/`master`, `.github/workflows/deploy-pi.yml` SSHs in and runs `git pull` + `systemctl restart family-board-api`.
+On push to `main`/`master` (or manual **Actions → Deploy to Pi → Run workflow**), the job SSHs in and runs `scripts/deploy_update.sh`.
+
+Check: GitHub → **Actions** → latest “Deploy to Pi” run should be green.
 
 ### Option B — GitHub webhook
 
 If the Pi is reachable (port forward, Tailscale Funnel, or Cloudflare Tunnel):
 
+Add to `shared/secrets.local.js` on the Pi:
+
+```js
+deployWebhookSecret: "pick-a-long-random-string",
+deployBranch: "main",   // optional — defaults to main
+```
+
 1. GitHub repo → **Settings → Webhooks → Add**
-2. URL: `http://<pi-ip>:8765/api/webhooks/github`
+2. URL: `https://<your-tunnel>/api/webhooks/github` (or `http://<pi-ip>:8765/api/webhooks/github`)
 3. Content type: `application/json`
 4. Secret: same as `deployWebhookSecret`
 5. Events: **Just the push event**
 
-Push to `main`/`master` triggers `git pull --ff-only` and a server restart.
+Push to `main`/`master` triggers `git pull --ff-only` and a server restart. Open admin/TV tabs then auto-refresh.
 
 Generic webhook (same secret): `POST /api/webhooks/deploy` with header `X-Deploy-Token: <secret>`.
 
 ### Manual deploy
 
-- **Admin → More → Pull updates & restart**
+- **Admin → More → Pull updates & restart now**
 - Or on the Pi: `bash scripts/deploy_update.sh`
+
+After restart, leave admin/TV pages open — they should refresh on their own.
 
 ## Admin PWA on your phone (HTTPS)
 

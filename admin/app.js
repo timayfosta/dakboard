@@ -844,8 +844,12 @@
       </section>
       <section class="card">
         <h2>Server</h2>
-        <p class="muted">Pull latest code and restart after updates. You'll be logged out briefly.</p>
-        <button class="btn block" type="button" id="deployServerBtn">Pull updates &amp; restart</button>
+        <p class="muted">
+          On push to GitHub, the Pi should auto pull + restart (Actions or webhook).
+          Open screens and this admin app then auto-refresh.
+        </p>
+        <p class="muted" id="deployMeta">Checking deploy status…</p>
+        <button class="btn block" type="button" id="deployServerBtn">Pull updates &amp; restart now</button>
         <button class="btn secondary block" type="button" id="restartServerBtn">Restart only</button>
         <p class="muted restart-status hidden" id="restartStatus"></p>
       </section>
@@ -853,6 +857,27 @@
         <h2>Session</h2>
         <button class="btn danger block" id="logoutBtn">Log out</button>
       </section>`;
+  }
+
+  async function fillDeployMeta() {
+    const el = $("#deployMeta");
+    if (!el) return;
+    try {
+      const health = await AdminAPI.health();
+      const git = health?.git || {};
+      const d = health?.deploy || {};
+      const bits = [];
+      if (git.sha) bits.push(`code ${git.sha}${git.branch ? ` @ ${git.branch}` : ""}`);
+      bits.push(d.gitRepo ? "git repo ready" : "not a git repo — auto-pull won't work");
+      bits.push(d.webhookConfigured ? "webhook secret set" : "no webhook secret yet");
+      const last = d.last;
+      if (last?.ok === false) bits.push(`last deploy failed: ${last.error || last.pull?.stderr || "unknown"}`);
+      else if (last?.pull?.alreadyUpToDate) bits.push("last pull: already up to date");
+      else if (last?.ok) bits.push("last deploy ok");
+      el.textContent = bits.join(" · ");
+    } catch {
+      el.textContent = "Can't reach server health check";
+    }
   }
 
   async function waitForServerRestart(statusEl, btn) {
@@ -1263,6 +1288,7 @@
     }
 
     const deployBtn = $("#deployServerBtn");
+    fillDeployMeta();
     if (deployBtn) {
       deployBtn.addEventListener("click", async () => {
         if (
@@ -1365,7 +1391,7 @@
   });
 
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js?v=10").then((reg) => {
+    navigator.serviceWorker.register("sw.js?v=11").then((reg) => {
       reg.update();
     }).catch(() => {});
   }
