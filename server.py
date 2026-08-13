@@ -208,6 +208,7 @@ class Handler(SimpleHTTPRequestHandler):
                 {
                     "last": deploy.get_last_result(),
                     "git": deploy.is_git_repo(),
+                    "busy": deploy.is_busy(),
                 },
             )
         if path == "/api/family/state":

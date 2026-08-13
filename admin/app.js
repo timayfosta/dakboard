@@ -913,6 +913,38 @@
     }
   }
 
+  function deployErrorMessage(result) {
+    if (!result) return "Deploy failed";
+    const pull = result.pull || {};
+    const raw = result.error || pull.error || pull.stderr || pull.stdout || "Deploy failed";
+    const msg = String(raw).trim();
+    if (msg.includes("merge") || msg.includes("overwriting") || msg.includes("local changes")) {
+      return "Git had local changes — retry after this fix (server will reset to origin on pull)";
+    }
+    if (msg.includes("Not a git repository")) {
+      return "Not a git clone — use git clone on this machine for pull-to-update";
+    }
+    if (msg.includes("Cannot fast-forward") || msg.includes("ff-only")) {
+      return "Branch diverged from GitHub — pull will now reset to origin; try again";
+    }
+    return msg.length > 120 ? `${msg.slice(0, 117)}…` : msg;
+  }
+
+  async function waitForDeployFinish() {
+    const start = Date.now();
+    const maxMs = 120000;
+    while (Date.now() - start < maxMs) {
+      await new Promise((r) => setTimeout(r, 800));
+      try {
+        const st = await AdminAPI.deployStatus(state.token);
+        if (!st.busy && st.last) return st.last;
+      } catch {
+        /* server may be restarting */
+      }
+    }
+    return null;
+  }
+
   async function waitForServerRestart(statusEl, btn) {
     const start = Date.now();
     const maxMs = 45000;
@@ -1361,9 +1393,33 @@
           const res = await AdminAPI.deploy(state.token);
           if (res.busy) {
             toast("Deploy already running");
+            deployBtn.disabled = false;
+            $("#restartServerBtn")?.removeAttribute("disabled");
+            if (statusEl) statusEl.classList.add("hidden");
+            return;
           }
         } catch (err) {
           toast(apiErrorMessage(err));
+          deployBtn.disabled = false;
+          $("#restartServerBtn")?.removeAttribute("disabled");
+          if (statusEl) statusEl.classList.add("hidden");
+          return;
+        }
+        if (statusEl) statusEl.textContent = "Pulling updates…";
+        const deployResult = await waitForDeployFinish();
+        await fillDeployMeta();
+        if (!deployResult?.ok) {
+          const msg = deployErrorMessage(deployResult);
+          if (statusEl) statusEl.textContent = msg;
+          toast(msg);
+          deployBtn.disabled = false;
+          $("#restartServerBtn")?.removeAttribute("disabled");
+          return;
+        }
+        if (deployResult.pull?.dirtyBeforeSync) {
+          toast("Local edits were discarded to match GitHub");
+        } else if (deployResult.pull?.alreadyUpToDate) {
+          toast("Already up to date — restarting");
         }
         if (statusEl) statusEl.textContent = "Restarting… waiting for server";
         await waitForServerRestart(statusEl, deployBtn);

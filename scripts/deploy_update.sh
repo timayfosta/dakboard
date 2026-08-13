@@ -11,8 +11,18 @@ if [[ ! -d .git ]]; then
   exit 1
 fi
 
-echo "Pulling latest…"
-git pull --ff-only
+echo "Fetching latest…"
+git fetch --prune origin
+
+UPSTREAM="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+if [[ -z "${UPSTREAM}" ]]; then
+  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  UPSTREAM="origin/${BRANCH}"
+fi
+
+echo "Syncing to ${UPSTREAM} (local edits to tracked files will be discarded)…"
+git reset --hard "${UPSTREAM}"
+git clean -fd
 
 if systemctl is-active --quiet family-board-api 2>/dev/null; then
   echo "Restarting family-board-api…"
