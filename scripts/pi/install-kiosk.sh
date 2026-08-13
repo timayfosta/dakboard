@@ -29,6 +29,8 @@ rsync -a --delete \
 chown -R "${TARGET_USER}:${TARGET_USER}" "${APP_DIR}"
 chmod +x "${APP_DIR}/scripts/pi/start-kiosk.sh"
 chmod +x "${APP_DIR}/scripts/pi/wait-for-api.sh"
+chmod +x "${APP_DIR}/scripts/pi/link-phone-admin.sh"
+bash "${APP_DIR}/scripts/pi/link-phone-admin.sh"
 
 # Patch service user/paths if not "pi"
 sed "s|/home/pi|${HOME_DIR}|g; s|User=pi|User=${TARGET_USER}|g" \

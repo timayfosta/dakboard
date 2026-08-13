@@ -40,6 +40,54 @@ The **Family Whiteboard** (`screens/whiteboard.html`) saves drawings to the Pi a
 
 **Display sizing:** Layout is designed at 1080×1920 portrait (`shared/config.js` → `display`). It auto-scales to fit any monitor — portrait TV fills edge-to-edge; landscape dev monitors get black pillarboxing, not a stretched horizontal layout.
 
+## Auto-deploy on git push
+
+The Pi must be a **git clone** (not rsync-only) for pull-to-update:
+
+```bash
+git clone https://github.com/YOU/dakboard.git ~/family-board
+cd ~/family-board
+sudo bash scripts/pi/install-kiosk.sh
+```
+
+Add to `shared/secrets.local.js` on the Pi:
+
+```js
+deployWebhookSecret: "pick-a-long-random-string",
+deployBranch: "main",   // optional — defaults to main
+```
+
+### Option A — GitHub Actions (recommended for home Pi)
+
+Works without exposing the Pi to the internet. Add repository secrets:
+
+| Secret | Value |
+|--------|--------|
+| `PI_HOST` | Pi IP or Tailscale hostname |
+| `PI_USER` | `pi` |
+| `PI_SSH_KEY` | Private SSH key (read-only deploy key on Pi) |
+
+On push to `main`/`master`, `.github/workflows/deploy-pi.yml` SSHs in and runs `git pull` + `systemctl restart family-board-api`.
+
+### Option B — GitHub webhook
+
+If the Pi is reachable (port forward, Tailscale Funnel, or Cloudflare Tunnel):
+
+1. GitHub repo → **Settings → Webhooks → Add**
+2. URL: `http://<pi-ip>:8765/api/webhooks/github`
+3. Content type: `application/json`
+4. Secret: same as `deployWebhookSecret`
+5. Events: **Just the push event**
+
+Push to `main`/`master` triggers `git pull --ff-only` and a server restart.
+
+Generic webhook (same secret): `POST /api/webhooks/deploy` with header `X-Deploy-Token: <secret>`.
+
+### Manual deploy
+
+- **Admin → More → Pull updates & restart**
+- Or on the Pi: `bash scripts/deploy_update.sh`
+
 ## Admin PWA on your phone (HTTPS)
 
 Browsers require HTTPS to install a PWA from another device. Options:
@@ -53,6 +101,17 @@ Browsers require HTTPS to install a PWA from another device. Options:
    Example: `https://your-tunnel.trycloudflare.com/phone/`
 
    LAN access still works at `/admin/`.
+
+   If `/phone/` returns 404 on the Pi, run once:
+
+   ```bash
+   cd ~/family-board
+   bash scripts/pi/link-phone-admin.sh
+   sudo systemctl restart family-board-api
+   curl -s -o /dev/null -w "phone: %{http_code}\n" http://127.0.0.1:8765/phone/
+   ```
+
+   You should see `phone: 200` before trying the tunnel again.
 
 For a permanent hostname, create a named tunnel in the Cloudflare Zero Trust dashboard.
 

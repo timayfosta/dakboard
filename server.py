@@ -8,6 +8,8 @@ Family Board local server
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 import mimetypes
 import re
@@ -27,6 +29,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "shared"))
 
 import db  # noqa: E402
+import deploy  # noqa: E402
 import screensaver_albums  # noqa: E402
 
 PORT = 8765
@@ -43,7 +46,15 @@ def load_secrets() -> dict[str, str]:
         return {}
     text = SECRETS.read_text(encoding="utf-8")
     out: dict[str, str] = {}
-    for key in ("icsUrl", "adminPassword", "googleClientId", "googleClientSecret", "googleRefreshToken"):
+    for key in (
+        "icsUrl",
+        "adminPassword",
+        "googleClientId",
+        "googleClientSecret",
+        "googleRefreshToken",
+        "deployWebhookSecret",
+        "deployBranch",
+    ):
         match = re.search(rf'{key}:\s*"([^"]*)"', text)
         if match:
             out[key] = match.group(1)
@@ -68,6 +79,11 @@ def read_json(handler: SimpleHTTPRequestHandler) -> dict:
         return json.loads(raw.decode("utf-8") or "{}")
     except json.JSONDecodeError:
         return {}
+
+
+def read_raw_body(handler: SimpleHTTPRequestHandler) -> bytes:
+    length = int(handler.headers.get("Content-Length") or 0)
+    return handler.rfile.read(length) if length else b""
 
 
 def new_id(prefix: str) -> str:
@@ -164,6 +180,16 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return send_json(self, {"ok": True})
+        if path == "/api/admin/deploy/status":
+            if not require_admin(self):
+                return
+            return send_json(
+                self,
+                {
+                    "last": deploy.get_last_result(),
+                    "git": deploy.is_git_repo(),
+                },
+            )
         if path == "/api/family/state":
             return send_json(self, db.public_state())
         if path == "/api/family/revision":
@@ -191,6 +217,12 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         path = (parsed.path.rstrip("/") or "/").lower()
+
+        if path == "/api/webhooks/github":
+            return self.github_webhook()
+        if path == "/api/webhooks/deploy":
+            return self.deploy_webhook()
+
         payload = read_json(self)
 
         if path == "/api/auth/login":
@@ -248,6 +280,11 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.admin_restart()
+
+        if path == "/api/admin/deploy":
+            if not require_admin(self):
+                return
+            return self.admin_deploy()
 
         send_json(self, {"error": "Not found", "path": path, "hint": "Restart server: npm start"}, 404)
 
@@ -797,6 +834,61 @@ class Handler(SimpleHTTPRequestHandler):
     def admin_restart(self):
         schedule_server_restart()
         send_json(self, {"ok": True, "restarting": True})
+
+    def admin_deploy(self):
+        result = deploy.deploy_async(schedule_server_restart, restart=True)
+        status = 200 if result.get("ok") else 409
+        send_json(self, result, status)
+
+    def deploy_webhook(self):
+        secret = load_secrets().get("deployWebhookSecret") or ""
+        if not secret:
+            return send_json(self, {"error": "deployWebhookSecret not configured"}, 503)
+
+        token = (self.headers.get("X-Deploy-Token") or "").strip()
+        if not hmac.compare_digest(token, secret):
+            return send_json(self, {"error": "Unauthorized"}, 401)
+
+        result = deploy.deploy_async(schedule_server_restart, restart=True)
+        send_json(self, result, 202 if result.get("ok") else 409)
+
+    def github_webhook(self):
+        secret = load_secrets().get("deployWebhookSecret") or ""
+        if not secret:
+            return send_json(self, {"error": "deployWebhookSecret not configured"}, 503)
+
+        body = read_raw_body(self)
+        signature = self.headers.get("X-Hub-Signature-256") or ""
+        if signature:
+            expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(signature, expected):
+                return send_json(self, {"error": "Invalid signature"}, 401)
+        else:
+            token = (self.headers.get("X-Deploy-Token") or "").strip()
+            if not hmac.compare_digest(token, secret):
+                return send_json(self, {"error": "Unauthorized"}, 401)
+
+        try:
+            payload = json.loads(body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            return send_json(self, {"error": "Invalid JSON"}, 400)
+
+        event = (self.headers.get("X-GitHub-Event") or "").lower()
+        if event == "ping":
+            return send_json(self, {"ok": True, "pong": True})
+
+        if event != "push":
+            return send_json(self, {"ok": True, "ignored": True, "event": event})
+
+        branch = (load_secrets().get("deployBranch") or "main").strip()
+        allowed = {branch, "main", "master"}
+        ref = payload.get("ref") or ""
+        pushed = ref.replace("refs/heads/", "")
+        if pushed not in allowed:
+            return send_json(self, {"ok": True, "ignored": True, "branch": pushed})
+
+        result = deploy.deploy_async(schedule_server_restart, restart=True)
+        send_json(self, {**result, "branch": pushed}, 202 if result.get("ok") else 409)
 
     def log_message(self, fmt, *args):
         print("[%s] %s" % (self.log_date_time_string(), fmt % args))

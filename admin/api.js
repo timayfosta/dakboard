@@ -40,6 +40,8 @@ const API = {
     API.request(`/api/screensaver/photos/${id}`, { method: "DELETE", token }),
   restartServer: (token) =>
     API.request("/api/admin/restart", { method: "POST", token, body: {} }),
+  deploy: (token) => API.request("/api/admin/deploy", { method: "POST", token, body: {} }),
+  deployStatus: (token) => API.request("/api/admin/deploy/status", { token }),
 };
 
 window.AdminAPI = API;

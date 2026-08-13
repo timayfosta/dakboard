@@ -840,8 +840,9 @@
       </section>
       <section class="card">
         <h2>Server</h2>
-        <p class="muted">Restart after code updates. You'll be logged out and need to sign in again.</p>
-        <button class="btn secondary block" type="button" id="restartServerBtn">Restart server</button>
+        <p class="muted">Pull latest code and restart after updates. You'll be logged out briefly.</p>
+        <button class="btn block" type="button" id="deployServerBtn">Pull updates &amp; restart</button>
+        <button class="btn secondary block" type="button" id="restartServerBtn">Restart only</button>
         <p class="muted restart-status hidden" id="restartStatus"></p>
       </section>
       <section class="card">
@@ -869,6 +870,7 @@
             logoutSession("Server restarted — log in again");
           }
           if (btn) btn.disabled = false;
+          $("#deployServerBtn")?.removeAttribute("disabled");
           if (statusEl) statusEl.classList.add("hidden");
           return true;
         }
@@ -881,6 +883,7 @@
       statusEl.textContent = "Server didn't come back. Run npm start on the PC.";
     }
     if (btn) btn.disabled = false;
+    $("#deployServerBtn")?.removeAttribute("disabled");
     return false;
   }
 
@@ -1247,6 +1250,37 @@
         } catch (err) {
           toast(apiErrorMessage(err) || "Upload failed");
         }
+      });
+    }
+
+    const deployBtn = $("#deployServerBtn");
+    if (deployBtn) {
+      deployBtn.addEventListener("click", async () => {
+        if (
+          !confirm(
+            "Pull the latest code from git and restart the server?\n\nRequires a git clone on this machine (not rsync-only)."
+          )
+        ) {
+          return;
+        }
+        const statusEl = $("#restartStatus");
+        deployBtn.disabled = true;
+        $("#restartServerBtn")?.setAttribute("disabled", "true");
+        if (statusEl) {
+          statusEl.classList.remove("hidden");
+          statusEl.textContent = "Pulling updates…";
+        }
+        try {
+          const res = await AdminAPI.deploy(state.token);
+          if (res.busy) {
+            toast("Deploy already running");
+          }
+        } catch (err) {
+          toast(apiErrorMessage(err));
+        }
+        if (statusEl) statusEl.textContent = "Restarting… waiting for server";
+        await waitForServerRestart(statusEl, deployBtn);
+        $("#restartServerBtn")?.removeAttribute("disabled");
       });
     }
 
