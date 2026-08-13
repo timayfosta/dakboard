@@ -1,7 +1,7 @@
 /* Auto-reload when the Family Board server restarts after a deploy/pull */
 (function () {
   const BOOT_KEY = "family-board-boot-id";
-  const POLL_MS = 4000;
+  const POLL_MS = 2500;
   let sawDown = false;
   let timer = null;
 

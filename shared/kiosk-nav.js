@@ -1,4 +1,4 @@
-/* Touchscreen kiosk navigation — swipe-up drawer + auto-rotate across configured screens */
+/* Touchscreen / mouse kiosk navigation — swipe drawer, rotate loop, admin swipe-down */
 (function () {
   const params = new URLSearchParams(location.search);
   if (!params.has("kiosk")) return;
@@ -9,8 +9,14 @@
   const allScreens = registry.screens.filter((s) => s.enabled !== false);
   if (!allScreens.length) return;
 
+  const mouseMode =
+    params.has("mouse") ||
+    params.get("input") === "mouse" ||
+    localStorage.getItem("family-kiosk-mouse") === "1";
+
   const swipeThreshold = registry.swipeThreshold || 60;
-  const bottomZonePx = 56;
+  const bottomZonePx = 72;
+  const topZonePx = 72;
   const autoHideMs = 5000;
   const defaultSeconds = Math.max(5, Number(registry.rotationSeconds) || 45);
   const defaultPauseMs = Math.max(0, (registry.pauseOnTouchSeconds || 120) * 1000);
@@ -23,13 +29,21 @@
   let rotationSettings = null;
   let pauseMs = defaultPauseMs;
   let pauseUntil = 0;
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let touchStartId = null;
-  let touchFromBottom = false;
-  let touchActive = false;
+  let pointerStartX = 0;
+  let pointerStartY = 0;
+  let pointerFromBottom = false;
+  let pointerFromTop = false;
+  let pointerActive = false;
+  let pointerId = null;
   let rotateTimer = null;
   let hideTimer = null;
+
+  if (mouseMode) {
+    document.body.classList.add("kiosk-mouse");
+    try {
+      localStorage.setItem("family-kiosk-mouse", "1");
+    } catch {}
+  }
 
   function defaultRotationSettings() {
     const screens = {};
@@ -48,7 +62,8 @@
   }
 
   function rotationQueue() {
-    return allScreens.filter((s) => screenConfig(s.id).enabled);
+    const q = allScreens.filter((s) => screenConfig(s.id).enabled);
+    return q.length ? q : allScreens.slice();
   }
 
   function viewportHeight() {
@@ -59,10 +74,15 @@
     return y >= viewportHeight() - bottomZonePx;
   }
 
+  function inTopZone(y) {
+    return y <= topZonePx;
+  }
+
   function goToId(id) {
     const target = allScreens.find((s) => s.id === id);
     if (!target || target.id === currentScreen.id) return;
-    location.href = `${target.path}?kiosk=1`;
+    const q = mouseMode ? "&mouse=1" : "";
+    location.href = `${target.path}?kiosk=1${q}`;
   }
 
   function goToAllOffset(delta) {
@@ -74,9 +94,18 @@
 
   function goToNextRotation() {
     const queue = rotationQueue();
-    if (queue.length < 2) return;
+    if (queue.length < 2) {
+      scheduleRotation();
+      return;
+    }
     const ri = queue.findIndex((s) => s.id === currentScreen.id);
+    // Wrap: after last screen, go back to first
     const next = queue[ri < 0 ? 0 : (ri + 1) % queue.length];
+    if (!next) return;
+    if (next.id === currentScreen.id) {
+      scheduleRotation();
+      return;
+    }
     goToId(next.id);
   }
 
@@ -84,17 +113,19 @@
     clearTimeout(rotateTimer);
     const queue = rotationQueue();
     if (queue.length < 2) return;
-    const ri = queue.findIndex((s) => s.id === currentScreen.id);
-    if (ri < 0) return;
 
-    const ms = screenConfig(currentScreen.id).seconds * 1000;
+    const cfgSeconds =
+      queue.some((s) => s.id === currentScreen.id)
+        ? screenConfig(currentScreen.id).seconds
+        : defaultSeconds;
+
     rotateTimer = setTimeout(() => {
       if (Date.now() < pauseUntil) {
         scheduleRotation();
         return;
       }
       goToNextRotation();
-    }, ms);
+    }, cfgSeconds * 1000);
   }
 
   function bumpPause() {
@@ -102,12 +133,18 @@
     scheduleRotation();
   }
 
-  function resetTouch() {
-    touchStartX = 0;
-    touchStartY = 0;
-    touchStartId = null;
-    touchFromBottom = false;
-    touchActive = false;
+  function openAdmin() {
+    const q = mouseMode ? "?mouse=1" : "";
+    location.href = `/admin/${q}`;
+  }
+
+  function resetPointer() {
+    pointerStartX = 0;
+    pointerStartY = 0;
+    pointerFromBottom = false;
+    pointerFromTop = false;
+    pointerActive = false;
+    pointerId = null;
   }
 
   function renderNav() {
@@ -165,6 +202,12 @@
   document.body.appendChild(drawer);
   document.body.classList.add("has-kiosk-nav");
 
+  // Top edge hint for admin swipe
+  const adminHint = document.createElement("div");
+  adminHint.className = "kiosk-admin-edge";
+  adminHint.setAttribute("aria-hidden", "true");
+  document.body.appendChild(adminHint);
+
   function scheduleHide() {
     clearTimeout(hideTimer);
     hideTimer = setTimeout(hideDrawer, autoHideMs);
@@ -182,34 +225,34 @@
     clearTimeout(hideTimer);
   }
 
-  function onTouchStart(e) {
-    if (e.touches.length !== 1) return;
-    const t = e.touches[0];
-    touchActive = true;
-    touchStartX = t.clientX;
-    touchStartY = t.clientY;
-    touchStartId = t.identifier;
-    touchFromBottom = inBottomZone(t.clientY);
+  function onPointerStart(clientX, clientY, id) {
+    pointerActive = true;
+    pointerId = id;
+    pointerStartX = clientX;
+    pointerStartY = clientY;
+    pointerFromBottom = inBottomZone(clientY);
+    pointerFromTop = inTopZone(clientY);
   }
 
-  function onTouchEnd(e) {
-    if (!touchActive) return;
+  function onPointerEnd(clientX, clientY) {
+    if (!pointerActive) return;
 
-    const t =
-      [...e.changedTouches].find((c) => c.identifier === touchStartId) || e.changedTouches[0];
-    if (!t) {
-      resetTouch();
-      return;
-    }
-
-    const dx = t.clientX - touchStartX;
-    const dy = t.clientY - touchStartY;
-    const fromBottom = touchFromBottom;
+    const dx = clientX - pointerStartX;
+    const dy = clientY - pointerStartY;
+    const fromBottom = pointerFromBottom;
+    const fromTop = pointerFromTop;
     const drawerOpen = drawer.classList.contains("open");
-    resetTouch();
+    resetPointer();
 
     bumpPause();
 
+    // Swipe down from top edge → admin
+    if (fromTop && dy > swipeThreshold && Math.abs(dy) > Math.abs(dx)) {
+      openAdmin();
+      return;
+    }
+
+    // Swipe up from bottom → screen nav drawer
     if (fromBottom && dy < -swipeThreshold && Math.abs(dy) > Math.abs(dx)) {
       showDrawer();
       return;
@@ -228,11 +271,46 @@
   }
 
   drawer.addEventListener("pointerdown", () => scheduleHide());
-  drawer.addEventListener("touchstart", () => scheduleHide(), { passive: true });
 
-  document.addEventListener("touchstart", onTouchStart, { passive: true });
-  document.addEventListener("touchend", onTouchEnd, { passive: true });
-  document.addEventListener("touchcancel", resetTouch, { passive: true });
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      onPointerStart(t.clientX, t.clientY, t.identifier);
+    },
+    { passive: true }
+  );
+  document.addEventListener(
+    "touchend",
+    (e) => {
+      const t =
+        [...e.changedTouches].find((c) => c.identifier === pointerId) || e.changedTouches[0];
+      if (!t) {
+        resetPointer();
+        return;
+      }
+      onPointerEnd(t.clientX, t.clientY);
+    },
+    { passive: true }
+  );
+  document.addEventListener("touchcancel", resetPointer, { passive: true });
+
+  // Mouse / trackpad support for non-touch displays
+  if (mouseMode) {
+    document.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      onPointerStart(e.clientX, e.clientY, "mouse");
+    });
+    document.addEventListener("mouseup", (e) => {
+      if (!pointerActive) return;
+      onPointerEnd(e.clientX, e.clientY);
+    });
+    // Double-click top edge also opens admin
+    document.addEventListener("dblclick", (e) => {
+      if (inTopZone(e.clientY)) openAdmin();
+    });
+  }
 
   document.addEventListener("kiosk-interaction", bumpPause);
 
@@ -251,6 +329,8 @@
     applyRotationSettings();
   });
 
-  renderNav();
+  // Start rotating immediately with defaults (don't wait on network)
+  rotationSettings = defaultRotationSettings();
+  applyRotationSettings();
   loadRotationSettings();
 })();

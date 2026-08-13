@@ -10,12 +10,13 @@ export DISPLAY="${DISPLAY:-:0}"
 export XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
 
 wait_for_x() {
+  local max="${FAMILY_BOARD_ROTATE_WAIT:-12}"
   local i
-  for i in $(seq 1 40); do
+  for i in $(seq 1 "$max"); do
     if command -v xrandr >/dev/null 2>&1 && xrandr --query >/dev/null 2>&1; then
       return 0
     fi
-    sleep 0.5
+    sleep 0.25
   done
   return 1
 }

@@ -56,16 +56,44 @@
   }
 
   function setAuthed(on) {
-    $("#loginView").classList.toggle("hidden", on);
-    $("#appView").classList.toggle("hidden", !on);
+    if (on) {
+      $("#loginView")?.classList.add("hidden");
+      $("#appView")?.classList.remove("hidden");
+    } else {
+      $("#loginView")?.classList.remove("hidden");
+      $("#appView")?.classList.add("hidden");
+    }
   }
 
   function logoutSession(message) {
-    localStorage.removeItem(TOKEN_KEY);
-    state.token = "";
+    // Open admin — logging out just refreshes into the app again
     clearInterval(listPollTimer);
-    setAuthed(false);
     if (message) toast(message);
+    enterAdmin();
+  }
+
+  async function enterAdmin() {
+    try {
+      if (!state.token) {
+        const res = await AdminAPI.login("");
+        state.token = res.token;
+        localStorage.setItem(TOKEN_KEY, res.token);
+      } else {
+        try {
+          await AdminAPI.session(state.token);
+        } catch {
+          const res = await AdminAPI.login("");
+          state.token = res.token;
+          localStorage.setItem(TOKEN_KEY, res.token);
+        }
+      }
+      setAuthed(true);
+      await refresh();
+      syncListPolling();
+    } catch (err) {
+      setAuthed(false);
+      toast(apiErrorMessage(err) || "Can't reach server");
+    }
   }
 
   function apiErrorMessage(err) {
@@ -834,12 +862,12 @@
       </section>
       <section class="card">
         <h2>Display links</h2>
-        <p class="muted">Open these on the Pi / TV kiosk.</p>
+        <p class="muted">Open these on the Pi / TV kiosk. Use mouse links on non-touch monitors.</p>
         <div class="actions link-grid">
-          <a class="btn secondary" href="/screens/calendar.html?kiosk=1">Calendar</a>
-          <a class="btn secondary" href="/screens/chores.html">Chores</a>
-          <a class="btn secondary" href="/screens/rewards.html">Rewards</a>
-          <a class="btn secondary" href="/screens/whiteboard.html?kiosk=1">Whiteboard</a>
+          <a class="btn secondary" href="/screens/calendar.html?kiosk=1">Kiosk</a>
+          <a class="btn secondary" href="/screens/calendar.html?kiosk=1&mouse=1">Kiosk + mouse</a>
+          <a class="btn secondary" href="/screens/chores.html?kiosk=1">Chores</a>
+          <a class="btn secondary" href="/screens/rewards.html?kiosk=1">Rewards</a>
         </div>
       </section>
       <section class="card">
@@ -854,8 +882,13 @@
         <p class="muted restart-status hidden" id="restartStatus"></p>
       </section>
       <section class="card">
+        <h2>Kiosk</h2>
+        <a class="btn secondary block" href="/screens/calendar.html?kiosk=1">Back to kiosk</a>
+        <a class="btn ghost block" href="/screens/calendar.html?kiosk=1&mouse=1" style="margin-top:0.45rem">Back to kiosk (mouse)</a>
+      </section>
+      <section class="card">
         <h2>Session</h2>
-        <button class="btn danger block" id="logoutBtn">Log out</button>
+        <button class="btn danger block" id="logoutBtn">Reload admin</button>
       </section>`;
   }
 
@@ -1375,25 +1408,10 @@
     logoutSession("Session expired — log in again");
   });
 
-  $("#loginForm").addEventListener("submit", async (e) => {
+  $("#retryAdminBtn")?.addEventListener("click", () => enterAdmin());
+  $("#loginForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const password = new FormData(e.target).get("password");
-    try {
-      const res = await AdminAPI.login(password);
-      state.token = res.token;
-      localStorage.setItem(TOKEN_KEY, res.token);
-      setAuthed(true);
-      await refresh();
-      syncListPolling();
-      toast("Welcome");
-    } catch (err) {
-      const msg = String(err.message || err);
-      if (msg.includes("501") || msg.includes("Failed to fetch") || msg.includes("Unsupported")) {
-        toast("Server not running — run: npm start");
-      } else {
-        toast(msg || "Login failed");
-      }
-    }
+    await enterAdmin();
   });
 
   $$(".nav button").forEach((btn) => {
@@ -1410,25 +1428,14 @@
   });
 
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js?v=11").then((reg) => {
+    navigator.serviceWorker.register("sw.js?v=12").then((reg) => {
       reg.update();
     }).catch(() => {});
   }
 
-  // Boot: if token exists, validate session; else login
+  // Boot straight into admin (no password)
   (async () => {
     await checkServer();
-    if (!state.token) {
-      setAuthed(false);
-      return;
-    }
-    try {
-      await AdminAPI.session(state.token);
-      setAuthed(true);
-      await refresh();
-      syncListPolling();
-    } catch {
-      logoutSession("Session expired — log in again");
-    }
+    await enterAdmin();
   })();
 })();

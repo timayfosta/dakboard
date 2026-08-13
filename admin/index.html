@@ -25,26 +25,15 @@
   <link rel="stylesheet" href="admin.css?v=17" />
 </head>
 <body>
-  <div id="loginView" class="login">
+  <div id="loginView" class="login hidden">
     <section class="card">
       <h1 style="font-family:var(--display);font-size:1.8rem;margin-bottom:0.35rem">Family Admin</h1>
-      <p class="muted" style="margin-bottom:0.9rem">Manage chores, lists, and rewards from your phone.</p>
-      <form id="loginForm">
-        <div class="field">
-          <label>Password</label>
-          <input name="password" type="password" autocomplete="current-password" required placeholder="Admin password" />
-        </div>
-        <button class="btn block" type="submit">Log in</button>
-      </form>
-      <div class="theme-switch theme-switch-login" role="group" aria-label="Appearance">
-        <button type="button" data-theme-set="day"><span class="ico" aria-hidden="true">☀</span> Day</button>
-        <button type="button" data-theme-set="night"><span class="ico" aria-hidden="true">☾</span> Night</button>
-      </div>
-      <p class="muted" style="margin-top:0.75rem">Default password is <strong>family</strong> until you change it in secrets.</p>
+      <p class="muted" style="margin-bottom:0.9rem">Connecting to Family Board…</p>
+      <button class="btn block" type="button" id="retryAdminBtn">Retry</button>
     </section>
   </div>
 
-  <div id="appView" class="app hidden">
+  <div id="appView" class="app">
     <header class="top">
       <div>
         <h1>Family Admin</h1>
@@ -70,7 +59,7 @@
   <script src="/shared/list-undo.js"></script>
   <script src="/shared/screens.js"></script>
   <script src="/shared/live-reload.js"></script>
-  <script src="api.js?v=18"></script>
-  <script src="app.js?v=18"></script>
+  <script src="api.js?v=19"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>

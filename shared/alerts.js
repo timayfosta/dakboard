@@ -19,6 +19,7 @@
       headers: {
         Accept: "application/geo+json",
       },
+      signal: AbortSignal.timeout(4000),
     });
     if (!res.ok) throw new Error(`NWS HTTP ${res.status}`);
     const data = await res.json();

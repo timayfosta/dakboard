@@ -120,12 +120,12 @@ def schedule_server_restart(delay_s: float = 0.8) -> None:
 
 
 def require_admin(handler: SimpleHTTPRequestHandler) -> bool:
+    # Home Family Board: admin is open (no password gate).
+    # Still accept/refresh a bearer token if the client sends one.
     auth = handler.headers.get("Authorization") or ""
     token = auth.replace("Bearer", "").strip()
-    exp = SESSIONS.get(token)
-    if not token or not exp or time.time() > exp:
-        send_json(handler, {"error": "Unauthorized"}, 401)
-        return False
+    if token:
+        SESSIONS[token] = time.time() + SESSION_HOURS * 3600
     return True
 
 
@@ -375,13 +375,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     # ---- auth ----
     def auth_login(self, payload: dict):
-        password = str(payload.get("password") or "")
-        expected = load_secrets().get("adminPassword") or "family"
-        if password != expected:
-            return send_json(self, {"error": "Invalid password"}, 401)
+        # Password optional — always issue a session token for this home install
         token = secrets.token_urlsafe(24)
         SESSIONS[token] = time.time() + SESSION_HOURS * 3600
-        return send_json(self, {"token": token, "expiresInHours": SESSION_HOURS})
+        return send_json(self, {"token": token, "expiresInHours": SESSION_HOURS, "openAccess": True})
 
     def auth_logout(self):
         auth = self.headers.get("Authorization") or ""

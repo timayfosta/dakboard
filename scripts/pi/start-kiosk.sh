@@ -11,12 +11,18 @@ if [[ -f "$ROOT/scripts/pi/kiosk.env" ]]; then
   source "$ROOT/scripts/pi/kiosk.env"
 fi
 
-URL="${FAMILY_BOARD_URL:-http://127.0.0.1:8765/screens/calendar.html?kiosk=1}"
 PORT="${FAMILY_BOARD_PORT:-8765}"
 HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
 SKIP_SERVER="${FAMILY_BOARD_SKIP_SERVER:-1}"
 PROFILE_DIR="${FAMILY_BOARD_CHROMIUM_PROFILE:-$HOME/.config/family-board-kiosk}"
 ROTATE="${FAMILY_BOARD_ROTATE:-left}"
+MOUSE="${FAMILY_BOARD_MOUSE:-0}"
+
+KIOSK_Q="kiosk=1"
+if [[ "${MOUSE}" == "1" || "${MOUSE}" == "true" ]]; then
+  KIOSK_Q="${KIOSK_Q}&mouse=1"
+fi
+URL="${FAMILY_BOARD_URL:-http://127.0.0.1:${PORT}/screens/calendar.html?${KIOSK_Q}}"
 
 export DISPLAY="${DISPLAY:-:0}"
 export XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
@@ -36,18 +42,19 @@ if [[ -z "$BROWSER" ]]; then
 fi
 
 wait_for_api() {
-  local tries="${1:-60}"
-  for _ in $(seq 1 "$tries"); do
-    if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
+  local tries="${1:-40}"
+  local i
+  for i in $(seq 1 "$tries"); do
+    if curl -fsS --max-time 1 "$HEALTH_URL" >/dev/null 2>&1; then
       return 0
     fi
-    sleep 1
+    sleep 0.2
   done
   return 1
 }
 
 start_local_server() {
-  if wait_for_api 2; then
+  if wait_for_api 5; then
     echo "API already running on port ${PORT}"
     return 0
   fi
@@ -58,12 +65,17 @@ start_local_server() {
 
   python3 "$ROOT/server.py" >/tmp/family-board-server.log 2>&1 &
   echo "$!" > /tmp/family-board-server.pid
-  wait_for_api 30
+  wait_for_api 50
 }
+
+# Rotate ASAP (don't block long on display detection)
+if [[ -x "$ROOT/scripts/pi/rotate-display.sh" ]]; then
+  FAMILY_BOARD_ROTATE_WAIT=8 bash "$ROOT/scripts/pi/rotate-display.sh" || true
+fi
 
 if [[ "$SKIP_SERVER" == "1" ]]; then
   echo "Waiting for Family Board API (${HEALTH_URL})…"
-  if ! wait_for_api 90; then
+  if ! wait_for_api 50; then
     echo "Family Board API did not start. Check: systemctl status family-board-api"
     exit 1
   fi
@@ -72,19 +84,22 @@ else
   start_local_server
 fi
 
-# Portrait desktop for vertical TV
-if [[ -x "$ROOT/scripts/pi/rotate-display.sh" ]]; then
-  bash "$ROOT/scripts/pi/rotate-display.sh" || true
-fi
-
-# Disable screen blanking / power-save
 xset s off >/dev/null 2>&1 || true
 xset -dpms >/dev/null 2>&1 || true
 xset s noblank >/dev/null 2>&1 || true
 
+# Mouse testing: don't hide cursor
+if [[ "${MOUSE}" == "1" || "${MOUSE}" == "true" ]]; then
+  pkill -x unclutter >/dev/null 2>&1 || true
+else
+  if command -v unclutter >/dev/null 2>&1; then
+    pkill -x unclutter >/dev/null 2>&1 || true
+    unclutter -idle 0.3 -root >/dev/null 2>&1 &
+  fi
+fi
+
 mkdir -p "$PROFILE_DIR"
 
-# Fullscreen app-style Chromium (no browser chrome)
 exec "$BROWSER" \
   --user-data-dir="$PROFILE_DIR" \
   --class=FamilyBoardKiosk \

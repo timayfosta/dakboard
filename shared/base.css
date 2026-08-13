@@ -93,6 +93,30 @@ body.kiosk {
   cursor: none;
 }
 
+/* Mouse testing override: ?kiosk=1&mouse=1 */
+body.kiosk.kiosk-mouse,
+body.kiosk.kiosk-mouse * {
+  cursor: auto !important;
+}
+
+.kiosk-admin-edge {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 10px;
+  z-index: 10040;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+body.kiosk.kiosk-mouse .kiosk-admin-edge {
+  opacity: 0.55;
+  height: 14px;
+}
+
 /* Kiosk nav — hidden drawer, swipe up from bottom edge to reveal */
 .kiosk-nav-drawer {
   position: fixed;
