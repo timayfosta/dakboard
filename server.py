@@ -120,26 +120,18 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
-    def _phone_redirect(self) -> bool:
-        parsed = urllib.parse.urlparse(self.path)
-        if parsed.path != "/phone":
-            return False
-        loc = "/phone/"
-        if parsed.query:
-            loc += "?" + parsed.query
-        self.send_response(301)
-        self.send_header("Location", loc)
-        self.end_headers()
-        return True
-
     def _rewrite_phone_to_admin(self) -> None:
         """Map /phone/* to admin files — Cloudflare quick tunnels often block /admin/* paths."""
         parsed = urllib.parse.urlparse(self.path)
-        if not parsed.path.startswith("/phone/"):
-            return
-        suffix = parsed.path[len("/phone") :]
+        path = parsed.path
         query = ("?" + parsed.query) if parsed.query else ""
-        self.path = f"/admin{suffix}{query}"
+        # Serve index directly — avoids 301 redirect loops with Cloudflare edge (trailing slash)
+        if path in ("/phone", "/phone/"):
+            self.path = f"/admin/index.html{query}"
+            return
+        if path.startswith("/phone/"):
+            suffix = path[len("/phone") :]
+            self.path = f"/admin{suffix}{query}"
 
     def end_headers(self):
         if self.path.startswith("/api/"):
@@ -159,8 +151,6 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404)
 
     def do_GET(self):
-        if self._phone_redirect():
-            return
         self._rewrite_phone_to_admin()
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"

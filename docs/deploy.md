@@ -96,9 +96,11 @@ Browsers require HTTPS to install a PWA from another device. Options:
 
 1. Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) on the Pi
 2. Run: `cloudflared tunnel --url http://127.0.0.1:8765`
-3. Open the `*.trycloudflare.com` URL on your phone → **`/phone/`** (not `/admin/` — quick tunnels often block paths containing `admin`) → Add to Home Screen
+3. Open the `*.trycloudflare.com` URL on your phone → **`/phone/index.html`** (not `/admin/`) → Add to Home Screen
 
-   Example: `https://your-tunnel.trycloudflare.com/phone/`
+   Example: `https://your-tunnel.trycloudflare.com/phone/index.html`
+
+   Use **`trycloudflare.com`** (one “l” in cloudflare). Avoid `/phone` ↔ `/phone/` — Cloudflare can redirect-loop on trailing slashes; `/phone/index.html` is safest.
 
    LAN access still works at `/admin/`.
 
