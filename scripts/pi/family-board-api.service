@@ -9,7 +9,7 @@ User=pi
 WorkingDirectory=/home/pi/family-board
 ExecStart=/usr/bin/python3 /home/pi/family-board/server.py
 Restart=always
-RestartSec=3
+RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 
 [Install]

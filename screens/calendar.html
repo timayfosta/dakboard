@@ -27,39 +27,203 @@
       padding: 0.3rem 0.25rem;
     }
 
-    .alert-banner {
+    .alert-pill {
       display: none;
       position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 30%;
-      z-index: 50;
-      padding: 1rem 1.1rem 1.2rem;
+      top: 0.45rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 60;
+      width: min(94%, 920px);
+    }
+
+    .alert-pill.show {
+      display: block;
+      animation: alert-pill-drop 0.45s cubic-bezier(0.34, 1.25, 0.64, 1);
+    }
+
+    @keyframes alert-pill-drop {
+      from { opacity: 0; transform: translateX(-50%) translateY(-14px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    .alert-pill-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.7rem;
+      padding: 0.9rem 1.45rem;
+      border-radius: 999px;
+      border: 2px solid rgba(255, 150, 90, 0.55);
+      background: rgba(18, 10, 12, 0.84);
+      backdrop-filter: blur(14px);
       color: #fff;
-      background: linear-gradient(180deg, rgba(239, 68, 68, 0.97), rgba(249, 115, 22, 0.93));
-    }
-    .alert-banner.show { display: flex; flex-direction: column; gap: 0.4rem; }
-    .alert-banner .eyebrow {
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      font-size: 0.8rem;
-      opacity: 0.92;
-    }
-    .alert-banner h2 {
       font-family: var(--font-display);
-      font-size: 1.65rem;
       font-weight: 800;
-      line-height: 1.05;
+      font-size: clamp(1.15rem, 3.8cqw, 1.55rem);
+      line-height: 1.1;
+      box-shadow: 0 10px 40px rgba(239, 68, 68, 0.28);
+      cursor: pointer;
+      animation: alert-pill-glow 2.2s ease-in-out infinite;
     }
-    .alert-banner p {
+
+    @keyframes alert-pill-glow {
+      0%, 100% {
+        box-shadow: 0 10px 40px rgba(239, 68, 68, 0.28), 0 0 0 0 rgba(255, 107, 53, 0.35);
+        border-color: rgba(255, 150, 90, 0.55);
+      }
+      50% {
+        box-shadow: 0 12px 48px rgba(239, 68, 68, 0.42), 0 0 28px 4px rgba(255, 107, 53, 0.28);
+        border-color: rgba(255, 180, 110, 0.85);
+      }
+    }
+
+    .alert-pill-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ff6b35;
+      box-shadow: 0 0 16px rgba(255, 107, 53, 0.9);
+      flex-shrink: 0;
+      animation: alert-dot-blink 1.1s ease-in-out infinite;
+    }
+
+    @keyframes alert-dot-blink {
+      0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 16px rgba(255, 107, 53, 0.9); }
+      50% { opacity: 0.35; transform: scale(0.75); box-shadow: 0 0 6px rgba(255, 107, 53, 0.4); }
+    }
+
+    .alert-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 55;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem 0.85rem 1.5rem;
+      background: rgba(6, 4, 10, 0.48);
+      backdrop-filter: blur(8px);
+    }
+
+    .alert-overlay.show {
+      display: flex;
+      animation: alert-overlay-in 0.35s ease-out;
+    }
+
+    @keyframes alert-overlay-in {
+      from { background: rgba(6, 4, 10, 0.15); }
+      to { background: rgba(6, 4, 10, 0.48); }
+    }
+
+    .alert-card {
+      position: relative;
+      width: min(96%, 980px);
+      max-height: 88%;
+      overflow: auto;
+      padding: 3rem 2.75rem 2.5rem;
+      border-radius: 32px;
+      border: 2px solid rgba(255, 130, 80, 0.45);
+      background:
+        linear-gradient(145deg, rgba(48, 20, 28, 0.92), rgba(24, 14, 32, 0.88)),
+        radial-gradient(circle at 20% 0%, rgba(255, 120, 60, 0.22), transparent 55%);
+      box-shadow:
+        0 32px 100px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      color: #fff;
+      animation:
+        alert-card-in 0.5s cubic-bezier(0.34, 1.25, 0.64, 1),
+        alert-card-glow 2.6s ease-in-out infinite;
+    }
+
+    @keyframes alert-card-in {
+      from { opacity: 0; transform: translateY(24px) scale(0.94); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @keyframes alert-card-glow {
+      0%, 100% {
+        border-color: rgba(255, 130, 80, 0.45);
+        box-shadow: 0 32px 100px rgba(0, 0, 0, 0.5), 0 0 0 0 rgba(255, 100, 50, 0.2);
+      }
+      50% {
+        border-color: rgba(255, 170, 100, 0.75);
+        box-shadow: 0 36px 110px rgba(0, 0, 0, 0.55), 0 0 48px 10px rgba(255, 100, 50, 0.18);
+      }
+    }
+
+    .alert-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      font-size: 1.85rem;
+      line-height: 1;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+
+    .alert-close:active {
+      transform: scale(0.94);
+    }
+
+    .alert-icon {
+      font-size: clamp(3.5rem, 12cqw, 5.25rem);
+      line-height: 1;
+      margin-bottom: 0.75rem;
+      filter: drop-shadow(0 6px 24px rgba(255, 120, 60, 0.45));
+      animation: alert-icon-pulse 1.75s ease-in-out infinite;
+    }
+
+    @keyframes alert-icon-pulse {
+      0%, 100% { transform: scale(1) rotate(0deg); }
+      25% { transform: scale(1.06) rotate(-3deg); }
+      75% { transform: scale(1.06) rotate(3deg); }
+    }
+
+    .alert-card .eyebrow {
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: clamp(1.05rem, 3.2cqw, 1.35rem);
+      color: rgba(255, 190, 140, 0.98);
+      margin-bottom: 0.5rem;
+    }
+
+    .alert-card h2 {
+      font-family: var(--font-display);
+      font-size: clamp(2.4rem, 8cqw, 3.75rem);
+      font-weight: 800;
+      line-height: 1.06;
+      margin-bottom: 0.85rem;
+      text-wrap: balance;
+      animation: alert-title-glow 2.8s ease-in-out infinite;
+    }
+
+    @keyframes alert-title-glow {
+      0%, 100% { text-shadow: 0 0 0 transparent; }
+      50% { text-shadow: 0 0 32px rgba(255, 140, 80, 0.5); }
+    }
+
+    .alert-card p {
       font-weight: 700;
-      font-size: 0.98rem;
-      line-height: 1.35;
-      max-width: 48ch;
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-line-clamp: 4;
-      -webkit-box-orient: vertical;
+      font-size: clamp(1.35rem, 4.8cqw, 1.95rem);
+      line-height: 1.42;
+      color: rgba(255, 255, 255, 0.94);
+      max-width: none;
+      overflow: visible;
+      display: block;
+      -webkit-line-clamp: unset;
+    }
+
+    .alert-pill.show ~ .screen {
+      padding-top: 4.5rem;
     }
 
     .header {
@@ -586,10 +750,21 @@
 </head>
 <body class="tv-stage">
   <div class="tv-frame">
-    <div class="alert-banner" id="alertBanner" role="alert" aria-live="assertive">
-      <div class="eyebrow" id="alertEyebrow">Weather alert</div>
-      <h2 id="alertTitle">Severe weather</h2>
-      <p id="alertBody"></p>
+    <div class="alert-pill" id="alertPill">
+      <button type="button" class="alert-pill-btn" id="alertPillBtn" aria-label="Open weather advisory">
+        <span class="alert-pill-dot" aria-hidden="true"></span>
+        <span id="alertPillLabel">Weather advisory</span>
+      </button>
+    </div>
+
+    <div class="alert-overlay" id="alertOverlay" role="alertdialog" aria-modal="true" aria-labelledby="alertTitle">
+      <article class="alert-card">
+        <button type="button" class="alert-close" id="alertClose" aria-label="Dismiss weather advisory">×</button>
+        <div class="alert-icon" id="alertIcon" aria-hidden="true">⚠️</div>
+        <div class="eyebrow" id="alertEyebrow">Weather alert</div>
+        <h2 id="alertTitle">Severe weather</h2>
+        <p id="alertBody"></p>
+      </article>
     </div>
 
     <div class="screen">
@@ -757,32 +932,89 @@
       }
     }
 
+    const alertUI = {
+      currentId: null,
+      dismissed: false,
+    };
+
+    function alertDismissKey(id) {
+      return `fb-alert-dismiss:${id}`;
+    }
+
+    function alertIconFor(eventName) {
+      const name = String(eventName || "").toLowerCase();
+      if (name.includes("tornado")) return "🌪️";
+      if (name.includes("thunder") || name.includes("lightning")) return "⛈️";
+      if (name.includes("flood")) return "🌊";
+      if (name.includes("winter") || name.includes("snow") || name.includes("ice")) return "❄️";
+      if (name.includes("heat")) return "🌡️";
+      if (name.includes("wind")) return "💨";
+      if (name.includes("fire")) return "🔥";
+      if (name.includes("fog")) return "🌫️";
+      return "⚠️";
+    }
+
+    function hideAlertUI() {
+      document.getElementById("alertOverlay").classList.remove("show");
+      document.getElementById("alertPill").classList.remove("show");
+      alertUI.currentId = null;
+      alertUI.dismissed = false;
+    }
+
+    function showAlertUI(top, { forceOpen = false } = {}) {
+      const overlay = document.getElementById("alertOverlay");
+      const pill = document.getElementById("alertPill");
+      const alertId = top.id || `${top.event}:${top.severity}`;
+
+      if (alertUI.currentId !== alertId) {
+        alertUI.currentId = alertId;
+        alertUI.dismissed = !!sessionStorage.getItem(alertDismissKey(alertId));
+      }
+
+      document.getElementById("alertIcon").textContent = alertIconFor(top.event);
+      document.getElementById("alertEyebrow").textContent = `${top.severity} · National Weather Service`;
+      document.getElementById("alertTitle").textContent = top.event;
+      document.getElementById("alertBody").textContent = top.headline || top.description;
+      document.getElementById("alertPillLabel").textContent = top.event;
+
+      pill.classList.add("show");
+      overlay.classList.toggle("show", forceOpen || !alertUI.dismissed);
+    }
+
     async function loadAlerts() {
-      const banner = document.getElementById("alertBanner");
       const demo = new URLSearchParams(location.search).has("demoAlert");
       try {
         const alerts = demo
           ? [{
+              id: "demo-severe-thunderstorm",
               event: "Severe Thunderstorm Warning",
               severity: "Severe",
-              headline: "DEMO: Severe thunderstorms capable of damaging winds and large hail are moving through your area.",
+              headline: "DEMO: Severe thunderstorms capable of damaging winds and large hail are moving through your area. Take shelter indoors away from windows until the storm passes.",
               description: "",
             }]
           : await FamilyAlerts.fetchAlerts(CFG);
         if (!alerts.length) {
-          banner.classList.remove("show");
+          hideAlertUI();
           return;
         }
-        const top = alerts[0];
-        document.getElementById("alertEyebrow").textContent = `${top.severity} · ${top.event}`;
-        document.getElementById("alertTitle").textContent = top.event;
-        document.getElementById("alertBody").textContent = top.headline || top.description;
-        banner.classList.add("show");
+        showAlertUI(alerts[0]);
       } catch (err) {
         console.warn("Alert fetch failed", err);
-        banner.classList.remove("show");
+        hideAlertUI();
       }
     }
+
+    document.getElementById("alertClose").addEventListener("click", () => {
+      if (alertUI.currentId) {
+        sessionStorage.setItem(alertDismissKey(alertUI.currentId), "1");
+      }
+      alertUI.dismissed = true;
+      document.getElementById("alertOverlay").classList.remove("show");
+    });
+
+    document.getElementById("alertPillBtn").addEventListener("click", () => {
+      document.getElementById("alertOverlay").classList.add("show");
+    });
 
     function renderMonth() {
       const now = new Date();

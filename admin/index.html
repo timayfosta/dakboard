@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="night">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" id="metaThemeColor" content="#000000" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Family Admin" />
@@ -13,7 +13,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/admin/admin.css?v=12" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("family-admin-theme");
+        if (t !== "day" && t !== "night") t = "night";
+        document.documentElement.setAttribute("data-theme", t);
+        var meta = document.getElementById("metaThemeColor");
+        if (meta) meta.setAttribute("content", t === "day" ? "#eef1f6" : "#000000");
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/admin/admin.css?v=15" />
 </head>
 <body>
   <div id="loginView" class="login">
@@ -27,6 +38,10 @@
         </div>
         <button class="btn block" type="submit">Log in</button>
       </form>
+      <div class="theme-switch theme-switch-login" role="group" aria-label="Appearance">
+        <button type="button" data-theme-set="day"><span class="ico" aria-hidden="true">☀</span> Day</button>
+        <button type="button" data-theme-set="night"><span class="ico" aria-hidden="true">☾</span> Night</button>
+      </div>
       <p class="muted" style="margin-top:0.75rem">Default password is <strong>family</strong> until you change it in secrets.</p>
     </section>
   </div>
@@ -36,6 +51,10 @@
       <div>
         <h1>Family Admin</h1>
         <div class="sub" id="familyMeta">Loading…</div>
+      </div>
+      <div class="theme-switch" role="group" aria-label="Appearance">
+        <button type="button" data-theme-set="day"><span class="ico" aria-hidden="true">☀</span> Day</button>
+        <button type="button" data-theme-set="night"><span class="ico" aria-hidden="true">☾</span> Night</button>
       </div>
     </header>
     <main class="content" id="tabContent"></main>
@@ -51,7 +70,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="/shared/screens.js"></script>
-  <script src="/admin/api.js?v=12"></script>
-  <script src="/admin/app.js?v=12"></script>
+  <script src="/admin/api.js?v=15"></script>
+  <script src="/admin/app.js?v=15"></script>
 </body>
 </html>

@@ -8,6 +8,26 @@ Family Board runs on the Raspberry Pi at `http://<pi-ip>:8765`. Lists, chores, r
 sudo bash scripts/pi/install-kiosk.sh
 ```
 
+This installs two **systemd** services that start automatically on boot:
+
+| Service | Starts | Role |
+|---------|--------|------|
+| `family-board-api` | At multi-user (network up) | Python API on port 8765 |
+| `family-board-kiosk` | After desktop + API | Full-screen Chromium carousel |
+
+The kiosk waits up to 90 seconds for the API health check before opening the browser.
+
+**Useful commands**
+
+```bash
+systemctl status family-board-api family-board-kiosk
+journalctl -u family-board-api -f
+journalctl -u family-board-kiosk -f
+sudo systemctl restart family-board-api family-board-kiosk
+```
+
+**Pi desktop:** enable auto-login to the desktop (Raspberry Pi OS → raspi-config → System Options → Boot / Auto Login → Desktop) so the graphical kiosk service can run.
+
 Kiosk opens the first screen in `shared/screens.js` with `?kiosk=1`:
 
 - Swipe left/right (or tap the bottom dots) to change screens

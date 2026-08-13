@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Start Family Board local API + Chromium kiosk (DAKOS-style)
+# Chromium kiosk for Family Board — API is started by systemd (family-board-api.service)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-# First enabled screen in shared/screens.js; ?kiosk=1 enables swipe + auto-rotation
 URL="${FAMILY_BOARD_URL:-http://127.0.0.1:8765/screens/calendar.html?kiosk=1}"
 PORT="${FAMILY_BOARD_PORT:-8765}"
+HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
+SKIP_SERVER="${FAMILY_BOARD_SKIP_SERVER:-1}"
 
 cd "$ROOT"
 
-# Prefer chromium, then chromium-browser
 BROWSER=""
 for candidate in chromium chromium-browser google-chrome; do
   if command -v "$candidate" >/dev/null 2>&1; then
@@ -23,24 +23,43 @@ if [[ -z "$BROWSER" ]]; then
   exit 1
 fi
 
-# Stop leftover server on our port (best effort)
-if command -v fuser >/dev/null 2>&1; then
-  fuser -k "${PORT}/tcp" >/dev/null 2>&1 || true
+wait_for_api() {
+  local tries="${1:-60}"
+  for _ in $(seq 1 "$tries"); do
+    if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+start_local_server() {
+  if wait_for_api 2; then
+    echo "API already running on port ${PORT}"
+    return 0
+  fi
+
+  if command -v fuser >/dev/null 2>&1; then
+    fuser -k "${PORT}/tcp" >/dev/null 2>&1 || true
+  fi
+
+  python3 "$ROOT/server.py" >/tmp/family-board-server.log 2>&1 &
+  echo "$!" > /tmp/family-board-server.pid
+  wait_for_api 30
+}
+
+if [[ "$SKIP_SERVER" == "1" ]]; then
+  echo "Waiting for Family Board API (${HEALTH_URL})…"
+  if ! wait_for_api 90; then
+    echo "Family Board API did not start. Check: systemctl status family-board-api"
+    exit 1
+  fi
+else
+  echo "Manual mode — starting API if needed…"
+  start_local_server
 fi
 
-python3 "$ROOT/server.py" >/tmp/family-board-server.log 2>&1 &
-SERVER_PID=$!
-echo "$SERVER_PID" > /tmp/family-board-server.pid
-
-# Wait for server
-for _ in $(seq 1 30); do
-  if curl -fsS "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 0.5
-done
-
-# Disable screen blanking when possible
 export DISPLAY="${DISPLAY:-:0}"
 xset s off >/dev/null 2>&1 || true
 xset -dpms >/dev/null 2>&1 || true

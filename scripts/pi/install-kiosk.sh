@@ -28,6 +28,7 @@ rsync -a --delete \
 # Keep local secrets if already present on the Pi
 chown -R "${TARGET_USER}:${TARGET_USER}" "${APP_DIR}"
 chmod +x "${APP_DIR}/scripts/pi/start-kiosk.sh"
+chmod +x "${APP_DIR}/scripts/pi/wait-for-api.sh"
 
 # Patch service user/paths if not "pi"
 sed "s|/home/pi|${HOME_DIR}|g; s|User=pi|User=${TARGET_USER}|g" \
@@ -50,12 +51,17 @@ systemctl daemon-reload
 systemctl enable family-board-api.service
 systemctl enable family-board-kiosk.service
 systemctl restart family-board-api.service
-systemctl restart family-board-kiosk.service || true
+
+# Wait for API before starting kiosk (avoids blank screen on first boot)
+if bash "${APP_DIR}/scripts/pi/wait-for-api.sh" 30; then
+  systemctl restart family-board-kiosk.service || true
+else
+  echo "Warning: API slow to start — kiosk will retry when desktop loads"
+fi
 
 echo ""
-echo "Installed."
-echo "API logs:   journalctl -u family-board-api -f"
-echo "Kiosk logs: journalctl -u family-board-kiosk -f"
-echo "Manual:     ${APP_DIR}/scripts/pi/start-kiosk.sh"
+echo "Installed. Both services are enabled and will start on boot."
+echo "  API (boot):   systemctl status family-board-api"
+echo "  Kiosk (GUI):  systemctl status family-board-kiosk"
 echo ""
 echo "Remember to copy shared/secrets.local.js onto the Pi (gitignored)."

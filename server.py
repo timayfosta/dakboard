@@ -12,7 +12,9 @@ import json
 import mimetypes
 import re
 import secrets
+import subprocess
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -70,6 +72,22 @@ def read_json(handler: SimpleHTTPRequestHandler) -> dict:
 
 def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:10]}"
+
+
+def schedule_server_restart(delay_s: float = 0.8) -> None:
+    """Spawn restart_server.py after the HTTP response is sent."""
+    script = ROOT / "scripts" / "restart_server.py"
+
+    def _run() -> None:
+        time.sleep(delay_s)
+        kwargs: dict[str, Any] = {"cwd": ROOT, "close_fds": True}
+        if sys.platform == "win32":
+            kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            kwargs["start_new_session"] = True
+        subprocess.Popen([sys.executable, str(script), "--delayed"], **kwargs)
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def require_admin(handler: SimpleHTTPRequestHandler) -> bool:
@@ -201,6 +219,11 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.screensaver_upload(payload)
+
+        if path == "/api/admin/restart":
+            if not require_admin(self):
+                return
+            return self.admin_restart()
 
         send_json(self, {"error": "Not found", "path": path, "hint": "Restart server: npm start"}, 404)
 
@@ -746,6 +769,10 @@ class Handler(SimpleHTTPRequestHandler):
         )
         db.save_db(state)
         send_json(self, {"ok": True, "balance": bal[kid_id], "state": db.public_state(state)})
+
+    def admin_restart(self):
+        schedule_server_restart()
+        send_json(self, {"ok": True, "restarting": True})
 
     def log_message(self, fmt, *args):
         print("[%s] %s" % (self.log_date_time_string(), fmt % args))

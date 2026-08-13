@@ -1,4 +1,4 @@
-const CACHE = "family-admin-v8";
+const CACHE = "family-admin-v9";
 const ASSETS = [
   "/admin/",
   "/admin/index.html",

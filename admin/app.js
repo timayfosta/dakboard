@@ -1,5 +1,6 @@
 (() => {
   const TOKEN_KEY = "family-admin-token";
+  const THEME_KEY = "family-admin-theme";
   const REQUIRED_API_VERSION = 2;
   const state = {
     token: localStorage.getItem(TOKEN_KEY) || "",
@@ -14,6 +15,37 @@
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => [...document.querySelectorAll(sel)];
+
+  function currentTheme() {
+    const t = document.documentElement.getAttribute("data-theme");
+    return t === "day" ? "day" : "night";
+  }
+
+  function applyTheme(theme) {
+    const next = theme === "day" ? "day" : "night";
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch {}
+    const meta = document.getElementById("metaThemeColor");
+    if (meta) meta.setAttribute("content", next === "day" ? "#eef1f6" : "#000000");
+    syncThemeButtons();
+  }
+
+  function syncThemeButtons() {
+    const active = currentTheme();
+    $$("[data-theme-set]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.themeSet === active);
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-theme-set]");
+    if (!btn) return;
+    applyTheme(btn.dataset.themeSet);
+  });
+
+  applyTheme(localStorage.getItem(THEME_KEY) || currentTheme());
 
   function toast(msg) {
     const el = $("#toast");
@@ -309,6 +341,8 @@
     setEmojiPicker(form, "icon", "✅");
     setCheckStylePicker(form, "circle");
     form.querySelectorAll("[data-kid-chip]").forEach((chip) => chip.classList.remove("on"));
+    form.querySelector("[data-kid-all]")?.classList.remove("on");
+    choreForm?.querySelector("[data-kid-all]")?.classList.remove("on");
     const heading = form.closest(".card")?.querySelector("h2");
     if (heading) heading.textContent = "Add chore";
     form.querySelector('button[type="submit"]').textContent = "Save chore";
@@ -337,6 +371,7 @@
     form.querySelectorAll("[data-kid-chip]").forEach((chip) => {
       chip.classList.toggle("on", kidIds.has(chip.dataset.kidChip));
     });
+    syncAllKidChip(form);
     const heading = form.closest(".card")?.querySelector("h2");
     if (heading) heading.textContent = "Edit chore";
     form.querySelector('button[type="submit"]').textContent = "Update chore";
@@ -362,6 +397,7 @@
     if (state.tab === "rewards") root.innerHTML = renderRewards(d);
     if (state.tab === "more") root.innerHTML = renderMore(d);
     wireTabActions();
+    syncThemeButtons();
   }
 
   function renderKids(d) {
@@ -408,6 +444,27 @@
       </section>`;
   }
 
+  function activeAdminKids() {
+    return (state.data?.kids || []).filter((k) => k.active !== false);
+  }
+
+  function syncAllKidChip(form) {
+    const allBtn = form?.querySelector("[data-kid-all]");
+    if (!allBtn) return;
+    const chips = [...form.querySelectorAll("[data-kid-chip]")];
+    const allOn = chips.length > 0 && chips.every((chip) => chip.classList.contains("on"));
+    allBtn.classList.toggle("on", allOn);
+  }
+
+  function setAllKidChips(form, on) {
+    form.querySelectorAll("[data-kid-chip]").forEach((chip) => chip.classList.toggle("on", on));
+    form.querySelector("[data-kid-all]")?.classList.toggle("on", on);
+  }
+
+  function selectedKidIds(form) {
+    return [...form.querySelectorAll("[data-kid-chip].on")].map((chip) => chip.dataset.kidChip);
+  }
+
   function renderChores(d) {
     const checkStyleLabel = (id) => CHECK_STYLES.find((s) => s.id === id)?.label || "Circle";
     return `
@@ -436,7 +493,9 @@
           </div>
           <div class="field"><label>Assign to</label>
             <div class="chips" id="choreKids">
+              <button type="button" class="chip chip-all" data-kid-all>All kids</button>
               ${d.kids
+                .filter((k) => k.active !== false)
                 .map(
                   (k) =>
                     `<button type="button" class="chip" data-kid-chip="${k.id}">${k.emoji} ${k.name}</button>`
@@ -477,7 +536,7 @@
       <section class="card">
         <h2>${title}</h2>
         <form data-list-add="${name}" class="row" style="margin-bottom:0.65rem">
-          <input name="text" placeholder="Add item" required style="flex:1;border:1px solid var(--line);border-radius:12px;background:#0a0a0a;padding:0.7rem 0.8rem" />
+          <input name="text" placeholder="Add item" required class="list-add-input" />
           <button class="btn" type="submit">Add</button>
         </form>
         <div class="list">
@@ -598,6 +657,16 @@
         </span>
       </label>`;
     return `
+      <section class="card">
+        <div class="row night-head">
+          <h2>Appearance</h2>
+        </div>
+        <p class="muted night-hint">Day / Night theme for this admin app (saved on this phone).</p>
+        <div class="theme-switch" role="group" aria-label="Appearance">
+          <button type="button" data-theme-set="day"><span class="ico" aria-hidden="true">☀</span> Day</button>
+          <button type="button" data-theme-set="night"><span class="ico" aria-hidden="true">☾</span> Night</button>
+        </div>
+      </section>
       <section class="card ss-card">
         <form id="screensaverForm">
           <div class="row night-head">
@@ -700,13 +769,13 @@
       <section class="card night-card">
         <form id="nightModeForm">
           <div class="row night-head">
-            <h2>Night mode</h2>
+            <h2>TV night dim</h2>
             <label class="night-toggle">
               <input type="checkbox" name="enabled" ${nm.enabled ? "checked" : ""} />
               <span>On</span>
             </label>
           </div>
-          <p class="muted night-hint">Set dim and wake times, then Save.</p>
+          <p class="muted night-hint">Dims the TV overnight. Set dim and wake times, then Save.</p>
           ${nm.enabled ? `<p class="muted night-status">Active · dim ${nm.dimTime} · wake ${nm.brightTime} · ${nm.brightness ?? 15}% bright</p>` : ""}
           <div class="night-times">
             <label>
@@ -770,9 +839,49 @@
         </div>
       </section>
       <section class="card">
+        <h2>Server</h2>
+        <p class="muted">Restart after code updates. You'll be logged out and need to sign in again.</p>
+        <button class="btn secondary block" type="button" id="restartServerBtn">Restart server</button>
+        <p class="muted restart-status hidden" id="restartStatus"></p>
+      </section>
+      <section class="card">
         <h2>Session</h2>
         <button class="btn danger block" id="logoutBtn">Log out</button>
       </section>`;
+  }
+
+  async function waitForServerRestart(statusEl, btn) {
+    const start = Date.now();
+    const maxMs = 45000;
+    while (Date.now() - start < maxMs) {
+      await new Promise((r) => setTimeout(r, 1200));
+      try {
+        const health = await AdminAPI.health();
+        if (health?.ok && Number(health.version) >= REQUIRED_API_VERSION) {
+          if (statusEl) statusEl.textContent = "Server is back online.";
+          toast("Server restarted");
+          try {
+            await AdminAPI.session(state.token);
+            state.serverOk = true;
+            state.serverHint = "";
+            await refresh();
+          } catch {
+            logoutSession("Server restarted — log in again");
+          }
+          if (btn) btn.disabled = false;
+          if (statusEl) statusEl.classList.add("hidden");
+          return true;
+        }
+      } catch {
+        /* still down */
+      }
+      if (statusEl) statusEl.textContent = "Restarting… waiting for server";
+    }
+    if (statusEl) {
+      statusEl.textContent = "Server didn't come back. Run npm start on the PC.";
+    }
+    if (btn) btn.disabled = false;
+    return false;
   }
 
   function wireTabActions() {
@@ -854,18 +963,22 @@
 
     const choreForm = $("#choreForm");
     if (choreForm) {
+      const allKidBtn = choreForm.querySelector("[data-kid-all]");
+      allKidBtn?.addEventListener("click", () => {
+        const turnOn = !allKidBtn.classList.contains("on");
+        setAllKidChips(choreForm, turnOn);
+      });
       $$("[data-kid-chip]").forEach((chip) => {
         chip.addEventListener("click", () => {
           chip.classList.toggle("on");
+          syncAllKidChip(choreForm);
         });
       });
       choreForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const fd = new FormData(choreForm);
         const editing = !!fd.get("id");
-        const kidIds = [...choreForm.querySelectorAll("[data-kid-chip].on")].map(
-          (chip) => chip.dataset.kidChip
-        );
+        const kidIds = selectedKidIds(choreForm);
         if (!kidIds.length) {
           toast("Assign at least one kid");
           return;
@@ -1137,6 +1250,31 @@
       });
     }
 
+    const restartBtn = $("#restartServerBtn");
+    if (restartBtn) {
+      restartBtn.addEventListener("click", async () => {
+        if (
+          !confirm(
+            "Restart the Family Board server?\n\nThe TV displays will reconnect automatically. You'll need to log in again in admin."
+          )
+        ) {
+          return;
+        }
+        const statusEl = $("#restartStatus");
+        restartBtn.disabled = true;
+        if (statusEl) {
+          statusEl.classList.remove("hidden");
+          statusEl.textContent = "Sending restart…";
+        }
+        try {
+          await AdminAPI.restartServer(state.token);
+        } catch {
+          /* connection drop is expected */
+        }
+        await waitForServerRestart(statusEl, restartBtn);
+      });
+    }
+
     const logoutBtn = $("#logoutBtn");
     if (logoutBtn) {
       logoutBtn.addEventListener("click", () => {
@@ -1184,7 +1322,7 @@
   });
 
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/admin/sw.js?v=8").then((reg) => {
+    navigator.serviceWorker.register("/admin/sw.js?v=9").then((reg) => {
       reg.update();
     }).catch(() => {});
   }

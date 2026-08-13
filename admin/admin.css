@@ -1,21 +1,79 @@
 /* Family Board Admin — mobile-first PWA */
-:root {
+:root,
+[data-theme="night"] {
+  color-scheme: dark;
   --bg: #000;
   --panel: #141414;
   --panel2: #1b1b1b;
-  --line: rgba(255,255,255,0.1);
+  --line: rgba(255, 255, 255, 0.1);
   --ink: #f3f5f8;
   --muted: #9aa3b2;
   --coral: #ff7a59;
   --mint: #3ddc97;
   --sky: #5aa7ff;
   --danger: #ef4444;
+  --btn-on-coral: #000;
+  --input-bg: #0a0a0a;
+  --chip-bg: #101010;
+  --top-bg: rgba(0, 0, 0, 0.92);
+  --nav-bg: rgba(10, 10, 10, 0.96);
+  --toast-bg: #222;
+  --soft: rgba(255, 255, 255, 0.04);
+  --soft-line: rgba(255, 255, 255, 0.08);
+  --soft-line-2: rgba(255, 255, 255, 0.12);
+  --soft-line-3: rgba(255, 255, 255, 0.14);
+  --soft-line-4: rgba(255, 255, 255, 0.18);
+  --coral-soft: rgba(255, 122, 89, 0.12);
+  --coral-soft-2: rgba(255, 122, 89, 0.08);
+  --coral-ring: rgba(255, 122, 89, 0.35);
+  --danger-soft: rgba(239, 68, 68, 0.15);
+  --danger-line: rgba(239, 68, 68, 0.45);
+  --danger-text: #ffb4b4;
+  --focus-ring: #fff;
+  --focus-glow: rgba(255, 255, 255, 0.25);
+  --install-grad: linear-gradient(135deg, rgba(255, 122, 89, 0.18), rgba(90, 167, 255, 0.12));
+  --shadow-inset: rgba(0, 0, 0, 0.25);
   --radius: 16px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --nav-h: 72px;
   --touch: 44px;
   --font: "Nunito", system-ui, sans-serif;
   --display: "Baloo 2", system-ui, sans-serif;
+}
+
+[data-theme="day"] {
+  color-scheme: light;
+  --bg: #eef1f6;
+  --panel: #ffffff;
+  --panel2: #f3f5f9;
+  --line: rgba(15, 23, 42, 0.12);
+  --ink: #0f172a;
+  --muted: #5b6577;
+  --coral: #e25535;
+  --mint: #0b8f64;
+  --sky: #2563eb;
+  --danger: #dc2626;
+  --btn-on-coral: #fff;
+  --input-bg: #ffffff;
+  --chip-bg: #e7ebf2;
+  --top-bg: rgba(238, 241, 246, 0.94);
+  --nav-bg: rgba(255, 255, 255, 0.96);
+  --toast-bg: #1e293b;
+  --soft: rgba(15, 23, 42, 0.04);
+  --soft-line: rgba(15, 23, 42, 0.08);
+  --soft-line-2: rgba(15, 23, 42, 0.12);
+  --soft-line-3: rgba(15, 23, 42, 0.16);
+  --soft-line-4: rgba(15, 23, 42, 0.2);
+  --coral-soft: rgba(226, 85, 53, 0.12);
+  --coral-soft-2: rgba(226, 85, 53, 0.1);
+  --coral-ring: rgba(226, 85, 53, 0.4);
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --danger-line: rgba(220, 38, 38, 0.4);
+  --danger-text: #b91c1c;
+  --focus-ring: #0f172a;
+  --focus-glow: rgba(15, 23, 42, 0.18);
+  --install-grad: linear-gradient(135deg, rgba(226, 85, 53, 0.14), rgba(37, 99, 235, 0.1));
+  --shadow-inset: rgba(15, 23, 42, 0.12);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -51,7 +109,7 @@ button, input, select, textarea {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(0,0,0,0.92);
+  background: var(--top-bg);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
   padding: max(0.65rem, env(safe-area-inset-top)) 0.85rem 0.65rem;
@@ -110,7 +168,7 @@ button, input, select, textarea {
   padding: 0.7rem 0.95rem;
   min-height: var(--touch);
   background: var(--coral);
-  color: #000;
+  color: var(--btn-on-coral);
   font-weight: 800;
   cursor: pointer;
   display: inline-flex;
@@ -159,7 +217,8 @@ button, input, select, textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #0a0a0a;
+  background: var(--input-bg);
+  color: var(--ink);
   padding: 0.75rem 0.8rem;
   font-size: 16px;
 }
@@ -211,7 +270,7 @@ button, input, select, textarea {
   height: 30px;
   border-radius: 50%;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--soft);
   color: var(--muted);
   font-size: 1.2rem;
   font-weight: 800;
@@ -223,9 +282,9 @@ button, input, select, textarea {
 }
 
 .btn-x:active {
-  background: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.45);
-  color: #ffb4b4;
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+  color: var(--danger-text);
 }
 
 .chips {
@@ -239,13 +298,25 @@ button, input, select, textarea {
   border-radius: 999px;
   padding: 0.45rem 0.7rem;
   min-height: 36px;
-  background: #101010;
+  background: var(--chip-bg);
+  color: var(--ink);
   font-size: 0.85rem;
 }
 
 .chip.on {
   border-color: var(--coral);
-  background: rgba(255, 122, 89, 0.12);
+  background: var(--coral-soft);
+}
+
+.chip.chip-all {
+  border-color: var(--coral-ring);
+  font-weight: 800;
+}
+
+.chip.chip-all.on {
+  color: var(--btn-on-coral);
+  background: var(--coral);
+  border-color: var(--coral);
 }
 
 .form-actions {
@@ -268,8 +339,8 @@ button, input, select, textarea {
   width: 2.35rem;
   height: 2.35rem;
   border-radius: 10px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
-  background: #141414;
+  border: 2px solid var(--soft-line);
+  background: var(--panel);
   font-size: 1.1rem;
   line-height: 1;
   display: grid;
@@ -280,8 +351,8 @@ button, input, select, textarea {
 
 .emoji-opt.on {
   border-color: var(--coral);
-  background: rgba(255, 122, 89, 0.1);
-  box-shadow: 0 0 0 2px rgba(255, 122, 89, 0.12);
+  background: var(--coral-soft);
+  box-shadow: 0 0 0 2px var(--coral-soft-2);
   filter: saturate(0.92) brightness(0.96);
 }
 
@@ -295,14 +366,14 @@ button, input, select, textarea {
   width: 2.65rem;
   height: 2.65rem;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.14);
+  border: 2px solid var(--soft-line-3);
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 0 0 1px var(--shadow-inset);
 }
 
 .color-opt.on {
-  border-color: #fff;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px var(--focus-glow);
 }
 
 .kid-color-dot {
@@ -325,8 +396,8 @@ button, input, select, textarea {
   gap: 0.45rem;
   padding: 0.55rem 0.65rem;
   border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  background: #0a0a0a;
+  border: 2px solid var(--soft-line);
+  background: var(--input-bg);
   color: var(--ink);
   font: inherit;
   font-weight: 700;
@@ -336,14 +407,14 @@ button, input, select, textarea {
 
 .check-style-opt.on {
   border-color: var(--coral);
-  background: rgba(255, 122, 89, 0.1);
+  background: var(--coral-soft);
 }
 
 .check-style-preview {
   width: 1.65rem;
   height: 1.65rem;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.18);
+  border: 2px solid var(--soft-line-4);
   display: grid;
   place-items: center;
   font-size: 0.95rem;
@@ -359,7 +430,7 @@ button, input, select, textarea {
   left: 0; right: 0; bottom: 0;
   height: calc(var(--nav-h) + var(--safe-bottom));
   padding: 0.25rem 0.25rem var(--safe-bottom);
-  background: rgba(10,10,10,0.96);
+  background: var(--nav-bg);
   border-top: 1px solid var(--line);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -386,7 +457,7 @@ button, input, select, textarea {
 .nav button .ico { font-size: 1.35rem; line-height: 1; }
 .nav button.active {
   color: var(--coral);
-  background: rgba(255, 122, 89, 0.08);
+  background: var(--coral-soft-2);
 }
 
 .login {
@@ -404,14 +475,19 @@ button, input, select, textarea {
 
 .hidden { display: none !important; }
 
+.restart-status {
+  margin-top: 0.65rem;
+  text-align: center;
+}
+
 .toast {
   position: fixed;
   left: 50%;
   bottom: calc(var(--nav-h) + var(--safe-bottom) + 12px);
   transform: translateX(-50%) translateY(12px);
-  background: #222;
+  background: var(--toast-bg);
   border: 1px solid var(--line);
-  color: var(--ink);
+  color: #f3f5f8;
   padding: 0.7rem 1rem;
   border-radius: 12px;
   opacity: 0;
@@ -428,7 +504,7 @@ button, input, select, textarea {
 }
 
 .install-banner {
-  background: linear-gradient(135deg, rgba(255,122,89,0.18), rgba(90,167,255,0.12));
+  background: var(--install-grad);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 0.85rem;
@@ -511,7 +587,8 @@ button, input, select, textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #0a0a0a;
+  background: var(--input-bg);
+  color: var(--ink);
   padding: 0.65rem 0.45rem;
 }
 
@@ -580,7 +657,8 @@ button, input, select, textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #0a0a0a;
+  background: var(--input-bg);
+  color: var(--ink);
   padding: 0.65rem 0.55rem;
 }
 
@@ -700,8 +778,8 @@ button, input, select, textarea {
   gap: 0.75rem;
   padding: 0.55rem 0.65rem;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--soft);
+  border: 1px solid var(--soft-line);
 }
 
 .rotation-toggle {
@@ -729,9 +807,9 @@ button, input, select, textarea {
   width: 4.2rem;
   padding: 0.35rem 0.45rem;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.25);
-  color: inherit;
+  border: 1px solid var(--soft-line-2);
+  background: var(--input-bg);
+  color: var(--ink);
   font: inherit;
   text-align: center;
 }
@@ -741,9 +819,9 @@ button, input, select, textarea {
   margin: 0 auto 0.5rem;
   padding: 0.65rem 0.8rem;
   border-radius: 12px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.45);
-  color: #ffb4b4;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
+  color: var(--danger-text);
   font-size: 0.85rem;
   line-height: 1.35;
 }
@@ -756,4 +834,86 @@ button, input, select, textarea {
     max-width: 640px;
     border-radius: 16px 16px 0 0;
   }
+}
+
+/* Admin appearance: day / night */
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  flex-shrink: 0;
+}
+
+.theme-switch button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 0.78rem;
+  min-height: 36px;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.theme-switch button .ico {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.theme-switch button.active {
+  background: var(--coral);
+  color: var(--btn-on-coral);
+}
+
+.theme-switch-login {
+  margin: 0.85rem auto 0;
+}
+
+.list-add-input {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--input-bg);
+  color: var(--ink);
+  padding: 0.7rem 0.8rem;
+  font: inherit;
+  font-size: 16px;
+}
+
+[data-theme="day"] .emoji-opt {
+  filter: none;
+}
+
+[data-theme="day"] .emoji-opt.on {
+  filter: none;
+}
+
+[data-theme="day"] .toast {
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="day"] .card,
+[data-theme="day"] .item,
+[data-theme="day"] .ss-source-item,
+[data-theme="day"] .ss-album-pick,
+[data-theme="day"] .rotation-row {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+[data-theme="day"] .btn.secondary {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+[data-theme="day"] .nav {
+  box-shadow: 0 -4px 18px rgba(15, 23, 42, 0.06);
 }

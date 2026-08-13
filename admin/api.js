@@ -38,6 +38,8 @@ const API = {
     API.request("/api/screensaver/upload", { method: "POST", token, body: item }),
   deletePhoto: (token, id) =>
     API.request(`/api/screensaver/photos/${id}`, { method: "DELETE", token }),
+  restartServer: (token) =>
+    API.request("/api/admin/restart", { method: "POST", token, body: {} }),
 };
 
 window.AdminAPI = API;

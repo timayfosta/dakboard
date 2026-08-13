@@ -25,6 +25,9 @@ def kill_port(port: int) -> None:
 
 
 def main() -> None:
+    delayed = "--delayed" in sys.argv
+    if delayed:
+        time.sleep(1.0)
     kill_port(PORT)
     time.sleep(0.4)
     os.chdir(ROOT)
