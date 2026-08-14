@@ -75,7 +75,7 @@ fi
 
 if [[ "$SKIP_SERVER" == "1" ]]; then
   echo "Waiting for Family Board API (${HEALTH_URL})…"
-  if ! wait_for_api 50; then
+  if ! bash "$ROOT/scripts/pi/wait-for-api.sh" 90; then
     echo "Family Board API did not start. Check: systemctl status family-board-api"
     exit 1
   fi

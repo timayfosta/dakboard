@@ -111,10 +111,6 @@ def git_pull() -> dict[str, Any]:
                 "syncMethod": "pull-ff-only",
             }
 
-        _run_git(["git", "clean", "-fd"], timeout=60)
-
-        out = (reset.stdout or "").strip()
-        err = (reset.stderr or "").strip()
         head = git_head()
         return {
             "ok": True,
@@ -134,20 +130,43 @@ def git_pull() -> dict[str, Any]:
         return {"ok": False, "error": "git sync timed out"}
 
 
+def _systemctl(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["systemctl", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _systemd_workdir() -> str | None:
+    unit = Path("/etc/systemd/system/family-board-api.service")
+    if not unit.is_file():
+        return None
+    for line in unit.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("WorkingDirectory="):
+            return line.split("=", 1)[1].strip()
+    return None
+
+
 def restart_service(schedule_restart_fn) -> dict[str, Any]:
     if sys.platform != "win32":
         try:
-            active = subprocess.run(
-                ["systemctl", "is-active", "family-board-api"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            active = _systemctl("is-active", "family-board-api")
             if active.stdout.strip() == "active":
-                subprocess.run(
-                    ["systemctl", "restart", "family-board-api"],
-                    check=False,
-                )
+                workdir = _systemd_workdir()
+                if workdir and Path(workdir).resolve() != ROOT.resolve():
+                    repair = ROOT / "scripts" / "pi" / "repair-kiosk.sh"
+                    if repair.is_file():
+                        subprocess.run(
+                            ["sudo", "bash", str(repair)],
+                            cwd=ROOT,
+                            check=False,
+                        )
+                _systemctl("restart", "family-board-api")
+                kiosk = _systemctl("is-enabled", "family-board-kiosk")
+                if kiosk.returncode == 0:
+                    _systemctl("restart", "family-board-kiosk")
                 return {"ok": True, "method": "systemctl"}
         except FileNotFoundError:
             pass

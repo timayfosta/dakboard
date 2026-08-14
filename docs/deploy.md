@@ -26,6 +26,25 @@ journalctl -u family-board-kiosk -f
 sudo systemctl restart family-board-api family-board-kiosk
 ```
 
+### After a manual git reset — kiosk or rotation stopped working
+
+If you ran `git reset --hard` by hand, systemd may still point at an old folder (e.g. `/home/pi/family-board` while the repo is now `~/dakboard`). Symptoms: API/kiosk do not start on boot, portrait rotation missing, screen carousel stuck on one page.
+
+From **inside your git checkout** on the Pi:
+
+```bash
+cd ~/dakboard          # or ~/family-board — wherever server.py lives
+sudo bash scripts/pi/repair-kiosk.sh
+sudo reboot
+```
+
+Check status:
+
+```bash
+systemctl status family-board-api family-board-kiosk
+journalctl -u family-board-api -u family-board-kiosk -b --no-pager
+```
+
 **Pi desktop:** enable auto-login to the desktop (Raspberry Pi OS → raspi-config → System Options → Boot / Auto Login → Desktop) so the graphical kiosk service can run.
 
 Kiosk opens the first screen in `shared/screens.js` with `?kiosk=1`:
@@ -47,7 +66,7 @@ Pushing to GitHub does **not** update phones/TVs by itself. The Pi must pull + r
 **Flow after this is configured:**
 
 1. You push to `main` / `master`
-2. GitHub Actions (or webhook) runs `git pull` + restarts `family-board-api`
+2. GitHub Actions (or webhook) runs `git pull` + restarts `family-board-api` and `family-board-kiosk`
 3. Admin PWA + TV screens notice the new `bootId` from `/api/health` and **reload themselves** (within a few seconds)
 
 The Pi must be a **git clone** (not rsync-only) for pull-to-update:
