@@ -194,6 +194,7 @@ class Handler(SimpleHTTPRequestHandler):
                         "gitRepo": deploy.is_git_repo(),
                         "webhookConfigured": bool(load_secrets().get("deployWebhookSecret")),
                         "last": deploy.get_last_result(),
+                        "boot": deploy.boot_status(),
                     },
                     "features": ["settings", "screensaver", "whiteboard", "nightMode", "rotation", "liveReload"],
                 },

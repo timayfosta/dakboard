@@ -7,6 +7,13 @@ cd "$ROOT"
 
 bash scripts/git_sync.sh
 
+if [[ -x scripts/pi/ensure-boot.sh ]]; then
+  echo "Enabling API + kiosk + tunnel for boot…"
+  sudo -n bash scripts/pi/ensure-boot.sh || sudo -n /usr/local/sbin/family-board-boot || true
+  echo "Deploy complete."
+  exit 0
+fi
+
 # Fix systemd paths if the repo moved (e.g. ~/family-board → ~/family-board-src)
 if [[ -f /etc/systemd/system/family-board-api.service ]]; then
   CURRENT="$(grep -m1 '^WorkingDirectory=' /etc/systemd/system/family-board-api.service | cut -d= -f2- || true)"

@@ -192,8 +192,78 @@ def _systemd_workdir() -> str | None:
     return None
 
 
+def _run_sudo(args: list[str], *, timeout: int = 90) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["sudo", "-n", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def boot_status() -> dict[str, Any]:
+    if sys.platform == "win32":
+        return {}
+    try:
+        def unit(name: str) -> dict[str, str]:
+            active = _systemctl("is-active", name)
+            enabled = _systemctl("is-enabled", name)
+            return {
+                "active": (active.stdout or "").strip() or "unknown",
+                "enabled": (enabled.stdout or "").strip() or "unknown",
+            }
+
+        tunnel = unit("cloudflared")
+        if (tunnel.get("active") or "") not in {"active"}:
+            alt = unit("family-board-tunnel")
+            if (alt.get("active") or "") in {"active"} or (alt.get("enabled") or "") in {
+                "enabled",
+                "static",
+            }:
+                tunnel = alt
+        return {
+            "api": unit("family-board-api"),
+            "kiosk": unit("family-board-kiosk"),
+            "tunnel": tunnel,
+        }
+    except FileNotFoundError:
+        return {}
+
+
+def enable_boot_services() -> dict[str, Any]:
+    """Enable API + kiosk + Cloudflare tunnel for every power-on, then start them."""
+    if sys.platform == "win32":
+        return {"ok": False, "error": "Windows — boot services are Pi-only"}
+
+    wrapper = Path("/usr/local/sbin/family-board-boot")
+    script = ROOT / "scripts" / "pi" / "ensure-boot.sh"
+    try:
+        if wrapper.is_file():
+            proc = _run_sudo([str(wrapper)], timeout=90)
+        elif script.is_file():
+            proc = _run_sudo(["bash", str(script)], timeout=90)
+        else:
+            return {"ok": False, "error": "ensure-boot.sh missing"}
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return {"ok": False, "error": str(exc)}
+
+    out = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    if proc.returncode != 0:
+        return {
+            "ok": False,
+            "error": out or "sudo failed — Pi user needs passwordless sudo for family-board-boot",
+            "returncode": proc.returncode,
+        }
+    return {"ok": True, "stdout": out, "services": boot_status()}
+
+
 def restart_service(schedule_restart_fn) -> dict[str, Any]:
     if sys.platform != "win32":
+        boot = enable_boot_services()
+        if boot.get("ok"):
+            return {"ok": True, "method": "ensure-boot", "boot": boot}
         try:
             active = _systemctl("is-active", "family-board-api")
             if active.stdout.strip() == "active":
@@ -202,7 +272,7 @@ def restart_service(schedule_restart_fn) -> dict[str, Any]:
                     repair = ROOT / "scripts" / "pi" / "repair-kiosk.sh"
                     if repair.is_file():
                         subprocess.run(
-                            ["sudo", "bash", str(repair)],
+                            ["sudo", "-n", "bash", str(repair)],
                             cwd=ROOT,
                             check=False,
                         )
@@ -210,7 +280,7 @@ def restart_service(schedule_restart_fn) -> dict[str, Any]:
                 kiosk = _systemctl("is-enabled", "family-board-kiosk")
                 if kiosk.returncode == 0:
                     _systemctl("restart", "family-board-kiosk")
-                return {"ok": True, "method": "systemctl"}
+                return {"ok": True, "method": "systemctl", "boot": boot}
         except FileNotFoundError:
             pass
 

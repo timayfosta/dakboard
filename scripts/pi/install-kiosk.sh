@@ -61,12 +61,9 @@ bash "${APP_DIR}/scripts/pi/link-phone-admin.sh"
 bash "${APP_DIR}/scripts/pi/write-api-service.sh" "${TARGET_USER}" "${APP_DIR}"
 bash "${APP_DIR}/scripts/pi/write-kiosk-service.sh" "${TARGET_USER}" "${APP_DIR}" "${HOME_DIR}"
 bash "${APP_DIR}/scripts/pi/write-desktop-launchers.sh" "${TARGET_USER}" "${APP_DIR}" "${HOME_DIR}"
+bash "${APP_DIR}/scripts/pi/write-sudoers.sh" "${TARGET_USER}" "${APP_DIR}" 2>/dev/null || true
 
-systemctl daemon-reload
-systemctl enable family-board-api.service
-systemctl enable family-board-kiosk.service
-systemctl reset-failed family-board-kiosk.service 2>/dev/null || true
-systemctl restart family-board-api.service
+bash "${APP_DIR}/scripts/pi/ensure-boot.sh"
 
 if bash "${APP_DIR}/scripts/pi/wait-for-api.sh" 30; then
   systemctl restart family-board-kiosk.service || true

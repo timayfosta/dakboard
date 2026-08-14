@@ -7,6 +7,11 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 chmod +x "$ROOT/scripts/pi/"*.sh 2>/dev/null || true
 
+if [[ -x "$ROOT/scripts/pi/ensure-boot.sh" ]]; then
+  echo "Enabling boot services (API + kiosk + tunnel)…"
+  sudo -n bash "$ROOT/scripts/pi/ensure-boot.sh" || sudo -n /usr/local/sbin/family-board-boot || true
+fi
+
 PORT="${FAMILY_BOARD_PORT:-8765}"
 HEALTH="http://127.0.0.1:${PORT}/api/health"
 export DISPLAY="${DISPLAY:-:0}"

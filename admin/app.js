@@ -873,8 +873,8 @@
       <section class="card">
         <h2>Server</h2>
         <p class="muted">
-          On push to GitHub, the Pi should auto pull + restart (Actions or webhook).
-          Open screens and this admin app then auto-refresh.
+          Pull updates also turns on auto-start: API, kiosk, and Cloudflare tunnel
+          after every power cycle. Use the LAN admin URL if the public site shows 1033.
         </p>
         <p class="muted" id="deployMeta">Checking deploy status…</p>
         <button class="btn block" type="button" id="deployServerBtn">Pull updates &amp; restart now</button>
@@ -906,7 +906,16 @@
       const last = d.last;
       if (last?.ok === false) bits.push(`last deploy failed: ${last.error || last.pull?.stderr || "unknown"}`);
       else if (last?.pull?.alreadyUpToDate) bits.push("last pull: already up to date");
-      else if (last?.ok) bits.push("last deploy ok");
+      const boot = d.boot || {};
+      const fmt = (u) => {
+        if (!u) return "";
+        const on = u.active === "active" ? "running" : u.active || "off";
+        const en = u.enabled === "enabled" ? "boot" : "no-boot";
+        return `${on}/${en}`;
+      };
+      if (boot.api) bits.push(`api ${fmt(boot.api)}`);
+      if (boot.kiosk) bits.push(`kiosk ${fmt(boot.kiosk)}`);
+      if (boot.tunnel) bits.push(`tunnel ${fmt(boot.tunnel)}`);
       el.textContent = bits.join(" · ");
     } catch {
       el.textContent = "Can't reach server health check";

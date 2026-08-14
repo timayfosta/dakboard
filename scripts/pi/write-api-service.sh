@@ -8,14 +8,16 @@ APP_DIR="${2:?}"
 cat > /etc/systemd/system/family-board-api.service <<EOF
 [Unit]
 Description=Family Board local API server
-After=network.target
-Wants=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=${TARGET_USER}
 WorkingDirectory=${APP_DIR}
 ExecStart=/usr/bin/python3 -u ${APP_DIR}/server.py
+ExecStartPost=+/bin/bash -c 'systemctl enable --now cloudflared.service 2>/dev/null || systemctl enable --now family-board-tunnel.service 2>/dev/null || true'
+ExecStartPost=+/bin/bash -c 'systemctl enable family-board-kiosk.service 2>/dev/null || true'
 Restart=always
 RestartSec=3
 StartLimitIntervalSec=0
