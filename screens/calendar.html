@@ -355,14 +355,14 @@
       flex: 1;
       min-height: 0;
       display: grid;
-      /* Left lists 25% | Right weekly agenda 75% */
-      grid-template-columns: 1fr 3fr;
+      /* Left weekly agenda 75% | Right lists 25% */
+      grid-template-columns: 3fr 1fr;
       gap: 0.55rem;
     }
 
     .left-col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      display: flex;
+      flex-direction: column;
       gap: 0.4rem;
       min-height: 0;
       overflow: hidden;
@@ -493,23 +493,24 @@
     }
 
     .right-col {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 0.4rem;
       min-height: 0;
       overflow: hidden;
     }
 
     .month-panel {
-      width: 100%;
+      width: min(42%, 22rem);
       flex: 0 0 auto;
-      max-height: 32%;
+      max-height: 28%;
       display: flex;
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
       padding: 0.3rem 0.25rem 0.25rem;
       container-type: inline-size;
+      align-self: flex-start;
     }
 
     .month-panel .block-title {
@@ -594,13 +595,13 @@
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
-      padding: 0.45rem 0.4rem;
+      padding: 0.5rem 0.45rem;
       height: 100%;
     }
 
     .list-panel .block-title {
-      font-size: 1.2rem;
-      margin-bottom: 0.35rem;
+      font-size: 1.35rem;
+      margin-bottom: 0.4rem;
       flex-shrink: 0;
     }
 
@@ -612,7 +613,7 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
+      gap: 0.45rem;
       padding-bottom: 0.15rem;
       -webkit-overflow-scrolling: touch;
     }
@@ -621,23 +622,24 @@
       list-style: none;
       display: flex;
       flex-direction: column;
-      gap: 0.3rem;
+      gap: 0.4rem;
       flex-shrink: 0;
     }
 
     .checklist li {
       display: grid;
       grid-template-columns: auto 1fr;
-      gap: 0.45rem;
-      align-items: center;
+      gap: 0.5rem;
+      align-items: start;
       background: transparent;
       border-radius: 0;
-      padding: 0.5rem 0.1rem;
+      padding: 0.55rem 0.1rem;
       border: none;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       cursor: default;
       font-weight: 700;
-      font-size: 1.12rem;
+      font-size: 1.35rem;
+      line-height: 1.25;
       flex-shrink: 0;
     }
 
@@ -652,7 +654,7 @@
     .checklist li .txt {
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
       min-width: 0;
     }
 
@@ -662,15 +664,15 @@
       grid-template-columns: 1fr;
       background: transparent;
       border: none;
-      font-size: 0.95rem;
+      font-size: 1.05rem;
       white-space: normal;
     }
 
     .checklist .list-dot {
       color: var(--ink-soft);
-      font-size: 1.2rem;
-      line-height: 1;
-      width: 16px;
+      font-size: 1.35rem;
+      line-height: 1.25;
+      width: 18px;
       text-align: center;
     }
 
@@ -751,7 +753,24 @@
       </header>
 
       <div class="body">
-        <div class="left-col" aria-label="Lists">
+        <div class="left-col">
+          <section class="panel month-panel" aria-label="Monthly calendar">
+            <div class="block-title">
+              <span class="month-label" id="monthLabel"></span>
+            </div>
+            <div class="month-grid-wrap">
+              <div class="cal-grid" id="calGrid"></div>
+            </div>
+          </section>
+
+          <section class="panel agenda" aria-label="Weekly agenda">
+            <div class="agenda-clip">
+              <div id="agendaList"></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="right-col" aria-label="Lists">
           <section class="panel list-panel" aria-label="Grocery list">
             <div class="block-title">
               <span>Groceries</span>
@@ -770,23 +789,6 @@
             <div class="list-scroll">
               <ul class="checklist" id="reminderList" data-list="reminders"></ul>
               <button type="button" class="list-add-btn" data-open-list="reminders">+ Add reminder</button>
-            </div>
-          </section>
-        </div>
-
-        <div class="right-col">
-          <section class="panel month-panel" aria-label="Monthly calendar">
-            <div class="block-title">
-              <span class="month-label" id="monthLabel"></span>
-            </div>
-            <div class="month-grid-wrap">
-              <div class="cal-grid" id="calGrid"></div>
-            </div>
-          </section>
-
-          <section class="panel agenda" aria-label="Weekly agenda">
-            <div class="agenda-clip">
-              <div id="agendaList"></div>
             </div>
           </section>
         </div>
@@ -1113,7 +1115,7 @@
     }
 
     async function clearListItem(kind, itemId) {
-      if (IS_KIOSK) return;
+      if (IS_KIOSK || document.body.classList.contains("kiosk")) return;
       const res = await FamilyAPI.toggleListItem(kind, itemId);
       syncListStateFromApi(res.state);
       if (res.item && window.ListUndo) {
@@ -1126,14 +1128,17 @@
 
     function wireChecklists() {
       // Clear grocery/reminders only from Admin — never on the kiosk
-      if (IS_KIOSK) return;
+      if (IS_KIOSK || document.body.classList.contains("kiosk")) return;
 
       document.querySelectorAll(".checklist[data-list]").forEach((ul) => {
         if (ul.dataset.bound === "1") return;
         ul.dataset.bound = "1";
         ul.addEventListener("click", async (e) => {
+          if (IS_KIOSK || document.body.classList.contains("kiosk")) return;
           const li = e.target.closest("li[data-id]");
           if (!li) return;
+          e.preventDefault();
+          e.stopPropagation();
           try {
             await clearListItem(ul.dataset.list, li.dataset.id);
           } catch (err) {
@@ -1148,19 +1153,25 @@
       const state = listState[kind];
       const root = document.getElementById(listId);
       const items = listItemsForDisplay(state.items);
+      const canClear = !(IS_KIOSK || document.body.classList.contains("kiosk"));
 
       if (!items.length) {
         root.dataset.ids = "";
-        root.innerHTML = `<li class="empty-list">No items yet — tap + Add below</li>`;
+        root.innerHTML = canClear
+          ? `<li class="empty-list">No items yet — tap + Add below</li>`
+          : `<li class="empty-list">No items yet — tap + Add, or clear from Admin</li>`;
         return;
       }
 
       const ids = items.map((item) => item.id).join("|");
-      if (root.dataset.ids === ids && root.querySelector("li[data-id]")) {
-        items.forEach((item) => {
-          const li = root.querySelector(`li[data-id="${item.id}"]`);
-          if (!li) return;
-          li.querySelector(".txt").textContent = item.text;
+      if (root.dataset.ids === ids && root.querySelector("li")) {
+        items.forEach((item, index) => {
+          const li = root.children[index];
+          if (!li || li.classList.contains("empty-list")) return;
+          const txt = li.querySelector(".txt");
+          if (txt) txt.textContent = item.text;
+          if (canClear) li.dataset.id = item.id;
+          else delete li.dataset.id;
         });
         return;
       }
@@ -1169,7 +1180,7 @@
       root.innerHTML = items
         .map(
           (item) => `
-          <li data-id="${item.id}">
+          <li${canClear ? ` data-id="${item.id}"` : ""}>
             <span class="list-dot" aria-hidden="true">•</span>
             <span class="txt">${item.text}</span>
           </li>`
@@ -1192,7 +1203,9 @@
                 syncListStateFromApi(res.state);
                 if (res.item && window.ListUndo) {
                   ListUndo.offer(`Added "${text}"`, async () => {
-                    const undo = await FamilyAPI.toggleListItem(kind, res.item.id);
+                    const undo = await FamilyAPI.toggleListItem(kind, res.item.id, {
+                      allowOnKiosk: true,
+                    });
                     syncListStateFromApi(undo.state);
                   });
                 }

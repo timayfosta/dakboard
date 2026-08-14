@@ -6,7 +6,8 @@
   display: none;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 0.4rem;
+  align-items: center;
+  padding: 0.5rem 0 1.1rem;
 }
 
 .touch-input-overlay.open {
@@ -14,18 +15,17 @@
 }
 
 .touch-input-sheet {
-  width: 100%;
-  flex: 1 1 auto;
-  max-height: 90%;
-  min-height: 52%;
+  width: 90%;
+  max-width: 90%;
+  flex: 0 0 auto;
   background: #121212;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 20px 20px 16px 16px;
+  border-radius: 18px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   animation: rise 0.25s ease both;
-  container-type: size;
+  container-type: inline-size;
 }
 
 .touch-input-head {
@@ -33,19 +33,19 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.55rem 0.7rem 0.4rem;
+  padding: 0.55rem 0.75rem 0.35rem;
   flex-shrink: 0;
 }
 
 .touch-input-head h3 {
   font-family: var(--font-display);
-  font-size: clamp(1rem, 4cqw, 1.2rem);
+  font-size: clamp(1rem, 3.2cqi, 1.25rem);
   font-weight: 800;
 }
 
 .touch-input-close {
-  width: clamp(40px, 10cqw, 48px);
-  height: clamp(40px, 10cqw, 48px);
+  width: clamp(40px, 8cqi, 48px);
+  height: clamp(40px, 8cqi, 48px);
   border-radius: 12px;
   border: 1px solid var(--line);
   background: #1a1a1a;
@@ -55,14 +55,14 @@
 }
 
 .touch-input-preview {
-  margin: 0 0.7rem;
+  margin: 0 0.75rem;
   padding: 0.55rem 0.7rem;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: #0a0a0a;
   font-weight: 700;
-  font-size: clamp(0.95rem, 3.5cqw, 1.1rem);
-  min-height: clamp(2.4rem, 8cqh, 3.2rem);
+  font-size: clamp(0.95rem, 3cqi, 1.15rem);
+  min-height: 2.6rem;
   line-height: 1.35;
   word-break: break-word;
   flex-shrink: 0;
@@ -73,25 +73,25 @@
 }
 
 .touch-input-body {
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  padding: 0.4rem 0.7rem 0.45rem;
+  padding: 0.45rem 0.75rem 0.35rem;
 }
 
+/* Standard QWERTY proportions: ~10 keys wide × 5 rows of near-square keys */
 .touch-keyboard {
-  flex: 1 1 0;
-  min-height: 0;
+  width: 100%;
+  aspect-ratio: 10 / 5.15;
   display: grid;
   grid-template-rows: repeat(5, 1fr);
-  gap: clamp(0.22rem, 1.2cqh, 0.4rem);
+  gap: clamp(0.2rem, 0.9cqi, 0.38rem);
 }
 
 .touch-kb-row {
   display: grid;
   grid-template-columns: repeat(10, 1fr);
-  gap: clamp(0.18rem, 1cqw, 0.32rem);
+  gap: clamp(0.16rem, 0.8cqi, 0.3rem);
   min-height: 0;
 }
 
@@ -102,12 +102,12 @@
 .touch-key {
   min-height: 0;
   height: 100%;
-  border-radius: clamp(8px, 2cqw, 12px);
+  border-radius: clamp(7px, 1.6cqi, 11px);
   border: 1px solid var(--line);
   background: #1c1c1c;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(1.1rem, min(5.5cqw, 10cqh), 2rem);
+  font-size: clamp(0.95rem, 4.2cqi, 1.55rem);
   line-height: 1;
   padding: 0;
 }
@@ -117,13 +117,13 @@
 }
 
 .touch-key.space {
-  font-size: clamp(0.95rem, min(4cqw, 8cqh), 1.35rem);
+  font-size: clamp(0.85rem, 3.2cqi, 1.15rem);
   letter-spacing: 0.04em;
 }
 
 .touch-key.clear-key {
-  min-width: clamp(72px, 18cqw, 100px);
-  font-size: clamp(0.85rem, min(3.5cqw, 7cqh), 1.15rem);
+  min-width: clamp(4.5rem, 16cqi, 6.5rem);
+  font-size: clamp(0.8rem, 2.8cqi, 1.05rem);
 }
 
 .touch-key:active {
@@ -135,16 +135,16 @@
   display: grid;
   grid-template-columns: 1fr 1.2fr;
   gap: 0.45rem;
-  padding: 0.5rem 0.7rem 0.65rem;
+  padding: 0.45rem 0.75rem 0.7rem;
   flex-shrink: 0;
   border-top: 1px solid var(--line);
 }
 
 .touch-input-foot button {
-  min-height: clamp(46px, 11cqh, 58px);
+  min-height: clamp(44px, 10cqi, 56px);
   border-radius: 14px;
   font-weight: 800;
-  font-size: clamp(0.95rem, 3.5cqw, 1.05rem);
+  font-size: clamp(0.95rem, 3cqi, 1.1rem);
 }
 
 .touch-input-foot .cancel {

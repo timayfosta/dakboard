@@ -17,7 +17,18 @@
     return data;
   }
 
-  async function toggleListItem(name, itemId) {
+  function isKioskDisplay() {
+    return (
+      document.body.classList.contains("kiosk") ||
+      new URLSearchParams(location.search).has("kiosk")
+    );
+  }
+
+  async function toggleListItem(name, itemId, opts = {}) {
+    // Kiosk may not clear lists by tapping; Admin (and explicit undo) still can.
+    if (isKioskDisplay() && !opts.allowOnKiosk) {
+      throw new Error("Clear lists from Admin");
+    }
     const res = await fetch("/api/family/lists/toggle", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
