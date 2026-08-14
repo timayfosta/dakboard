@@ -306,42 +306,66 @@
     url.searchParams.set("daysAhead", String(daysAhead));
     url.searchParams.set("max", String(Math.max(maxUpcoming, 25)));
 
-    const res = await fetch(url.toString(), { cache: "no-store" });
-    const contentType = res.headers.get("content-type") || "";
-    if (!res.ok) {
-      let detail = `Calendar proxy HTTP ${res.status}`;
-      if (contentType.includes("json")) {
-        try {
-          const err = await res.json();
-          if (err?.error) detail = err.error;
-        } catch (_) {
-          /* ignore */
-        }
+    const CACHE_KEY = "family-board-ics-cache-v1";
+
+    const parseFeed = (text) => {
+      if (!text || !/BEGIN:(VCALENDAR|VEVENT)/i.test(text)) {
+        throw new Error("Calendar proxy did not return an iCal feed");
       }
-      throw new Error(detail);
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), text }));
+      } catch (_) {
+        /* ignore quota */
+      }
+      const parsed = parseIcs(text, daysAhead);
+      const horizon = addDays(new Date(), daysAhead);
+      return parsed.filter((e) => e.start <= horizon);
+    };
+
+    try {
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      const contentType = res.headers.get("content-type") || "";
+      if (!res.ok) {
+        let detail = `Calendar proxy HTTP ${res.status}`;
+        if (contentType.includes("json")) {
+          try {
+            const err = await res.json();
+            if (err?.error) detail = err.error;
+          } catch (_) {
+            /* ignore */
+          }
+        }
+        throw new Error(detail);
+      }
+      if (contentType.includes("json")) {
+        const data = await res.json();
+        if (data?.error) throw new Error(data.error);
+        const items = data.events || data.items || data;
+        return (items || []).map((item) =>
+          normalizeEvent({
+            id: item.id,
+            title: item.title || item.summary || "(No title)",
+            start: item.start?.dateTime || item.start?.date || item.start,
+            end: item.end?.dateTime || item.end?.date || item.end || item.start,
+            allDay: !!(item.allDay || item.start?.date),
+            location: item.location || "",
+          })
+        );
+      }
+      return parseFeed(await res.text());
+    } catch (err) {
+      // Fall back to last good ICS saved in the browser
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          if (cached?.text) return parseFeed(cached.text);
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      throw err;
     }
-    if (contentType.includes("json")) {
-      const data = await res.json();
-      if (data?.error) throw new Error(data.error);
-      const items = data.events || data.items || data;
-      return (items || []).map((item) =>
-        normalizeEvent({
-          id: item.id,
-          title: item.title || item.summary || "(No title)",
-          start: item.start?.dateTime || item.start?.date || item.start,
-          end: item.end?.dateTime || item.end?.date || item.end || item.start,
-          allDay: !!(item.allDay || item.start?.date),
-          location: item.location || "",
-        })
-      );
-    }
-    const text = await res.text();
-    if (!/BEGIN:VCALENDAR/i.test(text)) {
-      throw new Error("Calendar proxy did not return an iCal feed");
-    }
-    const parsed = parseIcs(text, daysAhead);
-    const horizon = addDays(new Date(), daysAhead);
-    return parsed.filter((e) => e.start <= horizon);
   }
 
   async function fetchGooglePublicApi(cfg) {

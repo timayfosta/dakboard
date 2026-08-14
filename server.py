@@ -49,6 +49,7 @@ API_VERSION = 2
 BOOT_ID = uuid.uuid4().hex
 STARTED_AT = int(time.time() * 1000)
 PHOTOS_DIR = ROOT / "data" / "photos"
+CAL_CACHE = ROOT / "data" / "calendar-cache.ics"
 SECRETS = ROOT / "shared" / "secrets.local.js"
 SESSIONS: dict[str, float] = {}  # token -> expires_at
 SESSION_HOURS = 30 * 24
@@ -70,7 +71,7 @@ def load_secrets() -> dict[str, str]:
     ):
         match = re.search(rf'{key}:\s*"([^"]*)"', text)
         if match:
-            out[key] = match.group(1)
+            out[key] = match.group(1).strip()
     return out
 
 
@@ -388,9 +389,29 @@ class Handler(SimpleHTTPRequestHandler):
         return send_json(self, {"ok": True})
 
     # ---- calendar ----
+    def _is_ics_payload(self, data: bytes) -> bool:
+        if not data:
+            return False
+        sample = data[:4000].lstrip(b"\xef\xbb\xbf \t\r\n")
+        return b"BEGIN:VCALENDAR" in sample or b"BEGIN:VEVENT" in data
+
+    def _write_calendar_bytes(self, data: bytes, *, cached: bool = False) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/calendar; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-store")
+        if cached:
+            self.send_header("X-Family-Calendar-Cache", "1")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def proxy_calendar(self):
-        ics_url = load_secrets().get("icsUrl")
+        ics_url = (load_secrets().get("icsUrl") or "").strip()
         if not ics_url:
+            cached = CAL_CACHE.read_bytes() if CAL_CACHE.exists() else b""
+            if self._is_ics_payload(cached):
+                return self._write_calendar_bytes(cached, cached=True)
             return send_json(
                 self,
                 {
@@ -398,31 +419,34 @@ class Handler(SimpleHTTPRequestHandler):
                 },
                 500,
             )
+
+        live_error = ""
         try:
             req = urllib.request.Request(
                 ics_url,
                 headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; FamilyBoard/1.0)",
+                    "User-Agent": "Mozilla/5.0 (compatible; FamilyBoard/1.0; +https://localhost)",
                     "Accept": "text/calendar, text/plain, */*",
                 },
             )
             with urllib.request.urlopen(req, timeout=30) as resp:
                 data = resp.read()
-            if not data or b"BEGIN:VCALENDAR" not in data[:200]:
-                return send_json(
-                    self,
-                    {"error": "icsUrl did not return a Google iCal feed — reset the secret address in Google Calendar settings"},
-                    502,
-                )
-            self.send_response(200)
-            self.send_header("Content-Type", "text/calendar; charset=utf-8")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
+            if self._is_ics_payload(data):
+                try:
+                    CAL_CACHE.parent.mkdir(parents=True, exist_ok=True)
+                    CAL_CACHE.write_bytes(data)
+                except OSError:
+                    pass
+                return self._write_calendar_bytes(data)
+            live_error = "icsUrl did not return a Google iCal feed — reset the secret address in Google Calendar settings"
         except Exception as exc:  # noqa: BLE001
-            send_json(self, {"error": f"Calendar fetch failed: {exc}"}, 502)
+            live_error = f"Calendar fetch failed: {exc}"
+
+        cached = CAL_CACHE.read_bytes() if CAL_CACHE.exists() else b""
+        if self._is_ics_payload(cached):
+            return self._write_calendar_bytes(cached, cached=True)
+
+        send_json(self, {"error": live_error or "Google Calendar unavailable"}, 502)
 
     # ---- family mutations ----
     def kids_upsert(self, payload: dict):
