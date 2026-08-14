@@ -173,7 +173,7 @@
 
     .header {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 2fr 3fr;
       gap: 0.5rem;
       flex-shrink: 0;
       min-height: 0;
@@ -202,22 +202,21 @@
 
     .clock-card .date-stack {
       display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
-      gap: 0.02rem;
+      flex-direction: row;
+      align-items: baseline;
+      gap: 0.45rem;
       min-width: 0;
       width: 100%;
     }
 
     .clock-card .day-line {
       font-family: var(--font-display);
-      font-size: clamp(1.2rem, 10cqw, 1.95rem);
+      font-size: clamp(1.05rem, 8.5cqw, 1.7rem);
       font-weight: 800;
       line-height: 1.05;
       color: var(--ink);
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      flex-shrink: 0;
     }
 
     .clock-card .date-line {
@@ -229,6 +228,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
     }
 
     .weather-strip {
@@ -250,8 +250,8 @@
     }
 
     .wx-icon {
-      width: clamp(78px, 22cqw, 118px);
-      height: clamp(78px, 22cqw, 118px);
+      width: clamp(44px, 11cqw, 68px);
+      height: clamp(44px, 11cqw, 68px);
       flex-shrink: 0;
       display: grid;
       place-items: center;
@@ -501,10 +501,10 @@
     }
 
     .month-panel .block-title {
-      margin-bottom: 0.1rem;
+      margin-bottom: 0.7rem;
       flex-shrink: 0;
       justify-content: flex-start;
-      padding: 0.05rem 0 0.25rem;
+      padding: 0.05rem 0 0.15rem;
       min-height: clamp(2rem, 9cqh, 3rem);
       align-items: flex-end;
     }
