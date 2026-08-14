@@ -55,53 +55,12 @@ if [[ ! -f "${APP_DIR}/scripts/pi/kiosk.env" ]]; then
   cp "${SRC_DIR}/scripts/pi/kiosk.env" "${APP_DIR}/scripts/pi/kiosk.env" 2>/dev/null || true
 fi
 chown -R "${TARGET_USER}:${TARGET_USER}" "${APP_DIR}"
-chmod +x "${APP_DIR}/scripts/pi/"*.sh "${APP_DIR}/scripts/git_sync.sh" 2>/dev/null || true
+chmod +x "${APP_DIR}/scripts/pi/"*.sh "${APP_DIR}/scripts/git_sync.sh" "${APP_DIR}/INSTALL-PI.sh" 2>/dev/null || true
 bash "${APP_DIR}/scripts/pi/link-phone-admin.sh"
 
-cat > /etc/systemd/system/family-board-api.service <<EOF
-[Unit]
-Description=Family Board local API server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=${TARGET_USER}
-WorkingDirectory=${APP_DIR}
-ExecStart=/usr/bin/python3 ${APP_DIR}/server.py
-Restart=always
-RestartSec=5
-Environment=PYTHONUNBUFFERED=1
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
+bash "${APP_DIR}/scripts/pi/write-api-service.sh" "${TARGET_USER}" "${APP_DIR}"
 bash "${APP_DIR}/scripts/pi/write-kiosk-service.sh" "${TARGET_USER}" "${APP_DIR}" "${HOME_DIR}"
-
-mkdir -p "${HOME_DIR}/.config/autostart"
-cat > "${HOME_DIR}/.config/autostart/unclutter.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Unclutter
-Exec=unclutter -idle 0.5 -root
-X-GNOME-Autostart-enabled=true
-EOF
-cat > "${HOME_DIR}/.config/autostart/family-board-rotate.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Family Board Portrait Rotate
-Exec=bash -lc '${APP_DIR}/scripts/pi/rotate-display.sh; sleep 10; ${APP_DIR}/scripts/pi/rotate-display.sh'
-X-GNOME-Autostart-enabled=true
-EOF
-cat > "${HOME_DIR}/.config/autostart/family-board-kiosk.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Family Board Kiosk
-Exec=bash -lc 'sleep 12; exec ${APP_DIR}/scripts/pi/ensure-kiosk.sh'
-X-GNOME-Autostart-enabled=true
-EOF
-chown -R "${TARGET_USER}:${TARGET_USER}" "${HOME_DIR}/.config"
+bash "${APP_DIR}/scripts/pi/write-desktop-launchers.sh" "${TARGET_USER}" "${APP_DIR}" "${HOME_DIR}"
 
 systemctl daemon-reload
 systemctl enable family-board-api.service
@@ -120,13 +79,12 @@ echo "Installed. Both services are enabled and will start on boot."
 echo "  API unit:   $(systemctl is-enabled family-board-api) / $(systemctl is-active family-board-api)"
 echo "  Kiosk unit: $(systemctl is-enabled family-board-kiosk) / $(systemctl is-active family-board-kiosk || echo inactive-until-desktop)"
 echo "  App path:   ${APP_DIR}"
+echo "  Desktop:    ${HOME_DIR}/Desktop/Start-Family-Board.desktop"
+echo ""
+echo "If it does not auto-start after reboot, double-click Start Family Board"
+echo "or run:  bash ${APP_DIR}/scripts/pi/start-now.sh"
 echo ""
 echo "REQUIRED for kiosk on boot: Desktop auto-login"
 echo "  sudo raspi-config → System Options → Boot / Auto Login → Desktop Autologin"
 echo ""
-echo "Portrait TV rotation: edit ${APP_DIR}/scripts/pi/kiosk.env"
-echo "  FAMILY_BOARD_ROTATE=right   (or left / normal)"
-echo ""
 echo "Then reboot:  sudo reboot"
-echo ""
-echo "If secrets are missing, copy shared/secrets.local.js into ${APP_DIR}/shared/"

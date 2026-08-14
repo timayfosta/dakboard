@@ -1,16 +1,19 @@
 [Unit]
 Description=Family Board local API server
-After=network-online.target
-Wants=network-online.target
+After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/family-board-src
-ExecStart=/usr/bin/python3 /home/pi/family-board-src/server.py
+ExecStart=/usr/bin/python3 -u /home/pi/family-board-src/server.py
 Restart=always
-RestartSec=5
+RestartSec=3
+StartLimitIntervalSec=0
 Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

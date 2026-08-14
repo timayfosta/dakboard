@@ -4,29 +4,51 @@ Family Board runs on the Raspberry Pi at `http://<pi-ip>:8765`. On the Pi, the g
 
 ## Pi kiosk
 
-Run from your checkout (e.g. `~/family-board-src`):
+On the Pi the repo is **`~/family-board-src`**.
+
+### Install (once)
 
 ```bash
 cd ~/family-board-src
-sudo bash scripts/pi/install-kiosk.sh
+sudo bash INSTALL-PI.sh
+sudo reboot
 ```
 
-This installs two **systemd** services that start automatically on boot:
+This enables the API + kiosk on boot and puts **Start Family Board** on the Desktop.
+
+### Start now (when it did not auto-load)
+
+```bash
+cd ~/family-board-src
+bash scripts/pi/start-now.sh
+```
+
+Or double-click **Start Family Board** on the Pi desktop. That starts the server if needed, then opens the kiosk.
+
+Check what is running:
+
+```bash
+bash scripts/pi/status.sh
+```
+
+### Auto-start on boot
+
+`INSTALL-PI.sh` / `scripts/pi/install-kiosk.sh` installs two **systemd** services:
 
 | Service | Starts | Role |
 |---------|--------|------|
-| `family-board-api` | At multi-user (network up) | Python API on port 8765 |
+| `family-board-api` | At boot (multi-user) | Python API on port 8765 |
 | `family-board-kiosk` | After desktop + API | Full-screen Chromium carousel |
 
-The kiosk waits up to 90 seconds for the API health check before opening the browser.
+Desktop autostart is a backup if systemd misses the session. Enable **Desktop Autologin**: `sudo raspi-config` → System Options → Boot / Auto Login → Desktop Autologin.
 
 **Useful commands**
 
 ```bash
 systemctl status family-board-api family-board-kiosk
-journalctl -u family-board-api -f
-journalctl -u family-board-kiosk -f
+sudo systemctl start family-board-api family-board-kiosk
 sudo systemctl restart family-board-api family-board-kiosk
+journalctl -u family-board-api -n 40 --no-pager
 ```
 
 ### After a manual git reset — kiosk or rotation stopped working

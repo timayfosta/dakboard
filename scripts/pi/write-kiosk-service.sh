@@ -9,8 +9,8 @@ HOME_DIR="${3:?}"
 cat > /etc/systemd/system/family-board-kiosk.service <<EOF
 [Unit]
 Description=Family Board Chromium kiosk
-After=network-online.target family-board-api.service graphical.target
-Wants=family-board-api.service network-online.target graphical.target
+After=family-board-api.service graphical.target
+Wants=family-board-api.service graphical.target
 
 [Service]
 Type=simple
@@ -20,7 +20,7 @@ Environment=XAUTHORITY=${HOME_DIR}/.Xauthority
 Environment=FAMILY_BOARD_SKIP_SERVER=1
 WorkingDirectory=${APP_DIR}
 ExecStart=${APP_DIR}/scripts/pi/start-kiosk.sh
-Restart=on-failure
+Restart=always
 RestartSec=12
 StartLimitIntervalSec=0
 TimeoutStartSec=300
