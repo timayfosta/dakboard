@@ -6,8 +6,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/family-board
-ExecStart=/usr/bin/python3 /home/pi/family-board/server.py
+WorkingDirectory=/home/pi/family-board-src
+ExecStart=/usr/bin/python3 /home/pi/family-board-src/server.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1

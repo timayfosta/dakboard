@@ -1,10 +1,13 @@
 # Deploy & HTTPS
 
-Family Board runs on the Raspberry Pi at `http://<pi-ip>:8765`. Lists, chores, rewards, and star balances all live in `data/family.json` on the Pi — no Google Tasks needed.
+Family Board runs on the Raspberry Pi at `http://<pi-ip>:8765`. On the Pi, the git checkout is usually **`~/family-board-src`**. Lists, chores, rewards, and star balances all live in `data/family.json` on the Pi — no Google Tasks needed.
 
 ## Pi kiosk
 
+Run from your checkout (e.g. `~/family-board-src`):
+
 ```bash
+cd ~/family-board-src
 sudo bash scripts/pi/install-kiosk.sh
 ```
 
@@ -28,12 +31,12 @@ sudo systemctl restart family-board-api family-board-kiosk
 
 ### After a manual git reset — kiosk or rotation stopped working
 
-If you ran `git reset --hard` by hand, systemd may still point at an old folder (e.g. `/home/pi/family-board` while the repo is now `~/dakboard`). Symptoms: API/kiosk do not start on boot, portrait rotation missing, screen carousel stuck on one page.
+If you ran `git reset --hard` by hand, systemd may still point at an old folder (e.g. `/home/pi/family-board` while the repo is `~/family-board-src`). Symptoms: API/kiosk do not start on boot, portrait rotation missing, screen carousel stuck on one page.
 
 From **inside your git checkout** on the Pi:
 
 ```bash
-cd ~/dakboard          # or ~/family-board — wherever server.py lives
+cd ~/family-board-src
 sudo bash scripts/pi/repair-kiosk.sh
 sudo reboot
 ```
@@ -43,6 +46,13 @@ Check status:
 ```bash
 systemctl status family-board-api family-board-kiosk
 journalctl -u family-board-api -u family-board-kiosk -b --no-pager
+```
+
+If `family-board-kiosk` shows **failed** (not just inactive), it usually started before the desktop was ready and systemd stopped retrying. Repair fixes paths, removes the start limit, and adds a desktop autostart fallback:
+
+```bash
+sudo bash scripts/pi/repair-kiosk.sh
+sudo reboot
 ```
 
 **Pi desktop:** enable auto-login to the desktop (Raspberry Pi OS → raspi-config → System Options → Boot / Auto Login → Desktop) so the graphical kiosk service can run.
@@ -72,8 +82,8 @@ Pushing to GitHub does **not** update phones/TVs by itself. The Pi must pull + r
 The Pi must be a **git clone** (not rsync-only) for pull-to-update:
 
 ```bash
-git clone https://github.com/YOU/dakboard.git ~/family-board
-cd ~/family-board
+git clone https://github.com/YOU/dakboard.git ~/family-board-src
+cd ~/family-board-src
 sudo bash scripts/pi/install-kiosk.sh
 ```
 
@@ -124,7 +134,7 @@ Deploy **never merges** — it runs `scripts/git_sync.sh`, which fetches origin 
 That message means the Pi is still running **old deploy code** that used `git pull`. Fix once over SSH:
 
 ```bash
-cd ~/dakboard   # or ~/family-board
+cd ~/family-board-src
 git fetch origin
 git merge --abort 2>/dev/null || true
 git reset --hard origin/master   # or origin/main
@@ -154,7 +164,7 @@ Browsers require HTTPS to install a PWA from another device. Options:
    If `/phone/` returns 404 on the Pi, run once:
 
    ```bash
-   cd ~/family-board
+   cd ~/family-board-src
    bash scripts/pi/link-phone-admin.sh
    sudo systemctl restart family-board-api
    curl -s -o /dev/null -w "phone: %{http_code}\n" http://127.0.0.1:8765/phone/

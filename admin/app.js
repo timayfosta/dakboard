@@ -922,12 +922,10 @@
       return "Deploy already running — wait a few seconds and try again";
     }
     if (msg.includes("local variable 'out'") || msg.includes('local variable "out"')) {
-      return "Broken deploy on the Pi — SSH once: git fetch origin && git reset --hard origin/master && sudo systemctl restart family-board-api";
+      return "Broken deploy on the Pi — SSH: cd ~/family-board-src && git fetch origin && git reset --hard origin/master && sudo systemctl restart family-board-api";
     }
     if (msg.includes("merge") || msg.includes("overwriting") || msg.includes("local changes")) {
-      return "Old deploy code on the Pi — SSH once and run: bash scripts/git_sync.sh && sudo systemctl restart family-board-api";
-    }
-      return "Old deploy code on the Pi — SSH once and run: bash scripts/git_sync.sh && sudo systemctl restart family-board-api";
+      return "Old deploy on the Pi — SSH: cd ~/family-board-src && bash scripts/git_sync.sh && sudo systemctl restart family-board-api";
     }
     if (msg.includes("Not a git repository")) {
       return "Not a git clone — use git clone on this machine for pull-to-update";

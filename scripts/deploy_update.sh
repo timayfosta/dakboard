@@ -7,7 +7,7 @@ cd "$ROOT"
 
 bash scripts/git_sync.sh
 
-# Fix systemd paths if the repo moved (e.g. ~/family-board → ~/dakboard)
+# Fix systemd paths if the repo moved (e.g. ~/family-board → ~/family-board-src)
 if [[ -f /etc/systemd/system/family-board-api.service ]]; then
   CURRENT="$(grep -m1 '^WorkingDirectory=' /etc/systemd/system/family-board-api.service | cut -d= -f2- || true)"
   if [[ -n "${CURRENT}" && "${CURRENT}" != "${ROOT}" ]]; then

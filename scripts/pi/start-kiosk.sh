@@ -41,6 +41,12 @@ if [[ -z "$BROWSER" ]]; then
   exit 1
 fi
 
+echo "Waiting for desktop session…"
+if ! bash "$ROOT/scripts/pi/wait-for-display.sh"; then
+  echo "Display not ready. Check desktop auto-login (raspi-config)." >&2
+  exit 1
+fi
+
 wait_for_api() {
   local tries="${1:-40}"
   local i

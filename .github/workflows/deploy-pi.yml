@@ -19,14 +19,14 @@ jobs:
           script: |
             set -euo pipefail
             ROOT=""
-            for candidate in "$HOME/family-board" "$HOME/dakboard" "$HOME/Projects/dakboard"; do
+            for candidate in "$HOME/family-board-src" "$HOME/family-board" "$HOME/dakboard"; do
               if [[ -d "$candidate/.git" ]]; then
                 ROOT="$candidate"
                 break
               fi
             done
             if [[ -z "$ROOT" ]]; then
-              echo "Could not find git repo (tried ~/family-board, ~/dakboard, ~/Projects/dakboard)" >&2
+              echo "Could not find git repo (tried ~/family-board-src, ~/family-board, ~/dakboard)" >&2
               exit 1
             fi
             echo "Deploying in $ROOT"

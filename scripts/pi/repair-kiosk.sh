@@ -42,27 +42,7 @@ Environment=PYTHONUNBUFFERED=1
 WantedBy=multi-user.target
 EOF
 
-cat > /etc/systemd/system/family-board-kiosk.service <<EOF
-[Unit]
-Description=Family Board Chromium kiosk
-After=network-online.target family-board-api.service graphical.target
-Requires=family-board-api.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=${TARGET_USER}
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=${HOME_DIR}/.Xauthority
-Environment=FAMILY_BOARD_SKIP_SERVER=1
-WorkingDirectory=${APP_DIR}
-ExecStart=${APP_DIR}/scripts/pi/start-kiosk.sh
-Restart=on-failure
-RestartSec=8
-
-[Install]
-WantedBy=graphical.target
-EOF
+bash "${APP_DIR}/scripts/pi/write-kiosk-service.sh" "${TARGET_USER}" "${APP_DIR}" "${HOME_DIR}"
 
 mkdir -p "${HOME_DIR}/.config/autostart"
 cat > "${HOME_DIR}/.config/autostart/family-board-rotate.desktop" <<EOF
@@ -70,6 +50,13 @@ cat > "${HOME_DIR}/.config/autostart/family-board-rotate.desktop" <<EOF
 Type=Application
 Name=Family Board Portrait Rotate
 Exec=${APP_DIR}/scripts/pi/rotate-display.sh
+X-GNOME-Autostart-enabled=true
+EOF
+cat > "${HOME_DIR}/.config/autostart/family-board-kiosk.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Family Board Kiosk
+Exec=bash -lc 'sleep 8; exec ${APP_DIR}/scripts/pi/ensure-kiosk.sh'
 X-GNOME-Autostart-enabled=true
 EOF
 chown -R "${TARGET_USER}:${TARGET_USER}" "${HOME_DIR}/.config/autostart"

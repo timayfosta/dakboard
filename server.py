@@ -38,7 +38,7 @@ except ImportError as exc:
         f"  Looked in: {ROOT / 'shared'}\n"
         f"  Detail: {exc}\n"
         "  Fix: run from the full Family Board folder (must contain server.py + shared/).\n"
-        "  Example:  cd ~/family-board && python3 server.py",
+        "  Example:  cd ~/family-board-src && python3 server.py",
         flush=True,
     )
     raise SystemExit(1) from exc
