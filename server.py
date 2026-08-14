@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -420,27 +421,55 @@ class Handler(SimpleHTTPRequestHandler):
                 500,
             )
 
+        candidates = [ics_url]
+        # Google accepts either %40 or @ in the calendar id segment
+        if "%40" in ics_url:
+            candidates.append(ics_url.replace("%40", "@"))
+        elif "@" in ics_url and "/calendar/ical/" in ics_url:
+            candidates.append(ics_url.replace("@", "%40"))
+
         live_error = ""
-        try:
-            req = urllib.request.Request(
-                ics_url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; FamilyBoard/1.0; +https://localhost)",
-                    "Accept": "text/calendar, text/plain, */*",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = resp.read()
-            if self._is_ics_payload(data):
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/calendar, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+
+        for candidate in candidates:
+            try:
+                req = urllib.request.Request(candidate, headers=headers)
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    data = resp.read()
+                if self._is_ics_payload(data):
+                    try:
+                        CAL_CACHE.parent.mkdir(parents=True, exist_ok=True)
+                        CAL_CACHE.write_bytes(data)
+                    except OSError:
+                        pass
+                    return self._write_calendar_bytes(data)
+                live_error = (
+                    "icsUrl did not return a Google iCal feed — open Google Calendar → "
+                    "Settings → Integrate calendar → copy a fresh Secret address in iCal format"
+                )
+            except urllib.error.HTTPError as exc:
+                body = ""
                 try:
-                    CAL_CACHE.parent.mkdir(parents=True, exist_ok=True)
-                    CAL_CACHE.write_bytes(data)
-                except OSError:
-                    pass
-                return self._write_calendar_bytes(data)
-            live_error = "icsUrl did not return a Google iCal feed — reset the secret address in Google Calendar settings"
-        except Exception as exc:  # noqa: BLE001
-            live_error = f"Calendar fetch failed: {exc}"
+                    body = exc.read().decode("utf-8", errors="replace")[:180]
+                except Exception:  # noqa: BLE001
+                    body = ""
+                live_error = f"Google iCal HTTP {exc.code}"
+                if exc.code in (400, 401, 403, 404):
+                    live_error += (
+                        " — secret iCal URL is invalid or was reset. "
+                        "Paste a new Secret address into shared/secrets.local.js"
+                    )
+                if body and "Error" in body:
+                    live_error += f" ({body.strip()[:80]})"
+            except Exception as exc:  # noqa: BLE001
+                live_error = f"Calendar fetch failed: {exc}"
 
         cached = CAL_CACHE.read_bytes() if CAL_CACHE.exists() else b""
         if self._is_ics_payload(cached):

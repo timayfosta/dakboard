@@ -299,13 +299,11 @@
   }
 
   async function fetchViaProxy(cfg) {
-    const { proxyUrl, daysAhead = 21, maxUpcoming = 15 } = cfg.googleCalendar || {};
+    const { proxyUrl, daysAhead = 21 } = cfg.googleCalendar || {};
     if (!proxyUrl) return null;
 
+    // Keep the proxy URL clean — extra query params are unused and can confuse tunnels
     const url = new URL(proxyUrl, window.location.origin);
-    url.searchParams.set("daysAhead", String(daysAhead));
-    url.searchParams.set("max", String(Math.max(maxUpcoming, 25)));
-
     const CACHE_KEY = "family-board-ics-cache-v1";
 
     const parseFeed = (text) => {
@@ -369,7 +367,9 @@
   }
 
   async function fetchGooglePublicApi(cfg) {
-    const { apiKey, calendarId, daysAhead = 21, maxUpcoming = 15 } = cfg.googleCalendar || {};
+    const { apiKey, calendarId, daysAhead = 21, maxUpcoming = 15, proxyUrl } = cfg.googleCalendar || {};
+    // Private calendars use the iCal proxy — public API key calls return 400/404 and confuse errors
+    if (proxyUrl) return null;
     if (!apiKey || !calendarId) return null;
 
     const timeMin = new Date().toISOString();

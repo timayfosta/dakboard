@@ -498,16 +498,17 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      padding: 0.35rem 0.3rem 0.3rem;
+      /* horizontal padding -25%, vertical matched to horizontal */
+      padding: 0.225rem;
       container-type: size;
     }
 
     .month-panel .block-title {
-      margin-bottom: 0.15rem;
+      margin-bottom: 0.1rem;
       flex-shrink: 0;
       justify-content: flex-start;
-      padding: 0.1rem 0.05rem 0.4rem;
-      min-height: clamp(2.2rem, 10cqh, 3.4rem);
+      padding: 0.05rem 0 0.25rem;
+      min-height: clamp(2rem, 9cqh, 3rem);
       align-items: flex-end;
     }
 
@@ -536,13 +537,13 @@
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       grid-template-rows: auto repeat(6, 1fr);
-      gap: 0.04rem;
+      gap: 0.03rem;
     }
 
     .dow {
       text-align: center;
       font-family: var(--font-display);
-      font-size: clamp(1.1rem, min(9cqw, 12cqh), 2rem);
+      font-size: clamp(1.2rem, min(10cqw, 13cqh), 2.1rem);
       font-weight: 800;
       color: var(--ink-soft);
       text-transform: uppercase;
@@ -562,11 +563,12 @@
       justify-content: center;
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: clamp(1.5rem, min(14cqw, 22cqh), 2.8rem);
+      font-size: clamp(1.75rem, min(16cqw, 26cqh), 3.1rem);
       line-height: 1;
       color: var(--ink-soft);
       background: transparent;
       padding: 0;
+      margin: 0;
       min-width: 0;
       min-height: 0;
       overflow: hidden;
