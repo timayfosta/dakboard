@@ -355,22 +355,32 @@
       flex: 1;
       min-height: 0;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      /* Left lists 25% | Right weekly agenda 75% */
+      grid-template-columns: 1fr 3fr;
       gap: 0.55rem;
+    }
+
+    .left-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .agenda {
       display: flex;
       flex-direction: column;
+      flex: 1;
       min-height: 0;
       overflow: hidden;
-      padding: 0.55rem 0.35rem 0.55rem;
+      padding: 0.55rem 0.65rem 0.55rem 0.75rem;
     }
 
     .agenda h2,
     .block-title {
       font-family: var(--font-display);
-      font-size: 1.1rem;
+      font-size: 1.15rem;
       font-weight: 800;
       margin-bottom: 0.4rem;
       display: flex;
@@ -406,18 +416,18 @@
       background: linear-gradient(180deg, transparent, #111);
     }
 
-    .day-group + .day-group { margin-top: 0.75rem; }
+    .day-group + .day-group { margin-top: 0.9rem; }
 
     .day-head {
       display: flex;
       align-items: baseline;
-      gap: 0.45rem;
-      padding: 0.35rem 0.12rem 0.5rem;
-      margin-bottom: 0.15rem;
+      gap: 0.55rem;
+      padding: 0.45rem 0.15rem 0.55rem;
+      margin-bottom: 0.25rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: 1.5rem;
+      font-size: 2.15rem;
       line-height: 1.05;
       letter-spacing: -0.02em;
       color: var(--ink);
@@ -425,7 +435,7 @@
 
     .day-head .date-num {
       font-family: var(--font-display);
-      font-size: 1.15rem;
+      font-size: 1.55rem;
       font-weight: 800;
       color: var(--ink-soft);
       letter-spacing: 0;
@@ -433,40 +443,41 @@
 
     .agenda-rows {
       list-style: none;
-      padding-top: 0.1rem;
+      padding-top: 0.15rem;
+      width: 100%;
     }
 
     .agenda-row {
       display: grid;
-      grid-template-columns: 4.2rem 1fr;
-      gap: 0.5rem;
+      grid-template-columns: 6rem 1fr;
+      gap: 0.75rem;
       align-items: start;
-      padding: 0.42rem 0.1rem 0.42rem 0.35rem;
+      padding: 0.62rem 0.2rem 0.62rem 0.45rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      border-left: 3px solid var(--kid-color, transparent);
+      border-left: 4px solid var(--kid-color, transparent);
     }
 
     .agenda-row:last-child { border-bottom: none; }
 
     .agenda-row .time {
       font-weight: 800;
-      font-size: 0.78rem;
+      font-size: 1.2rem;
       color: var(--kid-color, var(--sky));
-      padding-top: 0.1rem;
+      padding-top: 0.15rem;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
 
     .agenda-row .title {
       font-weight: 700;
-      font-size: 0.98rem;
-      line-height: 1.25;
+      font-size: 1.45rem;
+      line-height: 1.3;
     }
 
     .agenda-row .kid-tag {
       display: inline-block;
-      margin-right: 0.35rem;
-      font-size: 0.95rem;
+      margin-right: 0.4rem;
+      font-size: 1.3rem;
       line-height: 1;
     }
 
@@ -478,24 +489,26 @@
       color: var(--ink-soft);
       font-weight: 700;
       padding: 0.6rem 0.1rem;
+      font-size: 1.3rem;
     }
 
     .right-col {
       display: flex;
       flex-direction: column;
-      gap: 0.45rem;
+      gap: 0.4rem;
       min-height: 0;
       overflow: hidden;
     }
 
     .month-panel {
       width: 100%;
-      flex-shrink: 0;
+      flex: 0 0 auto;
+      max-height: 32%;
       display: flex;
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
-      padding: 0.35rem 0.25rem 0.3rem;
+      padding: 0.3rem 0.25rem 0.25rem;
       container-type: inline-size;
     }
 
@@ -576,26 +589,18 @@
       background: rgba(255, 122, 89, 0.1);
     }
 
-    .lists {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.45rem;
-      flex: 1;
-      min-height: 0;
-      overflow: hidden;
-    }
-
     .list-panel {
       display: flex;
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
-      padding: 0.35rem 0.2rem;
+      padding: 0.45rem 0.4rem;
+      height: 100%;
     }
 
     .list-panel .block-title {
-      font-size: 0.92rem;
-      margin-bottom: 0.22rem;
+      font-size: 1.2rem;
+      margin-bottom: 0.35rem;
       flex-shrink: 0;
     }
 
@@ -607,7 +612,7 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 0.35rem;
+      gap: 0.4rem;
       padding-bottom: 0.15rem;
       -webkit-overflow-scrolling: touch;
     }
@@ -616,24 +621,28 @@
       list-style: none;
       display: flex;
       flex-direction: column;
-      gap: 0.22rem;
+      gap: 0.3rem;
       flex-shrink: 0;
     }
 
     .checklist li {
       display: grid;
       grid-template-columns: auto 1fr;
-      gap: 0.35rem;
+      gap: 0.45rem;
       align-items: center;
       background: transparent;
       border-radius: 0;
-      padding: 0.34rem 0.08rem;
+      padding: 0.5rem 0.1rem;
       border: none;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      cursor: pointer;
+      cursor: default;
       font-weight: 700;
-      font-size: 0.78rem;
+      font-size: 1.12rem;
       flex-shrink: 0;
+    }
+
+    body:not(.kiosk) .checklist li[data-id] {
+      cursor: pointer;
     }
 
     .checklist li:last-child {
@@ -653,13 +662,15 @@
       grid-template-columns: 1fr;
       background: transparent;
       border: none;
+      font-size: 0.95rem;
+      white-space: normal;
     }
 
     .checklist .list-dot {
       color: var(--ink-soft);
-      font-size: 0.95rem;
+      font-size: 1.2rem;
       line-height: 1;
-      width: 14px;
+      width: 16px;
       text-align: center;
     }
 
@@ -740,11 +751,28 @@
       </header>
 
       <div class="body">
-        <section class="panel agenda" aria-label="Weekly agenda">
-          <div class="agenda-clip">
-            <div id="agendaList"></div>
-          </div>
-        </section>
+        <div class="left-col" aria-label="Lists">
+          <section class="panel list-panel" aria-label="Grocery list">
+            <div class="block-title">
+              <span>Groceries</span>
+              <span class="list-source" id="grocerySource">Sync</span>
+            </div>
+            <div class="list-scroll">
+              <ul class="checklist" id="groceryList" data-list="grocery"></ul>
+              <button type="button" class="list-add-btn" data-open-list="grocery">+ Add grocery</button>
+            </div>
+          </section>
+          <section class="panel list-panel" aria-label="Reminders">
+            <div class="block-title">
+              <span>Reminders</span>
+              <span class="list-source" id="reminderSource">Sync</span>
+            </div>
+            <div class="list-scroll">
+              <ul class="checklist" id="reminderList" data-list="reminders"></ul>
+              <button type="button" class="list-add-btn" data-open-list="reminders">+ Add reminder</button>
+            </div>
+          </section>
+        </div>
 
         <div class="right-col">
           <section class="panel month-panel" aria-label="Monthly calendar">
@@ -756,28 +784,11 @@
             </div>
           </section>
 
-          <div class="lists">
-            <section class="panel list-panel" aria-label="Grocery list">
-              <div class="block-title">
-                <span>Groceries</span>
-                <span class="list-source" id="grocerySource">Sync</span>
-              </div>
-              <div class="list-scroll">
-                <ul class="checklist" id="groceryList" data-list="grocery"></ul>
-                <button type="button" class="list-add-btn" data-open-list="grocery">+ Add grocery</button>
-              </div>
-            </section>
-            <section class="panel list-panel" aria-label="Reminders">
-              <div class="block-title">
-                <span>Reminders</span>
-                <span class="list-source" id="reminderSource">Sync</span>
-              </div>
-              <div class="list-scroll">
-                <ul class="checklist" id="reminderList" data-list="reminders"></ul>
-                <button type="button" class="list-add-btn" data-open-list="reminders">+ Add reminder</button>
-              </div>
-            </section>
-          </div>
+          <section class="panel agenda" aria-label="Weekly agenda">
+            <div class="agenda-clip">
+              <div id="agendaList"></div>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -805,7 +816,8 @@
       reminders: { items: [] },
     };
 
-    if (new URLSearchParams(location.search).has("kiosk")) {
+    const IS_KIOSK = new URLSearchParams(location.search).has("kiosk");
+    if (IS_KIOSK) {
       document.body.classList.add("kiosk");
     }
 
@@ -1101,6 +1113,7 @@
     }
 
     async function clearListItem(kind, itemId) {
+      if (IS_KIOSK) return;
       const res = await FamilyAPI.toggleListItem(kind, itemId);
       syncListStateFromApi(res.state);
       if (res.item && window.ListUndo) {
@@ -1112,6 +1125,9 @@
     }
 
     function wireChecklists() {
+      // Clear grocery/reminders only from Admin — never on the kiosk
+      if (IS_KIOSK) return;
+
       document.querySelectorAll(".checklist[data-list]").forEach((ul) => {
         if (ul.dataset.bound === "1") return;
         ul.dataset.bound = "1";
