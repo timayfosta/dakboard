@@ -8,7 +8,7 @@ window.FAMILY_CONFIG = {
     height: 1920,
     /* Pi kiosk desktop rotation: left | right | normal | inverted
        (also set in scripts/pi/kiosk.env as FAMILY_BOARD_ROTATE) */
-    rotate: "left",
+    rotate: "right",
   },
 
   /* Open-Meteo + NWS alerts use lat/lon. Update for your home. */

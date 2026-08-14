@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # Rotate the Pi desktop to match Family Board's portrait (9:16) layout.
 # FAMILY_BOARD_ROTATE: left | right | normal | inverted
-#   left  = 90° counter-clockwise (most common for a TV turned clockwise physically)
-#   right = 90° clockwise
+#   right = 90° clockwise (default — fixes upside-down when TV is portrait)
+#   left  = 90° counter-clockwise
 set -euo pipefail
 
-ROTATE="${FAMILY_BOARD_ROTATE:-left}"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+if [[ -f "$ROOT/scripts/pi/kiosk.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$ROOT/scripts/pi/kiosk.env"
+fi
+
+ROTATE="${FAMILY_BOARD_ROTATE:-right}"
 export DISPLAY="${DISPLAY:-:0}"
 export XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
 
@@ -44,7 +50,7 @@ rotate_wayland() {
     right) transform="270" ;;
     inverted) transform="180" ;;
     normal) transform="normal" ;;
-    *) transform="90" ;;
+    *) transform="270" ;;
   esac
   if [[ -z "${out}" ]]; then
     echo "rotate-display: no Wayland output found" >&2

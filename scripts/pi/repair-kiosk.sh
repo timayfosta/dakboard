@@ -49,21 +49,30 @@ cat > "${HOME_DIR}/.config/autostart/family-board-rotate.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Family Board Portrait Rotate
-Exec=${APP_DIR}/scripts/pi/rotate-display.sh
+Exec=bash -lc '${APP_DIR}/scripts/pi/rotate-display.sh'
 X-GNOME-Autostart-enabled=true
 EOF
 cat > "${HOME_DIR}/.config/autostart/family-board-kiosk.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Family Board Kiosk
-Exec=bash -lc 'sleep 8; exec ${APP_DIR}/scripts/pi/ensure-kiosk.sh'
+Exec=bash -lc 'sleep 12; exec ${APP_DIR}/scripts/pi/ensure-kiosk.sh'
 X-GNOME-Autostart-enabled=true
 EOF
 chown -R "${TARGET_USER}:${TARGET_USER}" "${HOME_DIR}/.config/autostart"
 
+# Keep rotation preference if kiosk.env already customized; otherwise default right
+if [[ -f "${APP_DIR}/scripts/pi/kiosk.env" ]]; then
+  if grep -q '^FAMILY_BOARD_ROTATE=left' "${APP_DIR}/scripts/pi/kiosk.env"; then
+    sed -i 's/^FAMILY_BOARD_ROTATE=left/FAMILY_BOARD_ROTATE=right/' "${APP_DIR}/scripts/pi/kiosk.env" || true
+  fi
+fi
+
 systemctl daemon-reload
 systemctl enable family-board-api.service
 systemctl enable family-board-kiosk.service
+# Clear any start-limit from earlier boot races
+systemctl reset-failed family-board-kiosk.service 2>/dev/null || true
 systemctl restart family-board-api.service
 
 if bash "${APP_DIR}/scripts/pi/wait-for-api.sh" 60; then
@@ -77,6 +86,7 @@ echo "Repair complete."
 echo "  API:   $(systemctl is-enabled family-board-api) / $(systemctl is-active family-board-api)"
 echo "  Kiosk: $(systemctl is-enabled family-board-kiosk) / $(systemctl is-active family-board-kiosk || echo inactive-until-desktop)"
 echo "  Path:  ${APP_DIR}"
+echo "  Rotate: $(grep '^FAMILY_BOARD_ROTATE=' "${APP_DIR}/scripts/pi/kiosk.env" 2>/dev/null || echo FAMILY_BOARD_ROTATE=right)"
 echo ""
 echo "If kiosk still does not start on boot, enable desktop auto-login:"
 echo "  sudo raspi-config → System Options → Boot / Auto Login → Desktop Autologin"
