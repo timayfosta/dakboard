@@ -26,8 +26,7 @@
     localStorage.getItem("family-kiosk-mouse") === "1";
 
   const swipeThreshold = registry.swipeThreshold || 60;
-  const bottomZonePx = 72;
-  const topZonePx = 72;
+  const edgeZonePx = registry.edgeSwipePx || 80;
   const autoHideMs = 5000;
   const defaultSeconds = Math.max(5, Number(registry.rotationSeconds) || 45);
   const defaultPauseMs = Math.max(0, (registry.pauseOnTouchSeconds || 120) * 1000);
@@ -44,6 +43,8 @@
   let pointerStartY = 0;
   let pointerFromBottom = false;
   let pointerFromTop = false;
+  let pointerFromLeft = false;
+  let pointerFromRight = false;
   let pointerActive = false;
   let pointerId = null;
   let rotateTimer = null;
@@ -77,16 +78,47 @@
     return q.length ? q : allScreens.slice();
   }
 
-  function viewportHeight() {
-    return window.visualViewport?.height ?? window.innerHeight;
+  function viewportSize() {
+    return {
+      w: window.visualViewport?.width ?? window.innerWidth,
+      h: window.visualViewport?.height ?? window.innerHeight,
+    };
   }
 
-  function inBottomZone(y) {
-    return y >= viewportHeight() - bottomZonePx;
+  function contentRect() {
+    const el =
+      document.querySelector(".tv-scaler") ||
+      document.querySelector(".tv-frame") ||
+      document.body;
+    return el.getBoundingClientRect();
   }
 
-  function inTopZone(y) {
-    return y <= topZonePx;
+  function inBottomZone(x, y) {
+    const { h } = viewportSize();
+    const frame = contentRect();
+    return y >= h - edgeZonePx || y >= frame.bottom - edgeZonePx;
+  }
+
+  function inTopZone(x, y) {
+    const frame = contentRect();
+    return y <= edgeZonePx || y <= frame.top + edgeZonePx;
+  }
+
+  function inLeftZone(x) {
+    const frame = contentRect();
+    return x <= edgeZonePx || x <= frame.left + edgeZonePx;
+  }
+
+  function inRightZone(x) {
+    const { w } = viewportSize();
+    const frame = contentRect();
+    return x >= w - edgeZonePx || x >= frame.right - edgeZonePx;
+  }
+
+  function ignoreGestureTarget(el) {
+    return !!el?.closest?.(
+      ".touch-input-overlay.open, .alert-overlay.show, .screensaver-layer.active"
+    );
   }
 
   function goToId(id) {
@@ -110,7 +142,6 @@
       return;
     }
     const ri = queue.findIndex((s) => s.id === currentScreen.id);
-    // Wrap: after last screen, go back to first
     const next = queue[ri < 0 ? 0 : (ri + 1) % queue.length];
     if (!next) return;
     if (next.id === currentScreen.id) {
@@ -154,6 +185,8 @@
     pointerStartY = 0;
     pointerFromBottom = false;
     pointerFromTop = false;
+    pointerFromLeft = false;
+    pointerFromRight = false;
     pointerActive = false;
     pointerId = null;
   }
@@ -213,7 +246,6 @@
   document.body.appendChild(drawer);
   document.body.classList.add("has-kiosk-nav");
 
-  // Top edge hint for admin swipe
   const adminHint = document.createElement("div");
   adminHint.className = "kiosk-admin-edge";
   adminHint.setAttribute("aria-hidden", "true");
@@ -241,8 +273,10 @@
     pointerId = id;
     pointerStartX = clientX;
     pointerStartY = clientY;
-    pointerFromBottom = inBottomZone(clientY);
-    pointerFromTop = inTopZone(clientY);
+    pointerFromBottom = inBottomZone(clientX, clientY);
+    pointerFromTop = inTopZone(clientX, clientY);
+    pointerFromLeft = inLeftZone(clientX);
+    pointerFromRight = inRightZone(clientX);
   }
 
   function onPointerEnd(clientX, clientY) {
@@ -252,6 +286,8 @@
     const dy = clientY - pointerStartY;
     const fromBottom = pointerFromBottom;
     const fromTop = pointerFromTop;
+    const fromLeft = pointerFromLeft;
+    const fromRight = pointerFromRight;
     const drawerOpen = drawer.classList.contains("open");
     resetPointer();
 
@@ -274,52 +310,54 @@
       return;
     }
 
-    if (isWhiteboardPage || drawerOpen) return;
+    if (drawerOpen) return;
+    if (window.Whiteboard?.isDrawing?.()) return;
+
+    // Whiteboard: only change screens from left/right edges so drawing stays intact
+    if (isWhiteboardPage && !fromLeft && !fromRight) return;
 
     if (Math.abs(dx) < swipeThreshold || Math.abs(dx) < Math.abs(dy)) return;
     if (dx < 0) goToAllOffset(1);
     else goToAllOffset(-1);
   }
 
-  drawer.addEventListener("pointerdown", () => scheduleHide());
+  function onPointerDown(e) {
+    if (e.isPrimary === false) return;
+    if (e.button != null && e.button !== 0) return;
+    if (ignoreGestureTarget(e.target)) return;
+    if (e.target.closest?.(".kiosk-nav-drawer")) {
+      scheduleHide();
+      return;
+    }
 
-  document.addEventListener(
-    "touchstart",
-    (e) => {
-      if (e.touches.length !== 1) return;
-      const t = e.touches[0];
-      onPointerStart(t.clientX, t.clientY, t.identifier);
-    },
-    { passive: true }
-  );
-  document.addEventListener(
-    "touchend",
-    (e) => {
-      const t =
-        [...e.changedTouches].find((c) => c.identifier === pointerId) || e.changedTouches[0];
-      if (!t) {
-        resetPointer();
-        return;
-      }
-      onPointerEnd(t.clientX, t.clientY);
-    },
-    { passive: true }
-  );
-  document.addEventListener("touchcancel", resetPointer, { passive: true });
+    onPointerStart(e.clientX, e.clientY, e.pointerId);
 
-  // Mouse / trackpad support for non-touch displays
+    // Claim whiteboard edge swipes before the canvas starts a stroke.
+    // Leave the toolbar alone so its buttons still receive taps.
+    const onToolbar = !!e.target.closest?.(".wb-toolbar");
+    if (
+      isWhiteboardPage &&
+      (pointerFromTop || pointerFromLeft || pointerFromRight || (pointerFromBottom && !onToolbar))
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }
+
+  function onPointerUp(e) {
+    if (!pointerActive) return;
+    if (pointerId != null && e.pointerId !== pointerId) return;
+    onPointerEnd(e.clientX, e.clientY);
+  }
+
+  const pointerOpts = { capture: true, passive: false };
+  document.addEventListener("pointerdown", onPointerDown, pointerOpts);
+  document.addEventListener("pointerup", onPointerUp, pointerOpts);
+  document.addEventListener("pointercancel", resetPointer, pointerOpts);
+
   if (mouseMode) {
-    document.addEventListener("mousedown", (e) => {
-      if (e.button !== 0) return;
-      onPointerStart(e.clientX, e.clientY, "mouse");
-    });
-    document.addEventListener("mouseup", (e) => {
-      if (!pointerActive) return;
-      onPointerEnd(e.clientX, e.clientY);
-    });
-    // Double-click top edge also opens admin
     document.addEventListener("dblclick", (e) => {
-      if (inTopZone(e.clientY)) openAdmin();
+      if (inTopZone(e.clientX, e.clientY)) openAdmin();
     });
   }
 
@@ -340,7 +378,6 @@
     applyRotationSettings();
   });
 
-  // Start rotating immediately with defaults (don't wait on network)
   rotationSettings = defaultRotationSettings();
   applyRotationSettings();
   loadRotationSettings();

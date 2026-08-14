@@ -196,7 +196,7 @@ body.kiosk.kiosk-mouse .kiosk-admin-edge {
 .night-mode-layer.active {
   opacity: var(--night-overlay-opacity, 0.85);
   visibility: visible;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 body.night-mode {
