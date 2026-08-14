@@ -184,7 +184,6 @@
       flex-direction: column;
       align-items: flex-start;
       justify-content: center;
-      gap: 0.12rem;
       padding: 0.4rem 0.55rem 0.45rem;
       min-width: 0;
       overflow: hidden;
@@ -200,53 +199,23 @@
       white-space: nowrap;
     }
 
-    .clock-card .date-stack {
-      display: flex;
-      flex-direction: row;
-      align-items: baseline;
-      gap: 0.45rem;
-      min-width: 0;
-      width: 100%;
-    }
-
-    .clock-card .day-line {
-      font-family: var(--font-display);
-      font-size: clamp(1.05rem, 8.5cqw, 1.7rem);
-      font-weight: 800;
-      line-height: 1.05;
-      color: var(--ink);
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    .clock-card .date-line {
-      font-family: var(--font-display);
-      font-size: clamp(1.05rem, 8.5cqw, 1.7rem);
-      font-weight: 800;
-      line-height: 1.05;
-      color: var(--ink-soft);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      min-width: 0;
-    }
-
     .weather-strip {
       min-width: 0;
       display: flex;
       flex-direction: row;
       align-items: center;
-      gap: 0.4rem;
+      justify-content: flex-end;
+      gap: 0.2rem;
       padding: 0.35rem 0.4rem;
       container-type: inline-size;
     }
 
     .wx-now-compact {
       display: flex;
-      align-items: center;
-      gap: 0.4rem;
+      align-items: flex-start;
+      gap: 0.28rem;
       min-width: 0;
-      flex: 1 1 0;
+      flex: 0 0 auto;
     }
 
     .wx-icon {
@@ -356,7 +325,9 @@
       display: flex;
       flex-direction: column;
       min-height: 0;
-      height: 100%;
+      height: 90%;
+      max-height: 90%;
+      align-self: start;
       width: 100%;
       overflow: hidden;
       padding: 0.55rem 0.7rem 0.55rem 0.8rem;
@@ -742,12 +713,8 @@
 
     <div class="screen">
       <header class="header">
-        <section class="panel clock-card" aria-label="Time and date">
+        <section class="panel clock-card" aria-label="Time">
           <div class="time" id="clock">—:—</div>
-          <div class="date-stack">
-            <div class="day-line" id="dayLabel">—</div>
-            <div class="date-line" id="dateLabel">—</div>
-          </div>
         </section>
 
         <section class="panel weather-strip" aria-label="Weather">
@@ -843,14 +810,8 @@
       const now = new Date();
       const h = now.getHours();
       const nextTime = `${h % 12 || 12}:${pad(now.getMinutes())} ${h >= 12 ? "PM" : "AM"}`;
-      const weekday = now.toLocaleDateString(undefined, { weekday: "long" });
-      const rest = now.toLocaleDateString(undefined, { month: "long", day: "numeric" });
       const clock = document.getElementById("clock");
-      const dayLabel = document.getElementById("dayLabel");
-      const dateLabel = document.getElementById("dateLabel");
       if (clock.textContent !== nextTime) clock.textContent = nextTime;
-      if (dayLabel.textContent !== weekday) dayLabel.textContent = weekday;
-      if (dateLabel.textContent !== rest) dateLabel.textContent = rest;
     }
 
     let weatherFp = "";
