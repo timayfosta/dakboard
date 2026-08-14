@@ -74,9 +74,9 @@ start_local_server() {
   wait_for_api 50
 }
 
-# Rotate ASAP (don't block long on display detection)
+# Display is ready — rotate for the TV, then again after HDMI settle
 if [[ -x "$ROOT/scripts/pi/rotate-display.sh" ]]; then
-  FAMILY_BOARD_ROTATE_WAIT=8 bash "$ROOT/scripts/pi/rotate-display.sh" || true
+  FAMILY_BOARD_ROTATE_WAIT=20 bash "$ROOT/scripts/pi/rotate-display.sh" || true
 fi
 
 if [[ "$SKIP_SERVER" == "1" ]]; then

@@ -91,7 +91,7 @@ cat > "${HOME_DIR}/.config/autostart/family-board-rotate.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Family Board Portrait Rotate
-Exec=bash -lc '${APP_DIR}/scripts/pi/rotate-display.sh'
+Exec=bash -lc '${APP_DIR}/scripts/pi/rotate-display.sh; sleep 10; ${APP_DIR}/scripts/pi/rotate-display.sh'
 X-GNOME-Autostart-enabled=true
 EOF
 cat > "${HOME_DIR}/.config/autostart/family-board-kiosk.desktop" <<EOF

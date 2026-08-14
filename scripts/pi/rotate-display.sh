@@ -60,11 +60,21 @@ rotate_wayland() {
   wlr-randr --output "${out}" --transform "${transform}"
 }
 
-# Prefer whichever session is actually running
-if [[ -n "${WAYLAND_DISPLAY:-}" ]] || [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
-  rotate_wayland || rotate_x11 || true
-else
-  rotate_x11 || rotate_wayland || true
+apply_once() {
+  if [[ -n "${WAYLAND_DISPLAY:-}" ]] || [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
+    rotate_wayland || rotate_x11 || true
+  else
+    rotate_x11 || rotate_wayland || true
+  fi
+}
+
+# HDMI TVs often renegotiate EDID after login — apply, wait, apply again
+apply_once
+sleep 2
+apply_once
+if [[ "${FAMILY_BOARD_ROTATE_RETRY:-1}" == "1" ]]; then
+  sleep 6
+  apply_once
 fi
 
 exit 0

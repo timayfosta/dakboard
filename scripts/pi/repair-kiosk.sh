@@ -49,7 +49,7 @@ cat > "${HOME_DIR}/.config/autostart/family-board-rotate.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Family Board Portrait Rotate
-Exec=bash -lc '${APP_DIR}/scripts/pi/rotate-display.sh'
+Exec=bash -lc '${APP_DIR}/scripts/pi/rotate-display.sh; sleep 10; ${APP_DIR}/scripts/pi/rotate-display.sh'
 X-GNOME-Autostart-enabled=true
 EOF
 cat > "${HOME_DIR}/.config/autostart/family-board-kiosk.desktop" <<EOF
@@ -61,11 +61,9 @@ X-GNOME-Autostart-enabled=true
 EOF
 chown -R "${TARGET_USER}:${TARGET_USER}" "${HOME_DIR}/.config/autostart"
 
-# Keep rotation preference if kiosk.env already customized; otherwise default right
-if [[ -f "${APP_DIR}/scripts/pi/kiosk.env" ]]; then
-  if grep -q '^FAMILY_BOARD_ROTATE=left' "${APP_DIR}/scripts/pi/kiosk.env"; then
-    sed -i 's/^FAMILY_BOARD_ROTATE=left/FAMILY_BOARD_ROTATE=right/' "${APP_DIR}/scripts/pi/kiosk.env" || true
-  fi
+# Portrait TV default is clockwise (right). Flip leftover "left" from older installs.
+if [[ -f "${APP_DIR}/scripts/pi/kiosk.env" ]] && grep -q '^FAMILY_BOARD_ROTATE=left$' "${APP_DIR}/scripts/pi/kiosk.env"; then
+  sed -i 's/^FAMILY_BOARD_ROTATE=left$/FAMILY_BOARD_ROTATE=right/' "${APP_DIR}/scripts/pi/kiosk.env" || true
 fi
 
 systemctl daemon-reload
