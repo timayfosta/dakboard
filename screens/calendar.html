@@ -355,7 +355,7 @@
       flex: 1;
       min-height: 0;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1.15fr 0.85fr;
       gap: 0.55rem;
     }
 
@@ -364,7 +364,7 @@
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
-      padding: 0.55rem 0.35rem 0.55rem;
+      padding: 0.55rem 0.55rem 0.55rem 0.65rem;
     }
 
     .agenda h2,
@@ -406,18 +406,18 @@
       background: linear-gradient(180deg, transparent, #111);
     }
 
-    .day-group + .day-group { margin-top: 0.75rem; }
+    .day-group + .day-group { margin-top: 0.85rem; }
 
     .day-head {
       display: flex;
       align-items: baseline;
-      gap: 0.45rem;
-      padding: 0.35rem 0.12rem 0.5rem;
-      margin-bottom: 0.15rem;
+      gap: 0.5rem;
+      padding: 0.4rem 0.15rem 0.55rem;
+      margin-bottom: 0.2rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: 1.5rem;
+      font-size: 1.85rem;
       line-height: 1.05;
       letter-spacing: -0.02em;
       color: var(--ink);
@@ -425,7 +425,7 @@
 
     .day-head .date-num {
       font-family: var(--font-display);
-      font-size: 1.15rem;
+      font-size: 1.35rem;
       font-weight: 800;
       color: var(--ink-soft);
       letter-spacing: 0;
@@ -433,15 +433,17 @@
 
     .agenda-rows {
       list-style: none;
-      padding-top: 0.1rem;
+      padding-top: 0.15rem;
+      width: 75%;
+      max-width: 75%;
     }
 
     .agenda-row {
       display: grid;
-      grid-template-columns: 4.2rem 1fr;
-      gap: 0.5rem;
+      grid-template-columns: 5.2rem 1fr;
+      gap: 0.65rem;
       align-items: start;
-      padding: 0.42rem 0.1rem 0.42rem 0.35rem;
+      padding: 0.55rem 0.15rem 0.55rem 0.4rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
       border-left: 3px solid var(--kid-color, transparent);
     }
@@ -450,23 +452,23 @@
 
     .agenda-row .time {
       font-weight: 800;
-      font-size: 0.78rem;
+      font-size: 1.05rem;
       color: var(--kid-color, var(--sky));
-      padding-top: 0.1rem;
+      padding-top: 0.12rem;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
 
     .agenda-row .title {
       font-weight: 700;
-      font-size: 0.98rem;
-      line-height: 1.25;
+      font-size: 1.28rem;
+      line-height: 1.28;
     }
 
     .agenda-row .kid-tag {
       display: inline-block;
-      margin-right: 0.35rem;
-      font-size: 0.95rem;
+      margin-right: 0.4rem;
+      font-size: 1.15rem;
       line-height: 1;
     }
 
@@ -478,24 +480,27 @@
       color: var(--ink-soft);
       font-weight: 700;
       padding: 0.6rem 0.1rem;
+      font-size: 1.15rem;
+      width: 75%;
     }
 
     .right-col {
       display: flex;
       flex-direction: column;
-      gap: 0.45rem;
+      gap: 0.4rem;
       min-height: 0;
       overflow: hidden;
     }
 
     .month-panel {
       width: 100%;
-      flex-shrink: 0;
+      flex: 0 0 auto;
+      max-height: 38%;
       display: flex;
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
-      padding: 0.35rem 0.25rem 0.3rem;
+      padding: 0.3rem 0.2rem 0.25rem;
       container-type: inline-size;
     }
 
@@ -579,7 +584,7 @@
     .lists {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.45rem;
+      gap: 0.4rem;
       flex: 1;
       min-height: 0;
       overflow: hidden;
@@ -590,12 +595,12 @@
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
-      padding: 0.35rem 0.2rem;
+      padding: 0.4rem 0.35rem;
     }
 
     .list-panel .block-title {
-      font-size: 0.92rem;
-      margin-bottom: 0.22rem;
+      font-size: 1.15rem;
+      margin-bottom: 0.3rem;
       flex-shrink: 0;
     }
 
@@ -616,23 +621,23 @@
       list-style: none;
       display: flex;
       flex-direction: column;
-      gap: 0.22rem;
+      gap: 0.28rem;
       flex-shrink: 0;
     }
 
     .checklist li {
       display: grid;
       grid-template-columns: auto 1fr;
-      gap: 0.35rem;
+      gap: 0.45rem;
       align-items: center;
       background: transparent;
       border-radius: 0;
-      padding: 0.34rem 0.08rem;
+      padding: 0.45rem 0.12rem;
       border: none;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      cursor: pointer;
+      cursor: default;
       font-weight: 700;
-      font-size: 0.78rem;
+      font-size: 1.05rem;
       flex-shrink: 0;
     }
 
@@ -653,13 +658,14 @@
       grid-template-columns: 1fr;
       background: transparent;
       border: none;
+      font-size: 0.95rem;
     }
 
     .checklist .list-dot {
       color: var(--ink-soft);
-      font-size: 0.95rem;
+      font-size: 1.15rem;
       line-height: 1;
-      width: 14px;
+      width: 16px;
       text-align: center;
     }
 
@@ -1112,6 +1118,9 @@
     }
 
     function wireChecklists() {
+      // Kiosk is view/add only — clear grocery/reminder items from Admin
+      if (document.body.classList.contains("kiosk")) return;
+
       document.querySelectorAll(".checklist[data-list]").forEach((ul) => {
         if (ul.dataset.bound === "1") return;
         ul.dataset.bound = "1";
