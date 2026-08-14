@@ -66,7 +66,7 @@ Pushing to GitHub does **not** update phones/TVs by itself. The Pi must pull + r
 **Flow after this is configured:**
 
 1. You push to `main` / `master`
-2. GitHub Actions (or webhook) runs `git pull` + restarts `family-board-api` and `family-board-kiosk`
+2. GitHub Actions (or webhook) runs `scripts/git_sync.sh` + restarts `family-board-api` and `family-board-kiosk`
 3. Admin PWA + TV screens notice the new `bootId` from `/api/health` and **reload themselves** (within a few seconds)
 
 The Pi must be a **git clone** (not rsync-only) for pull-to-update:
@@ -108,7 +108,7 @@ deployBranch: "main",   // optional — defaults to main
 4. Secret: same as `deployWebhookSecret`
 5. Events: **Just the push event**
 
-Push to `main`/`master` triggers `git pull --ff-only` and a server restart. Open admin/TV tabs then auto-refresh.
+Push to `main`/`master` triggers a forced sync to origin (`git reset --hard`, no merge) and a server restart. Open admin/TV tabs then auto-refresh.
 
 Generic webhook (same secret): `POST /api/webhooks/deploy` with header `X-Deploy-Token: <secret>`.
 
@@ -116,6 +116,22 @@ Generic webhook (same secret): `POST /api/webhooks/deploy` with header `X-Deploy
 
 - **Admin → More → Pull updates & restart now**
 - Or on the Pi: `bash scripts/deploy_update.sh`
+
+Deploy **never merges** — it runs `scripts/git_sync.sh`, which fetches origin and `git reset --hard` to match GitHub exactly. Local edits to tracked files on the Pi are discarded (runtime data in `data/` is gitignored and kept).
+
+### "Changes would be overwritten by merge"
+
+That message means the Pi is still running **old deploy code** that used `git pull`. Fix once over SSH:
+
+```bash
+cd ~/dakboard   # or ~/family-board
+git fetch origin
+git merge --abort 2>/dev/null || true
+git reset --hard origin/master   # or origin/main
+sudo systemctl restart family-board-api
+```
+
+After you push the latest code, admin deploy and GitHub Actions use `git_sync.sh` and this error should not recur.
 
 After restart, leave admin/TV pages open — they should refresh on their own.
 

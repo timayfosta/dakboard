@@ -55,7 +55,7 @@ if [[ ! -f "${APP_DIR}/scripts/pi/kiosk.env" ]]; then
   cp "${SRC_DIR}/scripts/pi/kiosk.env" "${APP_DIR}/scripts/pi/kiosk.env" 2>/dev/null || true
 fi
 chown -R "${TARGET_USER}:${TARGET_USER}" "${APP_DIR}"
-chmod +x "${APP_DIR}/scripts/pi/"*.sh
+chmod +x "${APP_DIR}/scripts/pi/"*.sh "${APP_DIR}/scripts/git_sync.sh" 2>/dev/null || true
 bash "${APP_DIR}/scripts/pi/link-phone-admin.sh"
 
 cat > /etc/systemd/system/family-board-api.service <<EOF

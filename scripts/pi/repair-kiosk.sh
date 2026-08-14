@@ -20,7 +20,7 @@ fi
 echo "Repairing Family Board kiosk for user ${TARGET_USER}"
 echo "App dir: ${APP_DIR}"
 
-chmod +x "${APP_DIR}/scripts/pi/"*.sh 2>/dev/null || true
+chmod +x "${APP_DIR}/scripts/pi/"*.sh "${APP_DIR}/scripts/git_sync.sh" 2>/dev/null || true
 bash "${APP_DIR}/scripts/pi/link-phone-admin.sh" 2>/dev/null || true
 
 cat > /etc/systemd/system/family-board-api.service <<EOF

@@ -1,4 +1,4 @@
-"""Git pull + server restart for Pi / dev deployments."""
+"""Git sync + server restart for Pi / dev deployments."""
 
 from __future__ import annotations
 
@@ -62,72 +62,157 @@ def _run_git(args: list[str], *, timeout: int = 120) -> subprocess.CompletedProc
     )
 
 
-def _git_upstream_ref() -> str | None:
-    proc = _run_git(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], timeout=15)
+def _abort_git_operations() -> None:
+    for cmd in (
+        ["git", "merge", "--abort"],
+        ["git", "rebase", "--abort"],
+        ["git", "cherry-pick", "--abort"],
+    ):
+        _run_git(cmd, timeout=30)
+    lock = ROOT / ".git" / "index.lock"
+    if lock.exists():
+        try:
+            lock.unlink()
+        except OSError:
+            pass
+
+
+def _resolve_upstream() -> str | None:
+    proc = _run_git(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+        timeout=15,
+    )
     ref = (proc.stdout or "").strip()
     if proc.returncode == 0 and ref:
-        return ref
+        verify = _run_git(["git", "rev-parse", "--verify", f"{ref}^{{commit}}"], timeout=15)
+        if verify.returncode == 0:
+            return ref
+
     head = git_head()
-    branch = head.get("branch") or "main"
+    branch = head.get("branch") or ""
     if branch and branch != "HEAD":
-        return f"origin/{branch}"
+        candidate = f"origin/{branch}"
+        verify = _run_git(["git", "rev-parse", "--verify", f"{candidate}^{{commit}}"], timeout=15)
+        if verify.returncode == 0:
+            return candidate
+
+    for candidate in ("origin/master", "origin/main"):
+        verify = _run_git(["git", "rev-parse", "--verify", f"{candidate}^{{commit}}"], timeout=15)
+        if verify.returncode == 0:
+            return candidate
     return None
+
+
+def _checkout_branch_for_upstream(upstream: str) -> None:
+    local_branch = upstream.removeprefix("origin/")
+    head = git_head()
+    current = head.get("branch") or "HEAD"
+    if current == local_branch:
+        return
+
+    has_local = _run_git(["git", "show-ref", "--verify", f"refs/heads/{local_branch}"], timeout=15)
+    if has_local.returncode == 0:
+        _run_git(["git", "checkout", "-f", local_branch], timeout=30)
+    else:
+        _run_git(["git", "checkout", "-B", local_branch, upstream], timeout=30)
+
+
+def _git_sync_python() -> dict[str, Any]:
+    """Python fallback — same behavior as scripts/git_sync.sh (no merge/pull)."""
+    if not is_git_repo():
+        return {"ok": False, "error": "Not a git repository — use git clone on the Pi, not rsync-only install"}
+
+    dirty = (_run_git(["git", "status", "--porcelain"], timeout=20).stdout or "").strip()
+    before = git_head()
+
+    _abort_git_operations()
+
+    fetch = _run_git(["git", "fetch", "--prune", "origin"], timeout=90)
+    if fetch.returncode != 0:
+        err = (fetch.stderr or fetch.stdout or "git fetch failed").strip()
+        return {"ok": False, "error": "git fetch failed", "stderr": err}
+
+    upstream = _resolve_upstream()
+    if not upstream:
+        return {
+            "ok": False,
+            "error": "No upstream branch — set tracking branch (git branch -u origin/main)",
+        }
+
+    _checkout_branch_for_upstream(upstream)
+
+    reset = _run_git(["git", "reset", "--hard", upstream], timeout=60)
+    out = (reset.stdout or "").strip()
+    err = (reset.stderr or "").strip()
+    if reset.returncode != 0:
+        return {
+            "ok": False,
+            "error": "git reset failed",
+            "stderr": err or out or "git reset --hard failed",
+            "upstream": upstream,
+            "syncMethod": "reset-hard",
+        }
+
+    head = git_head()
+    return {
+        "ok": True,
+        "stdout": out or f"Synced to {upstream}",
+        "stderr": err,
+        "returncode": 0,
+        "alreadyUpToDate": before.get("sha") == head.get("sha") and not dirty,
+        "sha": head.get("sha") or "",
+        "branch": head.get("branch") or "",
+        "dirtyBeforeSync": bool(dirty),
+        "syncMethod": "reset-hard",
+        "upstream": upstream,
+    }
 
 
 def git_pull() -> dict[str, Any]:
     """Sync working tree to origin — discards local tracked edits (Pi deploy model)."""
-    if not is_git_repo():
-        return {"ok": False, "error": "Not a git repository — use git clone on the Pi, not rsync-only install"}
-    try:
-        fetch = _run_git(["git", "fetch", "--prune", "origin"], timeout=90)
-        if fetch.returncode != 0:
-            err = (fetch.stderr or fetch.stdout or "git fetch failed").strip()
-            return {"ok": False, "error": "git fetch failed", "stderr": err}
-
-        dirty = (_run_git(["git", "status", "--porcelain"], timeout=20).stdout or "").strip()
-        before = git_head()
-        upstream = _git_upstream_ref()
-        if not upstream:
-            return {"ok": False, "error": "No upstream branch — set tracking branch (git branch -u origin/main)"}
-
-        reset = _run_git(["git", "reset", "--hard", upstream], timeout=60)
-        if reset.returncode != 0:
-            err = (reset.stderr or reset.stdout or "git reset failed").strip()
-            # Last resort: ff-only pull (older clones)
-            pull = _run_git(["git", "pull", "--ff-only"], timeout=120)
-            out = (pull.stdout or "").strip()
-            err = (pull.stderr or pull.stdout or err).strip()
-            ok = pull.returncode == 0
+    script = ROOT / "scripts" / "git_sync.sh"
+    if script.is_file() and sys.platform != "win32":
+        try:
+            dirty = (_run_git(["git", "status", "--porcelain"], timeout=20).stdout or "").strip()
+            before = git_head()
+            proc = subprocess.run(
+                ["bash", str(script)],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            out = (proc.stdout or "").strip()
+            err = (proc.stderr or "").strip()
             head = git_head()
+            if proc.returncode == 3:
+                return {"ok": False, "error": "Git sync already in progress", "stderr": err}
+            if proc.returncode != 0:
+                return {
+                    "ok": False,
+                    "error": err.splitlines()[0] if err else "git sync failed",
+                    "stderr": err or out,
+                    "stdout": out,
+                    "syncMethod": "reset-hard",
+                }
             return {
-                "ok": ok,
+                "ok": True,
                 "stdout": out,
                 "stderr": err,
-                "returncode": pull.returncode,
-                "alreadyUpToDate": ok and "Already up to date" in out,
+                "returncode": 0,
+                "alreadyUpToDate": before.get("sha") == head.get("sha") and not dirty,
                 "sha": head.get("sha") or "",
                 "branch": head.get("branch") or "",
                 "dirtyBeforeSync": bool(dirty),
-                "syncMethod": "pull-ff-only",
+                "syncMethod": "reset-hard",
             }
+        except FileNotFoundError:
+            pass
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "git sync timed out"}
 
-        head = git_head()
-        return {
-            "ok": True,
-            "stdout": out or f"Synced to {upstream}",
-            "stderr": err,
-            "returncode": 0,
-            "alreadyUpToDate": before.get("sha") == head.get("sha") and not dirty,
-            "sha": head.get("sha") or "",
-            "branch": head.get("branch") or "",
-            "dirtyBeforeSync": bool(dirty),
-            "syncMethod": "reset-hard",
-            "upstream": upstream,
-        }
-    except FileNotFoundError:
-        return {"ok": False, "error": "git not installed"}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "git sync timed out"}
+    return _git_sync_python()
 
 
 def _systemctl(*args: str) -> subprocess.CompletedProcess[str]:

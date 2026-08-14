@@ -5,23 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if [[ ! -d .git ]]; then
-  echo "Not a git repo: ${ROOT}" >&2
-  echo "On the Pi, clone with git instead of rsync-only install for auto-updates." >&2
-  exit 1
-fi
-
-echo "Fetching latest…"
-git fetch --prune origin
-
-UPSTREAM="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
-if [[ -z "${UPSTREAM}" ]]; then
-  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-  UPSTREAM="origin/${BRANCH}"
-fi
-
-echo "Syncing to ${UPSTREAM} (local edits to tracked files will be discarded)…"
-git reset --hard "${UPSTREAM}"
+bash scripts/git_sync.sh
 
 # Fix systemd paths if the repo moved (e.g. ~/family-board → ~/dakboard)
 if [[ -f /etc/systemd/system/family-board-api.service ]]; then

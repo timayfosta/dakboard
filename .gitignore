@@ -9,6 +9,7 @@ data/*
 !data/.gitkeep
 
 node_modules/
+phone
 .wrangler/
 dist/
 __pycache__/

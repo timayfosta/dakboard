@@ -918,16 +918,16 @@
     const pull = result.pull || {};
     const raw = result.error || pull.error || pull.stderr || pull.stdout || "Deploy failed";
     const msg = String(raw).trim();
+    if (msg.includes("already in progress")) {
+      return "Deploy already running — wait a few seconds and try again";
+    }
     if (msg.includes("merge") || msg.includes("overwriting") || msg.includes("local changes")) {
-      return "Git had local changes — retry after this fix (server will reset to origin on pull)";
+      return "Old deploy code on the Pi — SSH once and run: bash scripts/git_sync.sh && sudo systemctl restart family-board-api";
     }
     if (msg.includes("Not a git repository")) {
       return "Not a git clone — use git clone on this machine for pull-to-update";
     }
-    if (msg.includes("Cannot fast-forward") || msg.includes("ff-only")) {
-      return "Branch diverged from GitHub — pull will now reset to origin; try again";
-    }
-    return msg.length > 120 ? `${msg.slice(0, 117)}…` : msg;
+    return msg.length > 160 ? `${msg.slice(0, 157)}…` : msg;
   }
 
   async function waitForDeployFinish() {
