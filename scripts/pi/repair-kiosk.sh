@@ -1,24 +1,27 @@
 #!/usr/bin/env bash
-# Re-enable Family Board API + kiosk + portrait rotate without a full reinstall
+# Fix systemd paths + autostart after git reset, clone move, or deploy gone wrong.
+# Does not reinstall apt packages — use install-kiosk.sh for a full setup.
 set -euo pipefail
 
 if [[ "${EUID}" -ne 0 ]]; then
-  echo "Run with: sudo bash scripts/pi/repair-kiosk.sh"
+  echo "Run with sudo: sudo bash scripts/pi/repair-kiosk.sh"
   exit 1
 fi
 
 TARGET_USER="${SUDO_USER:-pi}"
 HOME_DIR="$(eval echo "~${TARGET_USER}")"
-SRC_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-APP_DIR="${FAMILY_BOARD_APP_DIR:-$SRC_DIR}"
+APP_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
-if [[ ! -f "${APP_DIR}/server.py" ]]; then
-  echo "ERROR: server.py not found in ${APP_DIR}"
+if [[ ! -f "${APP_DIR}/server.py" || ! -d "${APP_DIR}/shared" ]]; then
+  echo "ERROR: ${APP_DIR} does not look like a Family Board checkout."
   exit 1
 fi
 
-chmod +x "${APP_DIR}/scripts/pi/"*.sh || true
-bash "${APP_DIR}/scripts/pi/link-phone-admin.sh" || true
+echo "Repairing Family Board kiosk for user ${TARGET_USER}"
+echo "App dir: ${APP_DIR}"
+
+chmod +x "${APP_DIR}/scripts/pi/"*.sh 2>/dev/null || true
+bash "${APP_DIR}/scripts/pi/link-phone-admin.sh" 2>/dev/null || true
 
 cat > /etc/systemd/system/family-board-api.service <<EOF
 [Unit]
@@ -69,23 +72,26 @@ Name=Family Board Portrait Rotate
 Exec=${APP_DIR}/scripts/pi/rotate-display.sh
 X-GNOME-Autostart-enabled=true
 EOF
-chown -R "${TARGET_USER}:${TARGET_USER}" "${HOME_DIR}/.config"
+chown -R "${TARGET_USER}:${TARGET_USER}" "${HOME_DIR}/.config/autostart"
 
 systemctl daemon-reload
-systemctl enable family-board-api.service family-board-kiosk.service
+systemctl enable family-board-api.service
+systemctl enable family-board-kiosk.service
 systemctl restart family-board-api.service
-sleep 1
-systemctl restart family-board-kiosk.service || true
+
+if bash "${APP_DIR}/scripts/pi/wait-for-api.sh" 60; then
+  systemctl restart family-board-kiosk.service || true
+else
+  echo "Warning: API slow to start — kiosk will retry when desktop loads"
+fi
 
 echo ""
-echo "Repaired."
+echo "Repair complete."
 echo "  API:   $(systemctl is-enabled family-board-api) / $(systemctl is-active family-board-api)"
 echo "  Kiosk: $(systemctl is-enabled family-board-kiosk) / $(systemctl is-active family-board-kiosk || echo inactive-until-desktop)"
-echo "  App:   ${APP_DIR}"
+echo "  Path:  ${APP_DIR}"
 echo ""
-echo "If kiosk still does not start on boot:"
+echo "If kiosk still does not start on boot, enable desktop auto-login:"
 echo "  sudo raspi-config → System Options → Boot / Auto Login → Desktop Autologin"
-echo "  sudo reboot"
 echo ""
-echo "If rotation is wrong, edit: ${APP_DIR}/scripts/pi/kiosk.env"
-echo "  FAMILY_BOARD_ROTATE=left   (or right / normal)"
+echo "Then: sudo reboot"
