@@ -170,48 +170,6 @@ def _git_sync_python() -> dict[str, Any]:
 
 def git_pull() -> dict[str, Any]:
     """Sync working tree to origin — discards local tracked edits (Pi deploy model)."""
-    script = ROOT / "scripts" / "git_sync.sh"
-    if script.is_file() and sys.platform != "win32":
-        try:
-            dirty = (_run_git(["git", "status", "--porcelain"], timeout=20).stdout or "").strip()
-            before = git_head()
-            proc = subprocess.run(
-                ["bash", str(script)],
-                cwd=ROOT,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=False,
-            )
-            out = (proc.stdout or "").strip()
-            err = (proc.stderr or "").strip()
-            head = git_head()
-            if proc.returncode == 3:
-                return {"ok": False, "error": "Git sync already in progress", "stderr": err}
-            if proc.returncode != 0:
-                return {
-                    "ok": False,
-                    "error": err.splitlines()[0] if err else "git sync failed",
-                    "stderr": err or out,
-                    "stdout": out,
-                    "syncMethod": "reset-hard",
-                }
-            return {
-                "ok": True,
-                "stdout": out,
-                "stderr": err,
-                "returncode": 0,
-                "alreadyUpToDate": before.get("sha") == head.get("sha") and not dirty,
-                "sha": head.get("sha") or "",
-                "branch": head.get("branch") or "",
-                "dirtyBeforeSync": bool(dirty),
-                "syncMethod": "reset-hard",
-            }
-        except FileNotFoundError:
-            pass
-        except subprocess.TimeoutExpired:
-            return {"ok": False, "error": "git sync timed out"}
-
     return _git_sync_python()
 
 
