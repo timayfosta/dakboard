@@ -3,6 +3,17 @@
   const params = new URLSearchParams(location.search);
   if (!params.has("kiosk")) return;
 
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (!e.altKey || (e.key !== "F4" && e.code !== "F4")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      window.close();
+    },
+    true
+  );
+
   const registry = window.FAMILY_SCREENS;
   if (!registry?.screens?.length) return;
 

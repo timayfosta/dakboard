@@ -20,7 +20,7 @@ Environment=XAUTHORITY=${HOME_DIR}/.Xauthority
 Environment=FAMILY_BOARD_SKIP_SERVER=1
 WorkingDirectory=${APP_DIR}
 ExecStart=${APP_DIR}/scripts/pi/start-kiosk.sh
-Restart=always
+Restart=on-failure
 RestartSec=12
 StartLimitIntervalSec=0
 TimeoutStartSec=300

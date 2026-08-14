@@ -106,11 +106,11 @@ fi
 
 mkdir -p "$PROFILE_DIR"
 
+# --app + fullscreen, not --kiosk: Chromium kiosk mode blocks Alt+F4.
 exec "$BROWSER" \
   --user-data-dir="$PROFILE_DIR" \
   --class=FamilyBoardKiosk \
   --app="$URL" \
-  --kiosk \
   --start-fullscreen \
   --window-position=0,0 \
   --noerrdialogs \
