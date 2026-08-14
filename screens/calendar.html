@@ -355,23 +355,14 @@
       flex: 1;
       min-height: 0;
       display: grid;
-      /* Left weekly agenda 75% | Right lists 25% */
+      /* Left weekly agenda 75% | Right month + lists 25% */
       grid-template-columns: 3fr 1fr;
       gap: 0.55rem;
-    }
-
-    .left-col {
-      display: flex;
-      flex-direction: column;
-      gap: 0.4rem;
-      min-height: 0;
-      overflow: hidden;
     }
 
     .agenda {
       display: flex;
       flex-direction: column;
-      flex: 1;
       min-height: 0;
       overflow: hidden;
       padding: 0.55rem 0.65rem 0.55rem 0.75rem;
@@ -493,24 +484,23 @@
     }
 
     .right-col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      display: flex;
+      flex-direction: column;
       gap: 0.4rem;
       min-height: 0;
       overflow: hidden;
+      width: 100%;
     }
 
     .month-panel {
-      width: min(42%, 22rem);
+      width: 100%;
       flex: 0 0 auto;
-      max-height: 28%;
       display: flex;
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
       padding: 0.3rem 0.25rem 0.25rem;
       container-type: inline-size;
-      align-self: flex-start;
     }
 
     .month-panel .block-title {
@@ -599,9 +589,19 @@
       height: 100%;
     }
 
+    .lists {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      width: 100%;
+    }
+
     .list-panel .block-title {
-      font-size: 1.35rem;
-      margin-bottom: 0.4rem;
+      font-size: 1.25rem;
+      margin-bottom: 0.35rem;
       flex-shrink: 0;
     }
 
@@ -753,7 +753,13 @@
       </header>
 
       <div class="body">
-        <div class="left-col">
+        <section class="panel agenda" aria-label="Weekly agenda">
+          <div class="agenda-clip">
+            <div id="agendaList"></div>
+          </div>
+        </section>
+
+        <div class="right-col">
           <section class="panel month-panel" aria-label="Monthly calendar">
             <div class="block-title">
               <span class="month-label" id="monthLabel"></span>
@@ -763,34 +769,28 @@
             </div>
           </section>
 
-          <section class="panel agenda" aria-label="Weekly agenda">
-            <div class="agenda-clip">
-              <div id="agendaList"></div>
-            </div>
-          </section>
-        </div>
-
-        <div class="right-col" aria-label="Lists">
-          <section class="panel list-panel" aria-label="Grocery list">
-            <div class="block-title">
-              <span>Groceries</span>
-              <span class="list-source" id="grocerySource">Sync</span>
-            </div>
-            <div class="list-scroll">
-              <ul class="checklist" id="groceryList" data-list="grocery"></ul>
-              <button type="button" class="list-add-btn" data-open-list="grocery">+ Add grocery</button>
-            </div>
-          </section>
-          <section class="panel list-panel" aria-label="Reminders">
-            <div class="block-title">
-              <span>Reminders</span>
-              <span class="list-source" id="reminderSource">Sync</span>
-            </div>
-            <div class="list-scroll">
-              <ul class="checklist" id="reminderList" data-list="reminders"></ul>
-              <button type="button" class="list-add-btn" data-open-list="reminders">+ Add reminder</button>
-            </div>
-          </section>
+          <div class="lists">
+            <section class="panel list-panel" aria-label="Grocery list">
+              <div class="block-title">
+                <span>Groceries</span>
+                <span class="list-source" id="grocerySource">Sync</span>
+              </div>
+              <div class="list-scroll">
+                <ul class="checklist" id="groceryList" data-list="grocery"></ul>
+                <button type="button" class="list-add-btn" data-open-list="grocery">+ Add grocery</button>
+              </div>
+            </section>
+            <section class="panel list-panel" aria-label="Reminders">
+              <div class="block-title">
+                <span>Reminders</span>
+                <span class="list-source" id="reminderSource">Sync</span>
+              </div>
+              <div class="list-scroll">
+                <ul class="checklist" id="reminderList" data-list="reminders"></ul>
+                <button type="button" class="list-add-btn" data-open-list="reminders">+ Add reminder</button>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>
@@ -847,6 +847,59 @@
     }
 
     let weatherFp = "";
+    const WEATHER_CACHE_KEY = "family-board-weather-cache-v1";
+
+    function applyWeatherData(data) {
+      const fp = JSON.stringify({
+        code: data.current.weather_code,
+        t: data.current.temperature_2m,
+        w: data.current.wind_speed_10m,
+        daily: data.daily,
+      });
+      if (fp === weatherFp) return;
+      weatherFp = fp;
+
+      setWxIcon(document.getElementById("wxIcon"), data.current.weather_code);
+      document.getElementById("wxTemp").textContent = `${Math.round(data.current.temperature_2m)}°`;
+
+      const root = document.getElementById("forecast");
+      const today = new Date();
+      root.innerHTML = data.daily.time
+        .map((iso, i) => {
+          const d = new Date(`${iso}T12:00:00`);
+          const code = data.daily.weather_code[i];
+          const name =
+            i === 0
+              ? "Today"
+              : d.toLocaleDateString(undefined, { weekday: "short" });
+          const isToday =
+            d.getDate() === today.getDate() &&
+            d.getMonth() === today.getMonth();
+          return `
+              <div class="fday${isToday ? " today" : ""}">
+                <div class="d">${name}</div>
+                <div class="ico">${WeatherIcons.svg(code)}</div>
+                <div class="temps">
+                  <span class="hi">${Math.round(data.daily.temperature_2m_max[i])}°</span>
+                  <span class="lo">${Math.round(data.daily.temperature_2m_min[i])}°</span>
+                </div>
+              </div>`;
+        })
+        .join("");
+    }
+
+    function loadCachedWeather() {
+      try {
+        const raw = localStorage.getItem(WEATHER_CACHE_KEY);
+        if (!raw) return false;
+        const cached = JSON.parse(raw);
+        if (!cached?.data?.current || !cached?.data?.daily) return false;
+        applyWeatherData(cached.data);
+        return true;
+      } catch {
+        return false;
+      }
+    }
 
     async function loadWeather() {
       const { latitude, longitude, tempUnit, windUnit, timezone } = CFG.weather;
@@ -860,44 +913,21 @@
         `&temperature_unit=${temp}&wind_speed_unit=${wind}&timezone=${encodeURIComponent(tz)}&forecast_days=5`;
       try {
         const data = await (await fetch(url, { signal: AbortSignal.timeout(4000) })).json();
-        const fp = JSON.stringify({
-          code: data.current.weather_code,
-          t: data.current.temperature_2m,
-          w: data.current.wind_speed_10m,
-          daily: data.daily,
-        });
-        if (fp === weatherFp) return;
-        weatherFp = fp;
-
-        setWxIcon(document.getElementById("wxIcon"), data.current.weather_code);
-        document.getElementById("wxTemp").textContent = `${Math.round(data.current.temperature_2m)}°`;
-
-        const root = document.getElementById("forecast");
-        const today = new Date();
-        root.innerHTML = data.daily.time
-          .map((iso, i) => {
-            const d = new Date(`${iso}T12:00:00`);
-            const code = data.daily.weather_code[i];
-            const name =
-              i === 0
-                ? "Today"
-                : d.toLocaleDateString(undefined, { weekday: "short" });
-            const isToday =
-              d.getDate() === today.getDate() &&
-              d.getMonth() === today.getMonth();
-            return `
-              <div class="fday${isToday ? " today" : ""}">
-                <div class="d">${name}</div>
-                <div class="ico">${WeatherIcons.svg(code)}</div>
-                <div class="temps">
-                  <span class="hi">${Math.round(data.daily.temperature_2m_max[i])}°</span>
-                  <span class="lo">${Math.round(data.daily.temperature_2m_min[i])}°</span>
-                </div>
-              </div>`;
-          })
-          .join("");
+        applyWeatherData(data);
+        try {
+          localStorage.setItem(
+            WEATHER_CACHE_KEY,
+            JSON.stringify({ savedAt: Date.now(), data })
+          );
+        } catch (_) {
+          /* quota / private mode */
+        }
       } catch {
-        document.getElementById("wxTemp").textContent = "--°";
+        if (!loadCachedWeather()) {
+          // Offline with no cache — still show a clear local SVG icon
+          setWxIcon(document.getElementById("wxIcon"), 2);
+          document.getElementById("wxTemp").textContent = "--°";
+        }
       }
     }
 
@@ -940,7 +970,7 @@
         alertUI.dismissed = !!sessionStorage.getItem(alertDismissKey(alertId));
       }
 
-      document.getElementById("alertIcon").textContent = alertIconFor(top.event);
+      document.getElementById("alertIcon").innerHTML = `<span class="emoji">${alertIconFor(top.event)}</span>`;
       document.getElementById("alertEyebrow").textContent = `${top.severity} · National Weather Service`;
       document.getElementById("alertTitle").textContent = top.event;
       document.getElementById("alertBody").textContent = top.headline || top.description;
@@ -1048,12 +1078,19 @@
       return ev.start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     }
 
+    let calendarSource = "";
+    let calendarError = "";
+
     function renderAgenda() {
       const root = document.getElementById("agendaList");
       // Pull extra events; clip/fade hides overflow instead of scrolling
       const items = FamilyCalendar.upcoming(events, 40);
       if (!items.length) {
-        root.innerHTML = `<div class="empty-note">No upcoming events</div>`;
+        if (calendarError && (calendarSource === "offline" || calendarSource === "demo")) {
+          root.innerHTML = `<div class="empty-note">Google Calendar offline<br><span style="font-size:0.75em;opacity:0.75">${calendarError}</span></div>`;
+        } else {
+          root.innerHTML = `<div class="empty-note">No upcoming events</div>`;
+        }
         return;
       }
 
@@ -1079,7 +1116,7 @@
             .map((ev) => {
               const kid = FamilyCalendarColors.matchKid(ev.title, agendaKids);
               const kidStyle = kid ? `--kid-color:${kid.color}` : "";
-              const kidTag = kid ? `<span class="kid-tag">${kid.emoji || ""}</span>` : "";
+              const kidTag = kid ? `<span class="kid-tag emoji">${kid.emoji || ""}</span>` : "";
               return `
               <li class="agenda-row${ev.allDay ? " all-day" : ""}" style="${kidStyle}">
                 <div class="time">${formatTime(ev)}</div>
@@ -1223,12 +1260,19 @@
 
     async function loadCalendar() {
       const result = await FamilyCalendar.loadEvents(CFG);
+      calendarSource = result.source || "";
+      calendarError = result.error || "";
       const fp = JSON.stringify(
-        (result.events || []).map((e) => [e.id, e.title, +e.start, +e.end, e.allDay])
+        [calendarSource, calendarError].concat(
+          (result.events || []).map((e) => [e.id, e.title, +e.start, +e.end, e.allDay])
+        )
       );
       if (fp === eventsFp) return;
       eventsFp = fp;
       events = result.events;
+      if (calendarSource === "demo" && calendarError) {
+        console.warn("Using demo calendar events:", calendarError);
+      }
       renderAgenda();
       renderMonth();
     }
@@ -1260,6 +1304,7 @@
     wireChecklists();
 
     updateClock();
+    loadCachedWeather();
     loadWeather();
     loadAlerts();
     loadCalendar();

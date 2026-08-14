@@ -18,8 +18,9 @@
   --touch: 64px;
   --radius: 16px;
   --shadow: none;
-  --font-display: "Baloo 2", system-ui, sans-serif;
-  --font-body: "Nunito", system-ui, sans-serif;
+  --font-emoji: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twemoji Mozilla", emoji, sans-serif;
+  --font-display: "Baloo 2", var(--font-emoji), system-ui, sans-serif;
+  --font-body: "Nunito", var(--font-emoji), system-ui, sans-serif;
   --tv-w: 1080px;
   --tv-h: 1920px;
 }
@@ -32,6 +33,31 @@ html, body {
   color: var(--ink);
   background: #000;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Keep emoji glyphs rendering even when parents use display fonts */
+.emoji,
+.chore-ico,
+.kid-tag,
+.kiosk-dot,
+.fx-emoji,
+.alert-icon,
+.pick .emoji,
+.reward .icon,
+.kid-panel-name,
+.name-line,
+.big {
+  font-family: var(--font-emoji), var(--font-body);
+  font-weight: 400 !important;
+  font-style: normal;
+  line-height: 1;
+}
+
+.wx-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
 /* Portrait stage — always 9:16, scaled to fit any plugged-in display */

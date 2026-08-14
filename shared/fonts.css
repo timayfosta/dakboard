@@ -34,3 +34,12 @@
   font-display: swap;
   src: url("./fonts/Nunito-800.woff2") format("woff2");
 }
+
+/* Color emoji — required on Pi/Chromium so icons aren't empty boxes */
+@font-face {
+  font-family: "Noto Color Emoji";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/NotoColorEmoji.ttf") format("truetype");
+}

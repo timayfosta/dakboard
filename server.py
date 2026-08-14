@@ -391,22 +391,38 @@ class Handler(SimpleHTTPRequestHandler):
     def proxy_calendar(self):
         ics_url = load_secrets().get("icsUrl")
         if not ics_url:
-            return send_json(self, {"error": "Missing icsUrl in secrets.local.js"}, 500)
+            return send_json(
+                self,
+                {
+                    "error": "Missing icsUrl in shared/secrets.local.js (gitignored — copy it onto the Pi)",
+                },
+                500,
+            )
         try:
             req = urllib.request.Request(
                 ics_url,
-                headers={"User-Agent": "family-board-local-proxy"},
+                headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; FamilyBoard/1.0)",
+                    "Accept": "text/calendar, text/plain, */*",
+                },
             )
             with urllib.request.urlopen(req, timeout=30) as resp:
                 data = resp.read()
+            if not data or b"BEGIN:VCALENDAR" not in data[:200]:
+                return send_json(
+                    self,
+                    {"error": "icsUrl did not return a Google iCal feed — reset the secret address in Google Calendar settings"},
+                    502,
+                )
             self.send_response(200)
             self.send_header("Content-Type", "text/calendar; charset=utf-8")
             self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
         except Exception as exc:  # noqa: BLE001
-            send_json(self, {"error": str(exc)}, 502)
+            send_json(self, {"error": f"Calendar fetch failed: {exc}"}, 502)
 
     # ---- family mutations ----
     def kids_upsert(self, payload: dict):

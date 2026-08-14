@@ -155,7 +155,7 @@
           inRotation ? "" : " off-rotation"
         }" data-id="${s.id}" aria-label="${s.title}" title="${s.title}${
           inRotation ? "" : " (not in rotation)"
-        }">${s.icon}</button>`;
+        }"><span class="emoji">${s.icon}</span></button>`;
       })
       .join("");
 

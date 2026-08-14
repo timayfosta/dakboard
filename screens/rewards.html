@@ -339,7 +339,7 @@
           if (!btn) return;
           const can = bal >= r.cost;
           btn.classList.toggle("locked", !can);
-          btn.querySelector(".icon").textContent = r.icon || "🎁";
+          btn.querySelector(".icon").innerHTML = `<span class="emoji">${r.icon || "🎁"}</span>`;
           btn.querySelector(".title").textContent = r.title;
           btn.querySelector(".cost").textContent = `★ ${r.cost}`;
         });
@@ -352,7 +352,7 @@
           const can = bal >= r.cost;
           return `
             <button class="reward${can ? "" : " locked"}" data-reward="${r.id}">
-              <div class="icon">${r.icon || "🎁"}</div>
+              <div class="icon"><span class="emoji">${r.icon || "🎁"}</span></div>
               <div class="title">${r.title}</div>
               <div class="cost">★ ${r.cost}</div>
             </button>`;

@@ -996,7 +996,7 @@
       }
 
       const balance = state.data.balances[kid.id] || 0;
-      titleEl.innerHTML = `${kid.emoji || "⭐"} ${kid.name}'s Quests · <span class="title-stars">★${balance}</span>`;
+      titleEl.innerHTML = `<span class="emoji">${kid.emoji || "⭐"}</span> ${kid.name}'s Quests · <span class="title-stars">★${balance}</span>`;
       starsEl.hidden = true;
       const { done, total, remaining } = progress(kid.id);
       labelEl.textContent =
@@ -1064,7 +1064,7 @@
       const style = chore.checkStyle || "circle";
       return `
         <li class="chore${done ? " done" : ""}" data-id="${chore.id}" data-kid="${kidId}" role="button" tabindex="0" aria-pressed="${done}">
-          <div class="chore-ico">${chore.icon || "✅"}</div>
+          <div class="chore-ico"><span class="emoji">${chore.icon || "✅"}</span></div>
           <div class="chore-text">
             <h3>${chore.title}</h3>
             <p><span class="stars-badge">★ ${chore.stars || 1}</span> · ${choreDescription(chore)}</p>
@@ -1196,7 +1196,7 @@
           return `
             <div class="kid-panel" style="--kid:${kid.color}">
               <div class="kid-panel-head">
-                <span class="kid-panel-name">${kid.emoji} ${kid.name}</span>
+                <span class="kid-panel-name"><span class="emoji">${kid.emoji}</span> ${kid.name}</span>
                 <span class="stars">· ★${state.data.balances[kid.id] || 0}</span>
               </div>
               <ul class="kid-panel-list">
@@ -1234,7 +1234,7 @@
           const active = !state.viewAll && kid.id === state.kidId;
           return `
             <button class="profile${active ? " active" : ""}" data-kid="${kid.id}" style="--active:${kid.color}" role="tab" aria-selected="${active}">
-              <div class="name-line">${kid.emoji || "⭐"} ${kid.name} <span class="name-stars">★${state.data.balances[kid.id] || 0}</span></div>
+              <div class="name-line"><span class="emoji">${kid.emoji || "⭐"}</span> ${kid.name} <span class="name-stars">★${state.data.balances[kid.id] || 0}</span></div>
               <div class="meta">${done}/${total} done</div>
               <div class="bar"><span style="width:${Math.round(pct * 100)}%"></span></div>
             </button>`;

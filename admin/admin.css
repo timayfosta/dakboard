@@ -37,8 +37,8 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --nav-h: 72px;
   --touch: 44px;
-  --font: "Nunito", system-ui, sans-serif;
-  --display: "Baloo 2", system-ui, sans-serif;
+  --font: "Nunito", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", system-ui, sans-serif;
+  --display: "Baloo 2", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", system-ui, sans-serif;
 }
 
 [data-theme="day"] {
@@ -341,7 +341,9 @@ button, input, select, textarea {
   border-radius: 10px;
   border: 2px solid var(--soft-line);
   background: var(--panel);
+  font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", emoji, sans-serif;
   font-size: 1.1rem;
+  font-weight: 400;
   line-height: 1;
   display: grid;
   place-items: center;

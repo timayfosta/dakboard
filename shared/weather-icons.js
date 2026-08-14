@@ -76,102 +76,91 @@
       </g>`;
   }
 
+  function svgShell(inner) {
+    return `<svg class="wx-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">${inner}</svg>`;
+  }
+
   const SVG = {
-    clear: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
-        ${sun(32, 32, 13)}
-      </svg>`,
+    clear: () => svgShell(`${sun(32, 32, 13)}`),
 
-    mostlyClear: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
-        ${sun(22, 22, 10)}
-        ${cloud(18, 28, 0.85, "#b8c2d0")}
-      </svg>`,
+    mostlyClear: () => svgShell(`${sun(22, 22, 10)}${cloud(18, 28, 0.85, "#b8c2d0")}`),
 
-    partlyCloudy: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
-        ${sun(24, 18, 9)}
-        ${cloud(14, 26, 1, "#b8c2d0")}
-      </svg>`,
+    partlyCloudy: () => svgShell(`${sun(24, 18, 9)}${cloud(14, 26, 1, "#b8c2d0")}`),
 
-    overcast: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
-        ${cloud(8, 18, 1.05, "#9aa3b2")}
-        ${cloud(12, 30, 0.95, "#b8c2d0")}
-      </svg>`,
+    overcast: () => svgShell(`${cloud(8, 18, 1.05, "#9aa3b2")}${cloud(12, 30, 0.95, "#b8c2d0")}`),
 
-    fog: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
+    fog: () =>
+      svgShell(`
         ${cloud(8, 16, 1, "#9aa3b2")}
         <line x1="14" y1="44" x2="50" y2="44" stroke="#9aa3b2" stroke-width="3" stroke-linecap="round"/>
         <line x1="10" y1="50" x2="46" y2="50" stroke="#b8c2d0" stroke-width="3" stroke-linecap="round"/>
         <line x1="16" y1="56" x2="42" y2="56" stroke="#9aa3b2" stroke-width="3" stroke-linecap="round"/>
-      </svg>`,
+      `),
 
-    drizzle: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
+    drizzle: () =>
+      svgShell(`
         ${cloud(8, 10, 1, "#9aa3b2")}
         <line x1="22" y1="42" x2="18" y2="50" stroke="#5aa7ff" stroke-width="2.5" stroke-linecap="round"/>
         <line x1="32" y1="42" x2="28" y2="50" stroke="#5aa7ff" stroke-width="2.5" stroke-linecap="round"/>
         <line x1="42" y1="42" x2="38" y2="50" stroke="#5aa7ff" stroke-width="2.5" stroke-linecap="round"/>
-      </svg>`,
+      `),
 
-    rain: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
+    rain: () =>
+      svgShell(`
         ${cloud(8, 8, 1, "#9aa3b2")}
         <line x1="20" y1="40" x2="14" y2="52" stroke="#5aa7ff" stroke-width="3" stroke-linecap="round"/>
         <line x1="30" y1="40" x2="24" y2="52" stroke="#5aa7ff" stroke-width="3" stroke-linecap="round"/>
         <line x1="40" y1="40" x2="34" y2="52" stroke="#5aa7ff" stroke-width="3" stroke-linecap="round"/>
         <line x1="50" y1="40" x2="44" y2="52" stroke="#5aa7ff" stroke-width="3" stroke-linecap="round"/>
-      </svg>`,
+      `),
 
-    heavyRain: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
+    heavyRain: () =>
+      svgShell(`
         ${cloud(6, 6, 1.08, "#7a8494")}
         <line x1="18" y1="38" x2="12" y2="54" stroke="#3d8bf0" stroke-width="3.5" stroke-linecap="round"/>
         <line x1="28" y1="38" x2="22" y2="54" stroke="#3d8bf0" stroke-width="3.5" stroke-linecap="round"/>
         <line x1="38" y1="38" x2="32" y2="54" stroke="#3d8bf0" stroke-width="3.5" stroke-linecap="round"/>
         <line x1="48" y1="38" x2="42" y2="54" stroke="#3d8bf0" stroke-width="3.5" stroke-linecap="round"/>
-      </svg>`,
+      `),
 
-    snow: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
+    snow: () =>
+      svgShell(`
         ${cloud(8, 8, 1, "#9aa3b2")}
         <circle cx="20" cy="46" r="2.5" fill="#e8eef7"/>
         <circle cx="30" cy="52" r="2.5" fill="#e8eef7"/>
         <circle cx="40" cy="46" r="2.5" fill="#e8eef7"/>
         <circle cx="50" cy="52" r="2.5" fill="#e8eef7"/>
-      </svg>`,
+      `),
 
-    heavySnow: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
+    heavySnow: () =>
+      svgShell(`
         ${cloud(6, 6, 1.08, "#7a8494")}
         <circle cx="16" cy="44" r="3" fill="#e8eef7"/>
         <circle cx="26" cy="50" r="3" fill="#e8eef7"/>
         <circle cx="36" cy="44" r="3" fill="#e8eef7"/>
         <circle cx="46" cy="50" r="3" fill="#e8eef7"/>
         <circle cx="52" cy="44" r="3" fill="#e8eef7"/>
-      </svg>`,
+      `),
 
     showers: () => SVG.rain(),
 
     heavyShowers: () => SVG.heavyRain(),
 
-    thunder: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
+    thunder: () =>
+      svgShell(`
         ${cloud(6, 8, 1.05, "#6b7280")}
         <polygon points="34,36 26,48 32,48 28,58 42,42 35,42 40,36" fill="#f5c84c"/>
-      </svg>`,
+      `),
 
     hail: () => SVG.thunder(),
 
-    severe: () => `
-      <svg class="wx-svg" viewBox="0 0 64 64" aria-hidden="true">
+    severe: () =>
+      svgShell(`
         ${cloud(4, 6, 1.12, "#5c6370")}
         <polygon points="34,34 24,48 31,48 27,58 44,42 36,42 42,34" fill="#ff7a59"/>
         <line x1="18" y1="40" x2="12" y2="54" stroke="#5aa7ff" stroke-width="3" stroke-linecap="round"/>
         <line x1="48" y1="40" x2="42" y2="54" stroke="#5aa7ff" stroke-width="3" stroke-linecap="round"/>
-      </svg>`,
+      `),
   };
 
   window.WeatherIcons = {
