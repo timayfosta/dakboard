@@ -73,12 +73,13 @@
       display: none;
       position: absolute;
       inset: 0;
-      z-index: 55;
+      z-index: 80;
       align-items: center;
       justify-content: center;
       padding: 1rem 0.85rem 1.5rem;
       background: rgba(6, 4, 10, 0.48);
       backdrop-filter: blur(8px);
+      pointer-events: auto;
     }
 
     .alert-overlay.show {
@@ -118,6 +119,7 @@
       position: absolute;
       top: 1rem;
       right: 1rem;
+      z-index: 2;
       width: 56px;
       height: 56px;
       border-radius: 50%;
@@ -129,6 +131,7 @@
       display: grid;
       place-items: center;
       cursor: pointer;
+      pointer-events: auto;
     }
 
     .alert-close:active {
@@ -902,7 +905,9 @@
     const alertUI = {
       currentId: null,
       dismissed: false,
+      autoCloseTimer: null,
     };
+    const ALERT_AUTO_CLOSE_MS = 30000;
 
     function alertDismissKey(id) {
       return `fb-alert-dismiss:${id}`;
@@ -921,19 +926,50 @@
       return "⚠️";
     }
 
+    function clearAlertAutoClose() {
+      if (alertUI.autoCloseTimer) {
+        clearTimeout(alertUI.autoCloseTimer);
+        alertUI.autoCloseTimer = null;
+      }
+    }
+
+    function setAlertOverlayOpen(open, { autoClose = false } = {}) {
+      const overlay = document.getElementById("alertOverlay");
+      const pill = document.getElementById("alertPill");
+      overlay.classList.toggle("show", open);
+      pill.classList.toggle("show", !open && !!alertUI.currentId);
+      clearAlertAutoClose();
+      if (open && autoClose) {
+        alertUI.autoCloseTimer = setTimeout(dismissAlertOverlay, ALERT_AUTO_CLOSE_MS);
+      }
+    }
+
+    function dismissAlertOverlay() {
+      if (alertUI.currentId) {
+        try {
+          sessionStorage.setItem(alertDismissKey(alertUI.currentId), "1");
+        } catch (_) {
+          /* quota / private mode */
+        }
+      }
+      alertUI.dismissed = true;
+      setAlertOverlayOpen(false);
+    }
+
     function hideAlertUI() {
-      document.getElementById("alertOverlay").classList.remove("show");
-      document.getElementById("alertPill").classList.remove("show");
+      clearAlertAutoClose();
       alertUI.currentId = null;
       alertUI.dismissed = false;
+      document.getElementById("alertOverlay").classList.remove("show");
+      document.getElementById("alertPill").classList.remove("show");
     }
 
     function showAlertUI(top, { forceOpen = false } = {}) {
       const overlay = document.getElementById("alertOverlay");
-      const pill = document.getElementById("alertPill");
       const alertId = top.id || `${top.event}:${top.severity}`;
+      const isNew = alertUI.currentId !== alertId;
 
-      if (alertUI.currentId !== alertId) {
+      if (isNew) {
         alertUI.currentId = alertId;
         alertUI.dismissed = !!sessionStorage.getItem(alertDismissKey(alertId));
       }
@@ -944,8 +980,19 @@
       document.getElementById("alertBody").textContent = top.headline || top.description;
       document.getElementById("alertPillLabel").textContent = top.event;
 
-      pill.classList.add("show");
-      overlay.classList.toggle("show", forceOpen || !alertUI.dismissed);
+      if (forceOpen) {
+        setAlertOverlayOpen(true);
+        return;
+      }
+
+      const overlayOpen = overlay.classList.contains("show");
+      if (isNew) {
+        setAlertOverlayOpen(!alertUI.dismissed, { autoClose: !alertUI.dismissed });
+        return;
+      }
+      if (!overlayOpen) {
+        setAlertOverlayOpen(!alertUI.dismissed, { autoClose: !alertUI.dismissed });
+      }
     }
 
     async function loadAlerts() {
@@ -971,16 +1018,20 @@
       }
     }
 
-    document.getElementById("alertClose").addEventListener("click", () => {
-      if (alertUI.currentId) {
-        sessionStorage.setItem(alertDismissKey(alertUI.currentId), "1");
-      }
-      alertUI.dismissed = true;
-      document.getElementById("alertOverlay").classList.remove("show");
+    document.getElementById("alertClose").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dismissAlertOverlay();
     });
 
-    document.getElementById("alertPillBtn").addEventListener("click", () => {
-      document.getElementById("alertOverlay").classList.add("show");
+    document.getElementById("alertOverlay").addEventListener("click", (e) => {
+      if (e.target.id === "alertOverlay") dismissAlertOverlay();
+    });
+
+    document.getElementById("alertPillBtn").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setAlertOverlayOpen(true);
     });
 
     function renderMonth() {
