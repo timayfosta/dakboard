@@ -176,8 +176,8 @@
 
     .header {
       display: grid;
-      grid-template-columns: 2fr 3fr;
-      gap: 0.5rem;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.45rem 0.5rem;
       flex-shrink: 0;
       min-height: 0;
     }
@@ -187,7 +187,7 @@
       flex-direction: column;
       align-items: flex-start;
       justify-content: center;
-      padding: 0.4rem 0.55rem 0.45rem;
+      padding: 0.35rem 0.45rem 0.3rem;
       min-width: 0;
       overflow: hidden;
       container-type: inline-size;
@@ -196,8 +196,8 @@
     .clock-card .time {
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: clamp(4.4rem, 38cqw, 7.4rem);
-      line-height: 0.88;
+      font-size: clamp(5.6rem, 46cqw, 9.2rem);
+      line-height: 0.86;
       letter-spacing: -0.045em;
       white-space: nowrap;
     }
@@ -208,22 +208,22 @@
       flex-direction: row;
       align-items: center;
       justify-content: flex-end;
-      gap: 0.2rem;
-      padding: 0.35rem 0.4rem;
+      padding: 0.35rem 0.35rem 0.3rem;
       container-type: inline-size;
     }
 
     .wx-now-compact {
       display: flex;
-      align-items: flex-start;
-      gap: 0.28rem;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.35rem;
       min-width: 0;
-      flex: 0 0 auto;
+      width: 100%;
     }
 
     .wx-icon {
-      width: clamp(44px, 11cqw, 68px);
-      height: clamp(44px, 11cqw, 68px);
+      width: clamp(58px, 16cqw, 92px);
+      height: clamp(58px, 16cqw, 92px);
       flex-shrink: 0;
       display: grid;
       place-items: center;
@@ -238,34 +238,30 @@
 
     .wx-now-compact .temp {
       font-family: var(--font-display);
-      font-size: clamp(4.2rem, 28cqw, 6.6rem);
+      font-size: clamp(5.6rem, 46cqw, 9.2rem);
       font-weight: 800;
-      line-height: 0.9;
+      line-height: 0.86;
       letter-spacing: -0.03em;
-      flex: 1 1 auto;
       min-width: 0;
     }
 
     .forecast {
-      display: flex;
-      gap: 0.18rem;
-      flex: 1.15 1 0;
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.35rem;
       min-width: 0;
-      justify-content: flex-end;
-      overflow: hidden;
     }
 
     .fday {
-      flex: 1 1 0;
       min-width: 0;
-      max-width: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
-      gap: 0.12rem;
+      gap: 0.14rem;
       text-align: center;
-      padding: 0.25rem 0.15rem 0.2rem;
+      padding: 0.2rem 0.1rem;
       line-height: 1.05;
     }
 
@@ -275,7 +271,7 @@
 
     .fday .d {
       font-weight: 800;
-      font-size: clamp(0.52rem, 2.4cqw, 0.64rem);
+      font-size: clamp(0.72rem, 2.6cqw, 0.92rem);
       color: var(--ink-soft);
       letter-spacing: 0.02em;
       white-space: nowrap;
@@ -286,31 +282,31 @@
     }
 
     .fday .ico {
-      width: clamp(40px, 10cqw, 56px);
-      height: clamp(40px, 10cqw, 56px);
+      width: clamp(48px, 8.5cqw, 68px);
+      height: clamp(48px, 8.5cqw, 68px);
       display: grid;
       place-items: center;
-      margin: 0.05rem 0;
     }
 
     .fday .temps {
       display: flex;
-      align-items: baseline;
+      flex-direction: column;
+      align-items: center;
       justify-content: center;
-      gap: 0.28rem;
+      gap: 0.06rem;
       width: 100%;
     }
 
     .fday .hi {
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: clamp(0.82rem, 3.8cqw, 1.08rem);
+      font-size: clamp(1.25rem, 4.6cqw, 1.7rem);
       line-height: 1;
     }
 
     .fday .lo {
       font-weight: 700;
-      font-size: clamp(0.7rem, 3.1cqw, 0.9rem);
+      font-size: clamp(1.05rem, 3.8cqw, 1.4rem);
       color: var(--ink-soft);
       line-height: 1;
     }
@@ -572,7 +568,8 @@
 
     .lists {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 1fr;
       gap: 0.45rem;
       flex: 1 1 52%;
       min-height: 0;
@@ -581,9 +578,13 @@
     }
 
     .list-panel .block-title {
-      font-size: clamp(1.15rem, 3.4cqw, 1.45rem);
+      font-size: clamp(2.3rem, 6.8cqw, 2.9rem);
       margin-bottom: 0.4rem;
       flex-shrink: 0;
+    }
+
+    .list-panel .list-source {
+      font-size: 1.36rem;
     }
 
     .list-scroll {
@@ -619,7 +620,7 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       cursor: default;
       font-weight: 700;
-      font-size: clamp(1.15rem, 3.2cqw, 1.5rem);
+      font-size: clamp(2.3rem, 6.4cqw, 3rem);
       line-height: 1.25;
       flex-shrink: 0;
     }
@@ -645,33 +646,38 @@
       grid-template-columns: 1fr;
       background: transparent;
       border: none;
-      font-size: 1.05rem;
+      font-size: 2.1rem;
       white-space: normal;
     }
 
     .checklist .list-dot {
       color: var(--ink-soft);
-      font-size: 1.35rem;
+      font-size: 2.7rem;
       line-height: 1.25;
-      width: 18px;
+      width: 36px;
       text-align: center;
     }
 
     .box {
-      width: 20px;
-      height: 20px;
-      border-radius: 5px;
-      border: 1.5px solid rgba(255, 255, 255, 0.18);
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.18);
       background: transparent;
       display: grid;
       place-items: center;
-      font-size: 0.8rem;
+      font-size: 1.6rem;
       color: #000;
     }
 
     .checklist li.done .box {
       background: var(--mint);
       border-color: var(--mint);
+    }
+
+    .list-panel .list-add-btn {
+      font-size: 1.76rem;
+      padding: 0.7rem 0.1rem;
     }
 
     .add-row {
@@ -720,13 +726,13 @@
           <div class="time" id="clock">—:—</div>
         </section>
 
-        <section class="panel weather-strip" aria-label="Weather">
+        <section class="panel weather-strip" aria-label="Current weather">
           <div class="wx-now-compact">
             <div class="wx-icon" id="wxIcon" aria-hidden="true"></div>
             <div class="temp" id="wxTemp">--°</div>
           </div>
-          <div class="forecast" id="forecast" aria-label="5 day forecast"></div>
         </section>
+        <div class="forecast" id="forecast" aria-label="4 day forecast"></div>
       </header>
 
       <div class="body">
@@ -836,6 +842,7 @@
       const root = document.getElementById("forecast");
       const today = new Date();
       root.innerHTML = data.daily.time
+        .slice(0, 4)
         .map((iso, i) => {
           const d = new Date(`${iso}T12:00:00`);
           const code = data.daily.weather_code[i];
@@ -881,7 +888,7 @@
         `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
         `&current=temperature_2m,weather_code,wind_speed_10m` +
         `&daily=weather_code,temperature_2m_max,temperature_2m_min` +
-        `&temperature_unit=${temp}&wind_speed_unit=${wind}&timezone=${encodeURIComponent(tz)}&forecast_days=5`;
+        `&temperature_unit=${temp}&wind_speed_unit=${wind}&timezone=${encodeURIComponent(tz)}&forecast_days=4`;
       try {
         const data = await (await fetch(url, { signal: AbortSignal.timeout(4000) })).json();
         applyWeatherData(data);
