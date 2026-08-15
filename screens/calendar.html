@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="night">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Family Board — Home</title>
   <script src="../shared/config.js"></script>
   <script src="../shared/display-init.js"></script>
+  <script src="../shared/kiosk-theme.js"></script>
   <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="../shared/screen-chrome.css" />
   <link rel="stylesheet" href="../shared/touch-input.css" />
   <style>
     .screen .panel {
@@ -45,6 +47,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      flex-wrap: wrap;
       gap: 0.7rem;
       padding: 0.9rem 1.45rem;
       border-radius: 999px;
@@ -55,7 +58,8 @@
       font-family: var(--font-display);
       font-weight: 800;
       font-size: clamp(1.15rem, 3.8cqw, 1.55rem);
-      line-height: 1.1;
+      line-height: 1.2;
+      text-wrap: balance;
       box-shadow: 0 10px 40px rgba(239, 68, 68, 0.28);
       cursor: pointer;
     }
@@ -145,6 +149,12 @@
       filter: drop-shadow(0 6px 24px rgba(255, 120, 60, 0.45));
     }
 
+    .alert-icon.multi {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.2em;
+    }
+
     .alert-card .eyebrow {
       font-weight: 800;
       letter-spacing: 0.12em;
@@ -163,7 +173,8 @@
       text-wrap: balance;
     }
 
-    .alert-card p {
+    .alert-card .alert-copy,
+    .alert-card .alert-copy p {
       font-weight: 700;
       font-size: clamp(1.35rem, 4.8cqw, 1.95rem);
       line-height: 1.42;
@@ -174,145 +185,21 @@
       -webkit-line-clamp: unset;
     }
 
-    .header {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.45rem 0.5rem;
-      flex-shrink: 0;
-      min-height: 0;
-      container-type: inline-size;
-      --hero-size: clamp(5.6rem, 23cqi, 9.2rem);
+    .alert-item + .alert-item {
+      margin-top: 1.15rem;
+      padding-top: 1.1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.14);
     }
 
-    .clock-card {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      justify-content: center;
-      padding: 0.35rem 0.45rem 0.3rem;
-      min-width: 0;
-      overflow: hidden;
-    }
-
-    .clock-card .time {
+    .alert-item h3 {
       font-family: var(--font-display);
+      font-size: clamp(1.55rem, 5.2cqw, 2.2rem);
       font-weight: 800;
-      font-size: var(--hero-size);
-      line-height: 0.86;
-      letter-spacing: -0.045em;
-      white-space: nowrap;
-    }
-
-    .weather-strip {
-      min-width: 0;
-      width: 100%;
-      overflow: hidden;
-      display: grid;
-      grid-template-columns: max-content minmax(0, 1fr);
-      align-items: start;
-      gap: 0.3rem;
-      padding: 0.35rem 0.35rem 0.3rem;
-    }
-
-    .wx-now-compact {
+      line-height: 1.15;
+      margin-bottom: 0.4rem;
       display: flex;
-      align-items: flex-start;
-      justify-content: flex-end;
-      gap: 0.2rem;
-      min-width: 0;
-      width: max-content;
-    }
-
-    .wx-icon {
-      width: calc(var(--hero-size) * 0.42);
-      height: calc(var(--hero-size) * 0.42);
-      flex-shrink: 0;
-      display: grid;
-      place-items: center;
-    }
-
-    .wx-icon .wx-svg,
-    .fday .wx-svg {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-
-    .wx-now-compact .temp {
-      font-family: var(--font-display);
-      font-size: var(--hero-size);
-      font-weight: 800;
-      line-height: 0.86;
-      letter-spacing: -0.03em;
-      min-width: 0;
-    }
-
-    .forecast {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.12rem;
-      min-width: 0;
-      width: 100%;
-      overflow: hidden;
-      container-type: inline-size;
-    }
-
-    .fday {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
       align-items: center;
-      justify-content: flex-start;
-      gap: 0.14rem;
-      text-align: center;
-      padding: 0.2rem 0.1rem;
-      line-height: 1.05;
-    }
-
-    .fday.today .hi {
-      color: var(--coral);
-    }
-
-    .fday .d {
-      font-weight: 800;
-      font-size: clamp(0.58rem, 14cqw, 0.8rem);
-      color: var(--ink-soft);
-      letter-spacing: 0.02em;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1.1;
-      width: 100%;
-    }
-
-    .fday .ico {
-      width: clamp(28px, 42cqw, 48px);
-      height: clamp(28px, 42cqw, 48px);
-      display: grid;
-      place-items: center;
-    }
-
-    .fday .temps {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 0.06rem;
-      width: 100%;
-    }
-
-    .fday .hi {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: clamp(0.95rem, 22cqw, 1.35rem);
-      line-height: 1;
-    }
-
-    .fday .lo {
-      font-weight: 700;
-      font-size: clamp(0.8rem, 18cqw, 1.15rem);
-      color: var(--ink-soft);
-      line-height: 1;
+      gap: 0.4rem;
     }
 
     .body {
@@ -373,7 +260,7 @@
       bottom: 0;
       height: 5.5rem;
       pointer-events: none;
-      background: linear-gradient(to bottom, rgba(17, 17, 17, 0), var(--panel) 88%);
+      background: linear-gradient(to bottom, transparent, var(--panel) 88%);
     }
 
     .day-group + .day-group { margin-top: 1rem; }
@@ -384,7 +271,7 @@
       gap: 0.55rem;
       padding: 0.5rem 0.15rem 0.55rem;
       margin-bottom: 0.3rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid var(--hairline);
       font-family: var(--font-display);
       font-weight: 800;
       font-size: clamp(1.7rem, 4.2cqw, 2.4rem);
@@ -413,7 +300,7 @@
       gap: 0.75rem;
       align-items: start;
       padding: 0.7rem 0.2rem 0.7rem 0.45rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid var(--hairline-soft);
       border-left: 4px solid var(--kid-color, transparent);
     }
 
@@ -556,7 +443,7 @@
     .day.today {
       color: var(--coral);
       border: 1.5px solid var(--coral);
-      background: rgba(255, 122, 89, 0.1);
+      background: color-mix(in srgb, var(--coral) 12%, transparent);
     }
 
     .list-panel {
@@ -611,7 +498,7 @@
       border-radius: 0;
       padding: 0.18rem 0.12rem;
       border: none;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      border-bottom: 1px solid var(--hairline-mid);
       cursor: default;
       font-weight: 700;
       font-size: clamp(1.725rem, 4.8cqw, 2.25rem);
@@ -656,12 +543,12 @@
       width: 30px;
       height: 30px;
       border-radius: 6px;
-      border: 1.5px solid rgba(255, 255, 255, 0.18);
+      border: 1.5px solid var(--check-border);
       background: transparent;
       display: grid;
       place-items: center;
       font-size: 1.2rem;
-      color: #000;
+      color: var(--on-accent);
     }
 
     .checklist li.done .box {
@@ -711,7 +598,7 @@
         <div class="alert-icon" id="alertIcon" aria-hidden="true">⚠️</div>
         <div class="eyebrow" id="alertEyebrow">Weather alert</div>
         <h2 id="alertTitle">Severe weather</h2>
-        <p id="alertBody"></p>
+        <div class="alert-copy" id="alertBody"></div>
       </article>
     </div>
 
@@ -719,6 +606,7 @@
       <header class="header">
         <section class="panel clock-card" aria-label="Time">
           <div class="time" id="clock">—:—</div>
+          <div class="date" id="clockDate"></div>
         </section>
 
         <section class="panel weather-strip" aria-label="Weather">
@@ -773,6 +661,7 @@
   </div>
 
   <script src="../shared/weather-icons.js"></script>
+  <script src="../shared/screen-chrome.js"></script>
   <script src="../shared/touch-input.js"></script>
   <script src="../shared/calendar-colors.js"></script>
   <script src="../shared/calendar.js"></script>
@@ -799,118 +688,36 @@
       document.body.classList.add("kiosk");
     }
 
-    function setWxIcon(el, code) {
-      if (!el) return;
-      el.innerHTML = WeatherIcons.svg(code);
-    }
-
-    function pad(n) {
-      return String(n).padStart(2, "0");
-    }
-
-    function updateClock() {
-      const now = new Date();
-      const h = now.getHours();
-      const nextTime = `${h % 12 || 12}:${pad(now.getMinutes())} ${h >= 12 ? "PM" : "AM"}`;
-      const clock = document.getElementById("clock");
-      if (clock.textContent !== nextTime) clock.textContent = nextTime;
-    }
-
-    let weatherFp = "";
-    const WEATHER_CACHE_KEY = "family-board-weather-cache-v1";
-
-    function applyWeatherData(data) {
-      const fp = JSON.stringify({
-        code: data.current.weather_code,
-        t: data.current.temperature_2m,
-        w: data.current.wind_speed_10m,
-        daily: data.daily,
-      });
-      if (fp === weatherFp) return;
-      weatherFp = fp;
-
-      setWxIcon(document.getElementById("wxIcon"), data.current.weather_code);
-      document.getElementById("wxTemp").textContent = `${Math.round(data.current.temperature_2m)}°`;
-
-      const root = document.getElementById("forecast");
-      const today = new Date();
-      root.innerHTML = data.daily.time
-        .slice(0, 4)
-        .map((iso, i) => {
-          const d = new Date(`${iso}T12:00:00`);
-          const code = data.daily.weather_code[i];
-          const name =
-            i === 0
-              ? "Today"
-              : d.toLocaleDateString(undefined, { weekday: "short" });
-          const isToday =
-            d.getDate() === today.getDate() &&
-            d.getMonth() === today.getMonth();
-          return `
-              <div class="fday${isToday ? " today" : ""}">
-                <div class="d">${name}</div>
-                <div class="ico">${WeatherIcons.svg(code)}</div>
-                <div class="temps">
-                  <span class="hi">${Math.round(data.daily.temperature_2m_max[i])}°</span>
-                  <span class="lo">${Math.round(data.daily.temperature_2m_min[i])}°</span>
-                </div>
-              </div>`;
-        })
-        .join("");
-    }
-
-    function loadCachedWeather() {
-      try {
-        const raw = localStorage.getItem(WEATHER_CACHE_KEY);
-        if (!raw) return false;
-        const cached = JSON.parse(raw);
-        if (!cached?.data?.current || !cached?.data?.daily) return false;
-        applyWeatherData(cached.data);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-
-    async function loadWeather() {
-      const { latitude, longitude, tempUnit, windUnit, timezone } = CFG.weather;
-      const temp = tempUnit === "celsius" ? "celsius" : "fahrenheit";
-      const wind = windUnit === "kmh" ? "kmh" : "mph";
-      const tz = timezone || "America/Chicago";
-      const url =
-        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
-        `&current=temperature_2m,weather_code,wind_speed_10m` +
-        `&daily=weather_code,temperature_2m_max,temperature_2m_min` +
-        `&temperature_unit=${temp}&wind_speed_unit=${wind}&timezone=${encodeURIComponent(tz)}&forecast_days=4`;
-      try {
-        const data = await (await fetch(url, { signal: AbortSignal.timeout(4000) })).json();
-        applyWeatherData(data);
-        try {
-          localStorage.setItem(
-            WEATHER_CACHE_KEY,
-            JSON.stringify({ savedAt: Date.now(), data })
-          );
-        } catch (_) {
-          /* quota / private mode */
-        }
-      } catch {
-        if (!loadCachedWeather()) {
-          // Offline with no cache — still show a clear local SVG icon
-          setWxIcon(document.getElementById("wxIcon"), 2);
-          document.getElementById("wxTemp").textContent = "--°";
-        }
-      }
-    }
-
     const alertUI = {
       currentId: null,
+      currentIds: [],
       dismissed: false,
       autoCloseTimer: null,
     };
-    const ALERT_AUTO_CLOSE_MS = 30000;
+    const ALERT_AUTO_CLOSE_MS = 10000;
+    const ALERT_DISMISS_STORE = "fb-alert-dismiss-ids";
 
-    function alertDismissKey(id) {
-      return `fb-alert-dismiss:${id}`;
+    function alertIdOf(alert) {
+      return alert.id || `${alert.event}:${alert.severity}`;
+    }
+
+    function readDismissedAlertIds() {
+      try {
+        const raw = sessionStorage.getItem(ALERT_DISMISS_STORE);
+        return new Set(raw ? JSON.parse(raw) : []);
+      } catch {
+        return new Set();
+      }
+    }
+
+    function markAlertsDismissed(ids) {
+      const seen = readDismissedAlertIds();
+      ids.forEach((id) => seen.add(id));
+      try {
+        sessionStorage.setItem(ALERT_DISMISS_STORE, JSON.stringify([...seen]));
+      } catch (_) {
+        /* quota / private mode */
+      }
     }
 
     function alertIconFor(eventName) {
@@ -945,13 +752,7 @@
     }
 
     function dismissAlertOverlay() {
-      if (alertUI.currentId) {
-        try {
-          sessionStorage.setItem(alertDismissKey(alertUI.currentId), "1");
-        } catch (_) {
-          /* quota / private mode */
-        }
-      }
+      markAlertsDismissed(alertUI.currentIds);
       alertUI.dismissed = true;
       setAlertOverlayOpen(false);
     }
@@ -959,26 +760,74 @@
     function hideAlertUI() {
       clearAlertAutoClose();
       alertUI.currentId = null;
+      alertUI.currentIds = [];
       alertUI.dismissed = false;
       document.getElementById("alertOverlay").classList.remove("show");
       document.getElementById("alertPill").classList.remove("show");
     }
 
-    function showAlertUI(top, { forceOpen = false } = {}) {
-      const overlay = document.getElementById("alertOverlay");
-      const alertId = top.id || `${top.event}:${top.severity}`;
-      const isNew = alertUI.currentId !== alertId;
+    function renderAlertCard(alerts) {
+      const top = alerts[0];
+      const many = alerts.length > 1;
+      const iconEl = document.getElementById("alertIcon");
+      const icons = [];
+      alerts.forEach((a) => {
+        const icon = alertIconFor(a.event);
+        if (!icons.includes(icon)) icons.push(icon);
+      });
+      iconEl.replaceChildren();
+      icons.slice(0, 3).forEach((icon) => {
+        const span = document.createElement("span");
+        span.className = "emoji";
+        span.textContent = icon;
+        iconEl.appendChild(span);
+      });
+      iconEl.classList.toggle("multi", icons.length > 1);
 
-      if (isNew) {
-        alertUI.currentId = alertId;
-        alertUI.dismissed = !!sessionStorage.getItem(alertDismissKey(alertId));
+      document.getElementById("alertEyebrow").textContent = many
+        ? `${alerts.length} alerts · National Weather Service`
+        : `${top.severity} · National Weather Service`;
+      document.getElementById("alertTitle").textContent = many ? "Weather alerts" : top.event;
+
+      const body = document.getElementById("alertBody");
+      body.replaceChildren();
+      if (!many) {
+        body.textContent = top.headline || top.description;
+      } else {
+        alerts.forEach((a) => {
+          const section = document.createElement("section");
+          section.className = "alert-item";
+          const heading = document.createElement("h3");
+          const ico = document.createElement("span");
+          ico.className = "emoji";
+          ico.textContent = alertIconFor(a.event);
+          heading.append(ico, document.createTextNode(a.event));
+          const copy = document.createElement("p");
+          copy.textContent = a.headline || a.description;
+          section.append(heading, copy);
+          body.appendChild(section);
+        });
       }
 
-      document.getElementById("alertIcon").innerHTML = `<span class="emoji">${alertIconFor(top.event)}</span>`;
-      document.getElementById("alertEyebrow").textContent = `${top.severity} · National Weather Service`;
-      document.getElementById("alertTitle").textContent = top.event;
-      document.getElementById("alertBody").textContent = top.headline || top.description;
-      document.getElementById("alertPillLabel").textContent = top.event;
+      document.getElementById("alertPillLabel").textContent = alerts.map((a) => a.event).join(" · ");
+    }
+
+    function showAlertUI(alerts, { forceOpen = false } = {}) {
+      const overlay = document.getElementById("alertOverlay");
+      const ids = alerts.map(alertIdOf);
+      const fingerprint = ids.slice().sort().join("|");
+      const isNew = alertUI.currentId !== fingerprint;
+
+      if (isNew) {
+        alertUI.currentId = fingerprint;
+        alertUI.currentIds = ids;
+        const seen = readDismissedAlertIds();
+        alertUI.dismissed = ids.every((id) => seen.has(id));
+      } else {
+        alertUI.currentIds = ids;
+      }
+
+      renderAlertCard(alerts);
 
       if (forceOpen) {
         setAlertOverlayOpen(true);
@@ -999,19 +848,28 @@
       const demo = new URLSearchParams(location.search).has("demoAlert");
       try {
         const alerts = demo
-          ? [{
-              id: "demo-severe-thunderstorm",
-              event: "Severe Thunderstorm Warning",
-              severity: "Severe",
-              headline: "DEMO: Severe thunderstorms capable of damaging winds and large hail are moving through your area. Take shelter indoors away from windows until the storm passes.",
-              description: "",
-            }]
+          ? [
+              {
+                id: "demo-severe-thunderstorm",
+                event: "Severe Thunderstorm Warning",
+                severity: "Severe",
+                headline: "DEMO: Severe thunderstorms capable of damaging winds and large hail are moving through your area. Take shelter indoors away from windows until the storm passes.",
+                description: "",
+              },
+              {
+                id: "demo-flash-flood",
+                event: "Flash Flood Warning",
+                severity: "Severe",
+                headline: "DEMO: Flash flooding is occurring. Move to higher ground. Do not drive through flooded roadways.",
+                description: "",
+              },
+            ]
           : await FamilyAlerts.fetchAlerts(CFG);
         if (!alerts.length) {
           hideAlertUI();
           return;
         }
-        showAlertUI(alerts[0]);
+        showAlertUI(alerts);
       } catch (err) {
         console.warn("Alert fetch failed", err);
         hideAlertUI();
@@ -1322,16 +1180,12 @@
     wireListAddButtons();
     wireChecklists();
 
-    updateClock();
-    loadCachedWeather();
-    loadWeather();
+    ScreenChrome.init();
     loadAlerts();
     loadCalendar();
     loadLists();
 
     // Realtime-ish refresh cadence (Pi kiosk friendly)
-    setInterval(updateClock, 1000);
-    setInterval(loadWeather, 5 * 60 * 1000);
     setInterval(loadAlerts, 3 * 60 * 1000);
     setInterval(loadCalendar, 60 * 1000);
     setInterval(loadLists, 2500);
@@ -1346,15 +1200,12 @@
 
     // Refresh when coming back online / tab visible
     window.addEventListener("online", () => {
-      loadWeather();
       loadCalendar();
       loadLists();
       loadAlerts();
     });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
-        updateClock();
-        loadWeather();
         loadCalendar();
         loadLists();
       }

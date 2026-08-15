@@ -2,7 +2,7 @@
   position: absolute;
   inset: 0;
   z-index: 80;
-  background: rgba(0, 0, 0, 0.82);
+  background: var(--overlay-strong);
   display: none;
   flex-direction: column;
   justify-content: flex-end;
@@ -18,8 +18,8 @@
   width: 90%;
   max-width: 90%;
   flex: 0 0 auto;
-  background: #121212;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--panel);
+  border: 1px solid var(--line);
   border-radius: 18px;
   display: flex;
   flex-direction: column;
@@ -48,7 +48,7 @@
   height: clamp(40px, 8cqi, 48px);
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: #1a1a1a;
+  background: var(--surface-2);
   font-size: 1.2rem;
   font-weight: 800;
   flex-shrink: 0;
@@ -59,7 +59,7 @@
   padding: 0.55rem 0.7rem;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: #0a0a0a;
+  background: var(--bg2);
   font-weight: 700;
   font-size: clamp(0.95rem, 3cqi, 1.15rem);
   min-height: 2.6rem;
@@ -104,7 +104,7 @@
   height: 100%;
   border-radius: clamp(7px, 1.6cqi, 11px);
   border: 1px solid var(--line);
-  background: #1c1c1c;
+  background: var(--surface-3);
   font-family: var(--font-display);
   font-weight: 800;
   font-size: clamp(0.95rem, 4.2cqi, 1.55rem);
@@ -127,7 +127,7 @@
 }
 
 .touch-key:active {
-  background: #2a2a2a;
+  background: var(--bar);
   transform: scale(0.96);
 }
 
@@ -149,13 +149,13 @@
 
 .touch-input-foot .cancel {
   border: 1px solid var(--line);
-  background: #1a1a1a;
+  background: var(--surface-2);
 }
 
 .touch-input-foot .submit {
   border: none;
   background: var(--coral);
-  color: #000;
+  color: var(--on-accent);
 }
 
 .touch-input-foot .submit:disabled {

@@ -119,6 +119,7 @@ def default_state() -> dict[str, Any]:
                     "whiteboard": {"enabled": True, "seconds": 45},
                 },
             },
+            "kioskTheme": "night",
             "nightMode": {
                 "enabled": False,
                 "dimTime": "22:00",
@@ -272,6 +273,7 @@ def merged_settings(state: dict[str, Any]) -> dict[str, Any]:
     if ss.get("enabled") and int(ss.get("idleMinutes") or 0) == 0 and not ss.get("scheduleEnabled"):
         ss["idleMinutes"] = 5
     settings["rotation"] = merged_rotation((state.get("settings") or {}).get("rotation"))
+    settings["kioskTheme"] = "day" if settings.get("kioskTheme") == "day" else "night"
     return settings
 
 

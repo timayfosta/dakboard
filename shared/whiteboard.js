@@ -40,6 +40,8 @@
   let currentStroke = null;
   let tool = "pen";
   let color = "#f2f4f8";
+  const DEFAULT_NIGHT_INK = "#f2f4f8";
+  const DEFAULT_DAY_INK = "#0f172a";
   let size = SIZES[1].value;
   let lastSavedAt = 0;
   let localRevision = 0;
@@ -61,6 +63,29 @@
     const base = Number(stroke.size) || 8;
     if (stroke.tool === "eraser") return Math.max(base, def.minSize || 12);
     return Math.max(1, base * (def.sizeMul || 1));
+  }
+
+  function cssVar(name, fallback) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+  }
+
+  function canvasBg() {
+    return cssVar("--wb-canvas", "#161616");
+  }
+
+  function defaultInk() {
+    return cssVar("--wb-ink", DEFAULT_NIGHT_INK);
+  }
+
+  function isDefaultInk(hex) {
+    const n = String(hex || "").toLowerCase();
+    return n === DEFAULT_NIGHT_INK || n === DEFAULT_DAY_INK || n === "#ffffff" || n === "#fff";
+  }
+
+  function strokePaintColor(hex) {
+    if (isDefaultInk(hex)) return defaultInk();
+    return hex || defaultInk();
   }
 
   function hexToRgb(hex) {
@@ -108,6 +133,14 @@
   }
 
   function viewportSize() {
+    const host = canvas?.parentElement;
+    if (host && host.classList.contains("wb-stage")) {
+      const r = host.getBoundingClientRect();
+      return {
+        w: Math.max(1, Math.floor(r.width)),
+        h: Math.max(1, Math.floor(r.height)),
+      };
+    }
     const vv = window.visualViewport;
     return {
       w: Math.max(1, Math.floor(vv?.width ?? window.innerWidth)),
@@ -143,7 +176,7 @@
     backingCtx.setTransform(1, 0, 0, 1, 0, 0);
     backingCtx.clearRect(0, 0, backing.width, backing.height);
     backingCtx.restore();
-    backingCtx.fillStyle = "#161616";
+    backingCtx.fillStyle = canvasBg();
     backingCtx.fillRect(0, 0, canvasW, canvasH);
     strokes.forEach((s) => drawStroke(s, backingCtx));
   }
@@ -292,6 +325,7 @@
     }
 
     context.globalCompositeOperation = "source-over";
+    stroke = { ...stroke, color: strokePaintColor(stroke.color) };
 
     if (stroke.tool === "line" && stroke.points.length >= 2) {
       const a = stroke.points[0];
@@ -423,7 +457,7 @@
     if (tool === "pencil") start.w = 1;
     currentStroke = {
       tool,
-      color: tool === "eraser" ? "#000000" : color,
+      color: tool === "eraser" ? canvasBg() : color,
       size,
       points: [start],
     };
@@ -588,6 +622,7 @@
     canvas = opts.canvas;
     ctx = canvas.getContext("2d");
     document.documentElement.classList.add("wb-page");
+    color = defaultInk();
     buildToolbar(opts.toolbar);
 
     canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
@@ -614,6 +649,22 @@
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") pollRemote();
     });
+    document.addEventListener("kiosk-theme-change", applyThemeColors);
+    applyThemeColors();
+  }
+
+  function applyThemeColors() {
+    if (!canvas || !ctx) return;
+    if (isDefaultInk(color)) {
+      setColor(defaultInk());
+      if (toolbarEl) {
+        toolbarEl.querySelectorAll(".wb-size span").forEach((el) => {
+          el.style.background = color;
+        });
+      }
+    }
+    rebuildBacking();
+    redraw();
   }
 
   function isDrawing() {

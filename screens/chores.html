@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="night">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Family Board — Chores</title>
   <script src="../shared/config.js"></script>
   <script src="../shared/display-init.js"></script>
+  <script src="../shared/kiosk-theme.js"></script>
   <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="../shared/screen-chrome.css" />
   <style>
     .screen { gap: 0.4rem; overflow: hidden; }
 
@@ -41,6 +43,10 @@
       color: var(--sunny);
     }
 
+    [data-theme="day"] .kid-title {
+      text-shadow: none;
+    }
+
     .star-pill[hidden] {
       display: none;
     }
@@ -54,7 +60,7 @@
 
     .view-btn {
       border: 1px solid var(--line);
-      background: #141414;
+      background: var(--surface);
       color: var(--ink-soft);
       border-radius: 999px;
       padding: 0.55rem 0.95rem;
@@ -64,7 +70,7 @@
     }
 
     .view-btn.active {
-      color: #000;
+      color: var(--on-accent);
       background: var(--mint);
       border-color: var(--mint);
     }
@@ -73,8 +79,8 @@
       font-family: var(--font-display);
       font-weight: 800;
       font-size: 1rem;
-      background: rgba(245, 200, 76, 0.14);
-      border: 1px solid rgba(245, 200, 76, 0.32);
+      background: var(--gold-wash);
+      border: 1px solid var(--gold-line);
       color: var(--sunny);
       border-radius: 999px;
       padding: 0.4rem 0.7rem;
@@ -90,7 +96,7 @@
     .progress-strip {
       display: grid;
       gap: 0.32rem;
-      background: linear-gradient(180deg, #141414, #101010);
+      background: linear-gradient(180deg, var(--surface), var(--panel));
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 0.45rem 0.55rem 0.5rem;
@@ -121,8 +127,8 @@
     .progress-track {
       height: 14px;
       border-radius: 999px;
-      background: #1f1f1f;
-      border: 1px solid rgba(255, 255, 255, 0.07);
+      background: var(--track);
+      border: 1px solid var(--hairline);
       overflow: hidden;
       box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
     }
@@ -146,7 +152,7 @@
       min-height: 0;
       display: flex;
       flex-direction: column;
-      background: #111;
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 0.4rem;
@@ -196,7 +202,7 @@
       min-height: 0;
       display: flex;
       flex-direction: column;
-      border-top: 1px dashed rgba(255, 255, 255, 0.12);
+      border-top: 1px dashed var(--hairline-strong);
       margin-top: 0.25rem;
       padding-top: 0.3rem;
     }
@@ -220,7 +226,7 @@
       grid-template-columns: auto 1fr auto;
       gap: 0.55rem;
       align-items: center;
-      background: #1a1a1a;
+      background: var(--surface-2);
       border: 2px solid transparent;
       border-radius: 14px;
       padding: 0.55rem 0.6rem;
@@ -232,22 +238,22 @@
     .chore:active:not(.done) { transform: scale(0.99); }
 
     .chore.done {
-      border-color: rgba(61, 220, 151, 0.35);
-      background: rgba(61, 220, 151, 0.07);
+      border-color: var(--mint-line);
+      background: var(--mint-wash);
       opacity: 0.88;
     }
 
     .chore.done .chore-text h3 {
       text-decoration: line-through;
       text-decoration-thickness: 2px;
-      text-decoration-color: rgba(255, 255, 255, 0.28);
+      text-decoration-color: var(--check-ghost);
       color: var(--ink-soft);
     }
 
     .chore.done .check {
       background: var(--mint);
       border-color: var(--mint);
-      color: #000;
+      color: var(--on-accent);
     }
 
     .chore.is-leaving,
@@ -328,7 +334,7 @@
       display: grid;
       place-items: center;
       font-size: 1.35rem;
-      background: #101010;
+      background: var(--panel);
       border: 1px solid var(--line);
     }
 
@@ -374,8 +380,8 @@
       width: 42px;
       height: 42px;
       border-radius: 50%;
-      border: 2px solid rgba(255,255,255,0.22);
-      background: #141414;
+      border: 2px solid var(--check-border);
+      background: var(--surface);
       display: grid;
       place-items: center;
       font-size: 1.15rem;
@@ -390,9 +396,9 @@
     .check.check-star,
     .check.check-heart,
     .check.check-diamond {
-      color: rgba(255, 255, 255, 0.28);
+      color: var(--check-ghost);
       font-size: 1.25rem;
-      border-color: rgba(255, 255, 255, 0.18);
+      border-color: var(--check-border);
     }
 
     .chore.done .check.check-star {
@@ -402,7 +408,7 @@
     }
 
     .chore.done .check.check-heart {
-      color: #ff7a9a;
+      color: var(--berry);
       border-color: rgba(255, 122, 154, 0.55);
       background: rgba(255, 122, 154, 0.12);
     }
@@ -441,8 +447,8 @@
       min-height: 0;
       display: flex;
       flex-direction: column;
-      background: #151515;
-      border: 2px solid color-mix(in srgb, var(--kid, var(--coral)) 55%, #333);
+      background: var(--surface);
+      border: 2px solid color-mix(in srgb, var(--kid, var(--coral)) 55%, var(--mix-shadow));
       border-radius: 14px;
       overflow: hidden;
     }
@@ -455,7 +461,7 @@
       justify-content: center;
       gap: 0.35rem;
       padding: 0.55rem 0.45rem;
-      background: color-mix(in srgb, var(--kid, var(--coral)) 12%, #111);
+      background: color-mix(in srgb, var(--kid, var(--coral)) 12%, var(--mix-base));
       font-family: var(--font-display);
       font-weight: 800;
       font-size: clamp(1rem, 2.8cqw, 1.25rem);
@@ -547,7 +553,7 @@
 
     .dock {
       flex-shrink: 0;
-      background: #0d0d0d;
+      background: var(--dock);
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 0.35rem;
@@ -565,7 +571,7 @@
 
     .profile {
       border: 2px solid transparent;
-      background: #171717;
+      background: var(--surface-4);
       border-radius: 12px;
       padding: 0.35rem 0.28rem 0.32rem;
       text-align: center;
@@ -579,7 +585,7 @@
 
     .profile.active {
       border-color: var(--active, var(--coral));
-      background: #1c1c1c;
+      background: var(--surface-3);
     }
 
     .profile .name-line {
@@ -616,7 +622,7 @@
       margin-top: 0.22rem;
       height: 4px;
       border-radius: 999px;
-      background: #2a2a2a;
+      background: var(--bar);
       overflow: hidden;
     }
 
@@ -633,7 +639,7 @@
       left: 50%;
       bottom: 8rem;
       transform: translateX(-50%) translateY(8px);
-      background: #1a1a1a;
+      background: var(--surface-2);
       border: 1px solid var(--line);
       color: var(--mint);
       font-family: var(--font-display);
@@ -658,7 +664,7 @@
       position: absolute;
       inset: 0;
       z-index: 35;
-      background: rgba(0,0,0,0.75);
+      background: var(--overlay);
       place-items: center;
       padding: 1.2rem;
     }
@@ -667,7 +673,7 @@
     .reminder-overlay.show { display: grid; }
 
     .modal-card {
-      background: #151515;
+      background: var(--surface);
       border: 2px solid var(--line);
       border-radius: 22px;
       padding: 1.2rem 1rem;
@@ -709,7 +715,7 @@
     }
 
     .modal-card li {
-      background: #1c1c1c;
+      background: var(--surface-3);
       border-radius: 10px;
       padding: 0.45rem 0.55rem;
       font-weight: 700;
@@ -722,7 +728,7 @@
       border-radius: 12px;
       background: var(--coral);
       border: none;
-      color: #000;
+      color: var(--on-accent);
       font-weight: 800;
       font-size: 0.95rem;
     }
@@ -731,6 +737,7 @@
 <body class="tv-stage">
   <div class="tv-frame">
     <div class="screen">
+      <div data-screen-chrome></div>
       <div class="hero">
         <div class="titlebar">
           <h1 class="kid-title" id="kidTitle">Pick a kid</h1>
@@ -787,6 +794,8 @@
 
   <div class="confetti" id="fxRoot" aria-hidden="true"></div>
 
+  <script src="../shared/weather-icons.js"></script>
+  <script src="../shared/screen-chrome.js"></script>
   <script src="../shared/fx.js"></script>
   <script src="../shared/family-api.js"></script>
   <script src="../shared/display-sync.js"></script>
@@ -1324,6 +1333,7 @@
       document.getElementById("reminderOverlay").classList.remove("show");
     });
 
+    ScreenChrome.init();
     updateViewToggle();
     load(true);
     window.addEventListener("pageshow", () => {

@@ -1,17 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="night">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Family Board — Whiteboard</title>
+  <script src="../shared/config.js"></script>
+  <script src="../shared/display-init.js"></script>
+  <script src="../shared/kiosk-theme.js"></script>
   <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="../shared/screen-chrome.css" />
   <link rel="stylesheet" href="../shared/whiteboard.css" />
 </head>
-<body class="wb-page">
-  <canvas id="wbCanvas" aria-label="Drawing canvas"></canvas>
-  <div class="wb-toolbar" id="wbToolbar"></div>
+<body class="tv-stage wb-page">
+  <div class="tv-frame">
+    <div class="screen">
+      <div data-screen-chrome></div>
+      <div class="wb-stage">
+        <canvas id="wbCanvas" aria-label="Drawing canvas"></canvas>
+      </div>
+      <div class="wb-toolbar" id="wbToolbar"></div>
+    </div>
+  </div>
 
+  <script src="../shared/weather-icons.js"></script>
+  <script src="../shared/screen-chrome.js"></script>
   <script src="../shared/family-api.js"></script>
   <script src="../shared/display-sync.js"></script>
   <script src="../shared/live-reload.js"></script>
@@ -25,6 +38,7 @@
       document.body.classList.add("kiosk");
     }
 
+    ScreenChrome.init();
     Whiteboard.init({
       canvas: document.getElementById("wbCanvas"),
       toolbar: document.getElementById("wbToolbar"),

@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="night">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Family Board — Rewards</title>
   <script src="../shared/config.js"></script>
   <script src="../shared/display-init.js"></script>
+  <script src="../shared/kiosk-theme.js"></script>
   <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="../shared/screen-chrome.css" />
   <style>
     .top {
       flex-shrink: 0;
@@ -35,14 +37,14 @@
     .pick {
       border: 3px solid transparent;
       border-radius: 18px;
-      background: #141414;
+      background: var(--surface);
       padding: 0.55rem 0.35rem;
       text-align: center;
       transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
     }
 
     .pick.active {
-      background: #1a1a1a;
+      background: var(--surface-2);
       border-color: var(--active, var(--coral));
       transform: translateY(-2px);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--active, var(--coral)) 25%, transparent);
@@ -57,7 +59,7 @@
     .pick .bal {
       font-weight: 800;
       font-size: 0.8rem;
-      color: #b77800;
+      color: var(--gold-ink);
     }
 
     .shop {
@@ -85,8 +87,8 @@
       font-family: var(--font-display);
       font-weight: 800;
       font-size: 1.15rem;
-      background: rgba(255, 201, 74, 0.4);
-      color: #b77800;
+      background: var(--gold-soft);
+      color: var(--gold-ink);
       border-radius: 999px;
       padding: 0.4rem 0.85rem;
     }
@@ -135,8 +137,8 @@
 
     .reward .cost {
       font-weight: 800;
-      color: #b77800;
-      background: rgba(255, 201, 74, 0.35);
+      color: var(--gold-ink);
+      background: var(--gold-softer);
       border-radius: 999px;
       padding: 0.3rem 0.65rem;
       width: fit-content;
@@ -170,7 +172,7 @@
     }
 
     .recent-list li {
-      background: #141414;
+      background: var(--surface);
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 0.55rem 0.7rem;
@@ -215,9 +217,8 @@
 <body class="tv-stage">
   <div class="tv-frame">
   <div class="screen">
+    <div data-screen-chrome></div>
     <section class="panel top">
-      <h1>🎁 Reward Shop</h1>
-      <p>Spend stars you earned on chore quests</p>
       <div class="picker" id="picker" role="tablist"></div>
     </section>
 
@@ -239,6 +240,8 @@
   <div class="toast" id="toast" aria-live="polite"></div>
   <div class="confetti" id="confetti" aria-hidden="true"></div>
 
+  <script src="../shared/weather-icons.js"></script>
+  <script src="../shared/screen-chrome.js"></script>
   <script src="../shared/family-api.js"></script>
   <script src="../shared/display-sync.js"></script>
   <script src="../shared/live-reload.js"></script>
@@ -435,6 +438,7 @@
       }
     }
 
+    ScreenChrome.init();
     load();
     setInterval(load, 2000);
     document.addEventListener("visibilitychange", () => {
