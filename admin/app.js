@@ -878,6 +878,7 @@
         </p>
         <p class="muted" id="deployMeta">Checking deploy status…</p>
         <button class="btn block" type="button" id="deployServerBtn">Pull updates &amp; restart now</button>
+        <button class="btn secondary block" type="button" id="startTunnelBtn">Start Cloudflare tunnel</button>
         <button class="btn secondary block" type="button" id="restartServerBtn">Restart only</button>
         <button class="btn danger block" type="button" id="rebootPiBtn" style="margin-top:0.55rem">Reboot Raspberry Pi</button>
         <p class="muted restart-status hidden" id="restartStatus"></p>
@@ -1437,6 +1438,34 @@
         if (statusEl) statusEl.textContent = "Restarting… waiting for server";
         await waitForServerRestart(statusEl, deployBtn);
         $("#restartServerBtn")?.removeAttribute("disabled");
+      });
+    }
+
+    const tunnelBtn = $("#startTunnelBtn");
+    if (tunnelBtn) {
+      tunnelBtn.addEventListener("click", async () => {
+        const statusEl = $("#restartStatus");
+        tunnelBtn.disabled = true;
+        if (statusEl) {
+          statusEl.classList.remove("hidden");
+          statusEl.textContent = "Starting Cloudflare tunnel…";
+        }
+        try {
+          const res = await AdminAPI.startTunnel(state.token);
+          await fillDeployMeta();
+          const tun = res?.boot?.tunnel || res?.services?.tunnel || {};
+          if (tun.active === "active") {
+            toast("Tunnel is running — try family.fcchurchofgod.com/phone/index.html");
+            if (statusEl) statusEl.textContent = "Tunnel running";
+          } else {
+            const detail = res?.error || res?.stdout || "Tunnel did not stay running";
+            toast(detail);
+            if (statusEl) statusEl.textContent = detail;
+          }
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Could not start tunnel — use home Wi‑Fi admin");
+        }
+        tunnelBtn.disabled = false;
       });
     }
 

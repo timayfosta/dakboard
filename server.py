@@ -314,6 +314,11 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             return self.admin_reboot()
 
+        if path == "/api/admin/tunnel-start":
+            if not require_admin(self):
+                return
+            return self.admin_tunnel_start()
+
         send_json(self, {"error": "Not found", "path": path, "hint": "Restart server: npm start"}, 404)
 
     def do_PUT(self):
@@ -967,6 +972,11 @@ class Handler(SimpleHTTPRequestHandler):
         result = deploy.schedule_pi_reboot()
         status = 200 if result.get("ok") else 400
         send_json(self, result, status)
+
+    def admin_tunnel_start(self):
+        result = deploy.enable_boot_services()
+        status = 200 if result.get("ok") else 400
+        send_json(self, {**result, "boot": result.get("services") or deploy.boot_status()}, status)
 
     def deploy_webhook(self):
         secret = load_secrets().get("deployWebhookSecret") or ""

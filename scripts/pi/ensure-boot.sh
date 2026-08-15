@@ -55,8 +55,15 @@ unit_ok() {
 
 extract_token() {
   local file="$1"
+  local raw=""
   [[ -f "${file}" ]] || return 1
-  grep -oE -- '--token[= ][^[:space:]]+' "${file}" 2>/dev/null | tail -1 | sed -E 's/--token[= ]//' | tr -d '\r'
+  raw="$(grep -oE -- '--token[= ][^[:space:]'\''\"]+' "${file}" 2>/dev/null | tail -1 | sed -E 's/--token[= ]//' || true)"
+  if [[ -z "${raw}" ]]; then
+    raw="$(grep -oE -- "TUNNEL_TOKEN=['\"]?[^[:space:]'\"]+" "${file}" 2>/dev/null | tail -1 | sed -E 's/TUNNEL_TOKEN=//' | tr -d "'\"" || true)"
+  fi
+  raw="$(printf '%s' "${raw}" | tr -d '\r\n')"
+  [[ -n "${raw}" ]] || return 1
+  printf '%s' "${raw}"
 }
 
 write_clean_tunnel() {
@@ -89,6 +96,15 @@ write_clean_tunnel() {
   fi
   if [[ -z "${token}" ]]; then
     token="$(extract_token /etc/systemd/system/cloudflared.service.bad || true)"
+  fi
+  if [[ -z "${token}" ]]; then
+    token="$(extract_token /etc/cloudflared/env || true)"
+  fi
+  if [[ -z "${token}" ]]; then
+    token="$(extract_token /etc/default/cloudflared || true)"
+  fi
+  if [[ -z "${token}" ]]; then
+    token="$(extract_token /lib/systemd/system/cloudflared.service || true)"
   fi
 
   mkdir -p /etc/cloudflared

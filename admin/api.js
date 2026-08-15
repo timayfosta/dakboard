@@ -45,6 +45,7 @@ const API = {
   deploy: (token) => API.request("/api/admin/deploy", { method: "POST", token, body: {} }),
   deployStatus: (token) => API.request("/api/admin/deploy/status", { token }),
   rebootPi: (token) => API.request("/api/admin/reboot", { method: "POST", token, body: {} }),
+  startTunnel: (token) => API.request("/api/admin/tunnel-start", { method: "POST", token, body: {} }),
 };
 
 window.AdminAPI = API;
