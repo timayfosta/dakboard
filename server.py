@@ -1,7 +1,7 @@
 """
 Family Board local server
 - Static site + admin PWA
-- /api/calendar → private Google iCal
+- /api/calendar → Google Calendar API (OAuth colors) or private iCal fallback
 - /api/family/* → chores, lists, rewards, kids (admin + kiosk)
 """
 
@@ -23,6 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from datetime import date, datetime, timedelta, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -52,7 +53,15 @@ BOOT_ID = uuid.uuid4().hex
 STARTED_AT = int(time.time() * 1000)
 PHOTOS_DIR = ROOT / "data" / "photos"
 CAL_CACHE = ROOT / "data" / "calendar-cache.ics"
+CAL_JSON_CACHE = ROOT / "data" / "calendar-cache.json"
+CONFIG_JS = ROOT / "shared" / "config.js"
 SECRETS = ROOT / "shared" / "secrets.local.js"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_COLORS_URL = "https://www.googleapis.com/calendar/v3/colors"
+GOOGLE_CAL_API = "https://www.googleapis.com/calendar/v3"
+_oauth_lock = threading.Lock()
+_oauth_access = {"token": "", "expires_at": 0.0}
+_oauth_colors = {"event": {}, "fetched_at": 0.0}
 SESSIONS: dict[str, float] = {}  # token -> expires_at
 SESSION_HOURS = 30 * 24
 ADMIN_FILE_MAX_BYTES = 512_000
@@ -270,6 +279,181 @@ def load_secrets() -> dict[str, str]:
         if match:
             out[key] = match.group(1).strip()
     return out
+
+
+def oauth_calendar_configured() -> bool:
+    secrets_map = load_secrets()
+    return bool(
+        secrets_map.get("googleClientId")
+        and secrets_map.get("googleClientSecret")
+        and secrets_map.get("googleRefreshToken")
+    )
+
+
+def load_config_calendar() -> dict[str, Any]:
+    text = CONFIG_JS.read_text(encoding="utf-8") if CONFIG_JS.exists() else ""
+    cal_id = ""
+    days = 21
+    match = re.search(r'calendarId:\s*"([^"]+)"', text)
+    if match:
+        cal_id = match.group(1).strip()
+    days_match = re.search(r"daysAhead:\s*(\d+)", text)
+    if days_match:
+        days = max(1, int(days_match.group(1)))
+    return {"calendarId": cal_id, "daysAhead": days}
+
+
+def _google_http_json(url: str, *, token: str = "", data: bytes | None = None) -> dict[str, Any]:
+    headers = {"Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    if data is not None:
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data is not None else "GET")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            body = ""
+        detail = ""
+        try:
+            parsed = json.loads(body) if body else {}
+            err = parsed.get("error")
+            if isinstance(err, dict):
+                detail = err.get("message") or ""
+            elif isinstance(err, str):
+                detail = parsed.get("error_description") or err
+        except Exception:  # noqa: BLE001
+            detail = body[:160]
+        raise RuntimeError(detail or f"Google HTTP {exc.code}") from exc
+
+
+def google_access_token() -> str:
+    secrets_map = load_secrets()
+    client_id = secrets_map.get("googleClientId") or ""
+    client_secret = secrets_map.get("googleClientSecret") or ""
+    refresh = secrets_map.get("googleRefreshToken") or ""
+    if not (client_id and client_secret and refresh):
+        return ""
+    now = time.time()
+    with _oauth_lock:
+        if _oauth_access["token"] and _oauth_access["expires_at"] > now + 60:
+            return str(_oauth_access["token"])
+        payload = _google_http_json(
+            GOOGLE_TOKEN_URL,
+            data=urllib.parse.urlencode(
+                {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "refresh_token": refresh,
+                    "grant_type": "refresh_token",
+                }
+            ).encode("utf-8"),
+        )
+        token = str(payload.get("access_token") or "")
+        if not token:
+            raise RuntimeError("Google OAuth did not return an access token")
+        expires = int(payload.get("expires_in") or 3600)
+        _oauth_access["token"] = token
+        _oauth_access["expires_at"] = now + expires
+        return token
+
+
+def google_event_color_map(token: str) -> dict[str, str]:
+    now = time.time()
+    if _oauth_colors["event"] and _oauth_colors["fetched_at"] > now - 86400:
+        return dict(_oauth_colors["event"])
+    data = _google_http_json(GOOGLE_COLORS_URL, token=token)
+    event = {
+        str(key): str(value.get("background") or "")
+        for key, value in (data.get("event") or {}).items()
+        if isinstance(value, dict)
+    }
+    _oauth_colors["event"] = event
+    _oauth_colors["fetched_at"] = now
+    return event
+
+
+def _all_day_end(end_date: str) -> str:
+    try:
+        year, month, day = [int(part) for part in end_date.split("-")[:3]]
+        prev = date(year, month, day) - timedelta(days=1)
+        return f"{prev.isoformat()}T23:59:59"
+    except Exception:  # noqa: BLE001
+        return f"{end_date}T23:59:59"
+
+
+def fetch_google_calendar_api() -> dict[str, Any] | None:
+    if not oauth_calendar_configured():
+        return None
+    cfg = load_config_calendar()
+    calendar_id = cfg.get("calendarId") or ""
+    if not calendar_id:
+        raise RuntimeError("Missing googleCalendar.calendarId in shared/config.js")
+    token = google_access_token()
+    colors = google_event_color_map(token)
+    cal_url = f"{GOOGLE_CAL_API}/calendars/{urllib.parse.quote(calendar_id, safe='')}"
+    calendar = _google_http_json(cal_url, token=token)
+    default_color = str(calendar.get("backgroundColor") or "")
+    labels = {
+        str(label.get("id")): str(label.get("backgroundColor") or "")
+        for label in ((calendar.get("labelProperties") or {}).get("eventLabels") or [])
+        if isinstance(label, dict) and label.get("id") and label.get("backgroundColor")
+    }
+
+    now = datetime.now(timezone.utc)
+    time_min = now.isoformat().replace("+00:00", "Z")
+    time_max = (now + timedelta(days=int(cfg.get("daysAhead") or 21))).isoformat().replace("+00:00", "Z")
+    events: list[dict[str, Any]] = []
+    page_token = ""
+    while True:
+        params = {
+            "timeMin": time_min,
+            "timeMax": time_max,
+            "singleEvents": "true",
+            "orderBy": "startTime",
+            "maxResults": "250",
+            "eventLabelVersion": "1",
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        url = f"{cal_url}/events?{urllib.parse.urlencode(params)}"
+        data = _google_http_json(url, token=token)
+        for item in data.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            start = item.get("start") or {}
+            end = item.get("end") or {}
+            all_day = bool(start.get("date") and not start.get("dateTime"))
+            start_val = start.get("dateTime") or (f"{start.get('date')}T00:00:00" if start.get("date") else "")
+            if all_day and end.get("date"):
+                end_val = _all_day_end(str(end.get("date")))
+            else:
+                end_val = end.get("dateTime") or start_val
+            color = (
+                labels.get(str(item.get("eventLabelId") or ""))
+                or colors.get(str(item.get("colorId") or ""))
+                or default_color
+            )
+            events.append(
+                {
+                    "id": item.get("id"),
+                    "title": item.get("summary") or "(No title)",
+                    "start": start_val,
+                    "end": end_val,
+                    "allDay": all_day,
+                    "location": item.get("location") or "",
+                    "color": color,
+                }
+            )
+        page_token = str(data.get("nextPageToken") or "")
+        if not page_token:
+            break
+    return {"source": "google-oauth", "events": events}
 
 
 def send_json(handler: SimpleHTTPRequestHandler, payload: Any, status: int = 200):
@@ -742,7 +926,38 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _write_calendar_json(self, payload: dict[str, Any], *, cached: bool = False) -> None:
+        if not cached:
+            try:
+                CAL_JSON_CACHE.parent.mkdir(parents=True, exist_ok=True)
+                CAL_JSON_CACHE.write_text(json.dumps(payload), encoding="utf-8")
+            except OSError:
+                pass
+        send_json(self, {**payload, "cached": True} if cached else payload)
+
+    def _cached_calendar_json(self) -> bool:
+        if not CAL_JSON_CACHE.exists():
+            return False
+        try:
+            payload = json.loads(CAL_JSON_CACHE.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            return False
+        if not isinstance(payload, dict) or not isinstance(payload.get("events"), list):
+            return False
+        self._write_calendar_json(payload, cached=True)
+        return True
+
     def proxy_calendar(self):
+        if oauth_calendar_configured():
+            try:
+                payload = fetch_google_calendar_api()
+                if payload is not None:
+                    return self._write_calendar_json(payload)
+            except Exception as exc:  # noqa: BLE001
+                print(f"Calendar OAuth failed, falling back to iCal: {exc}", flush=True)
+                if self._cached_calendar_json():
+                    return
+
         ics_url = (load_secrets().get("icsUrl") or "").strip()
         if not ics_url:
             cached = CAL_CACHE.read_bytes() if CAL_CACHE.exists() else b""
@@ -1419,7 +1634,7 @@ if __name__ == "__main__":
     print(f"Admin PWA     -> http://127.0.0.1:{PORT}/admin/  (tunnel: /phone/)", flush=True)
     print(f"Health check  -> http://127.0.0.1:{PORT}/api/health", flush=True)
     print(f"Family API    -> http://127.0.0.1:{PORT}/api/family/state", flush=True)
-    print(f"Calendar ICS  -> http://127.0.0.1:{PORT}/api/calendar", flush=True)
+    print(f"Calendar API  -> http://127.0.0.1:{PORT}/api/calendar", flush=True)
     print(f"Root          -> {ROOT}", flush=True)
     try:
         server.serve_forever()
