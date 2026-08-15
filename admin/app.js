@@ -28,6 +28,8 @@
     adminFiles: [],
     adminFileId: "",
     adminFile: null,
+    browsePath: "",
+    browseListing: null,
   };
   let listPollTimer = null;
 
@@ -787,16 +789,46 @@
 
   function renderFileButtons() {
     const files = state.adminFiles || [];
-    if (!files.length) return `<p class="muted">Loading files…</p>`;
-    return files
-      .map(
-        (f) => `
+    const shortcuts = files.length
+      ? files
+          .map(
+            (f) => `
       <button type="button" class="btn secondary block file-open-btn${f.id === state.adminFileId ? " active" : ""}" data-open-file="${f.id}">
         ${escapeHtml(f.label)}
         <span class="muted">${f.exists ? escapeHtml(f.rel) : "not created yet"}</span>
       </button>`
-      )
+          )
+          .join("")
+      : `<p class="muted">Loading shortcuts…</p>`;
+    return `${shortcuts}${renderBrowseList()}`;
+  }
+
+  function renderBrowseList() {
+    const listing = state.browseListing;
+    if (!listing) return `<p class="muted" style="margin-top:0.75rem">Opening family-board-src…</p>`;
+    const pathLabel = listing.path ? `family-board-src / ${listing.path.replaceAll("/", " / ")}` : "family-board-src";
+    const up = listing.parent != null
+      ? `<button type="button" class="btn ghost block" data-browse-path="${escapeHtml(listing.parent)}">Up one folder</button>`
+      : "";
+    const entries = (listing.entries || [])
+      .map((entry) => {
+        if (entry.type === "dir") {
+          return `<button type="button" class="btn secondary block file-open-btn" data-browse-path="${escapeHtml(entry.path)}">📁 ${escapeHtml(entry.name)}</button>`;
+        }
+        const canOpen = entry.text !== false;
+        return `<button type="button" class="btn secondary block file-open-btn${state.adminFile?.path === entry.path ? " active" : ""}" data-open-browse="${escapeHtml(entry.path)}" ${canOpen ? "" : "disabled"}>
+          ${escapeHtml(entry.name)}
+          <span class="muted">${canOpen ? "text file" : "not editable"}</span>
+        </button>`;
+      })
       .join("");
+    return `
+      <div class="file-browser">
+        <h3>family-board-src</h3>
+        <p class="file-crumb muted">${escapeHtml(pathLabel)}</p>
+        ${up}
+        <div class="file-list">${entries || `<p class="muted">This folder is empty.</p>`}</div>
+      </div>`;
   }
 
   function renderFileEditor() {
@@ -805,11 +837,12 @@
     return `
       <form id="adminFileForm" class="file-editor-form">
         <h3>${escapeHtml(open.label)}</h3>
-        <p class="muted">${escapeHtml(open.hint)}</p>
+        <p class="muted">${escapeHtml(open.hint || open.path || "")}</p>
         <textarea id="adminFileText" class="file-editor" spellcheck="false" ${open.writable ? "" : "readonly"}>${escapeHtml(open.content)}</textarea>
         <div class="file-editor-actions">
           <button type="button" class="btn secondary block" id="copyFileBtn">Copy all</button>
           ${open.writable ? `<button type="submit" class="btn block">Save file</button>` : ""}
+          <button type="button" class="btn ghost block" id="closeFileBtn">Back to folder</button>
         </div>
       </form>`;
   }
@@ -827,6 +860,39 @@
         }
       });
     });
+    $$("[data-browse-path]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.adminFile = null;
+        state.adminFileId = "";
+        loadBrowse(btn.dataset.browsePath || "");
+      });
+    });
+    $$("[data-open-browse]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const filePath = btn.dataset.openBrowse;
+        try {
+          state.adminFile = await AdminAPI.readBrowseFile(state.token, filePath);
+          state.adminFileId = "";
+          renderTab();
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Could not open file");
+        }
+      });
+    });
+  }
+
+  async function loadBrowse(path) {
+    const host = $("#adminFileList");
+    if (!host) return;
+    try {
+      const data = await AdminAPI.browse(state.token, path ?? state.browsePath);
+      state.browsePath = data.path || "";
+      state.browseListing = data;
+      host.innerHTML = renderFileButtons();
+      bindFileOpenButtons();
+    } catch (err) {
+      host.innerHTML = `<p class="muted">${escapeHtml(apiErrorMessage(err) || "Could not open folder")}</p>`;
+    }
   }
 
   async function loadAdminFiles() {
@@ -835,11 +901,13 @@
     try {
       const data = await AdminAPI.listFiles(state.token);
       state.adminFiles = data.files || [];
-      host.innerHTML = renderFileButtons();
-      bindFileOpenButtons();
     } catch (err) {
-      host.innerHTML = `<p class="muted">${escapeHtml(apiErrorMessage(err) || "Could not list files")}</p>`;
+      state.adminFiles = [];
+      if (!state.browseListing) {
+        host.innerHTML = `<p class="muted">${escapeHtml(apiErrorMessage(err) || "Could not list files")}</p>`;
+      }
     }
+    await loadBrowse(state.browsePath);
   }
 
   function renderMore(d) {
@@ -1067,8 +1135,8 @@
         </button>
       </section>
       <section class="card">
-        <h2>Config files</h2>
-        <p class="muted">Open a file to copy or paste secrets yourself. Saves on this device (the Pi).</p>
+        <h2>family-board-src</h2>
+        <p class="muted">Open the project folder on the Pi. Copy, paste, and save files from here — including when you are away from home.</p>
         <div class="file-list" id="adminFileList">${renderFileButtons()}</div>
         ${renderFileEditor()}
       </section>
@@ -1637,13 +1705,23 @@
       }
     });
 
+    $("#closeFileBtn")?.addEventListener("click", () => {
+      state.adminFile = null;
+      state.adminFileId = "";
+      renderTab();
+    });
+
     $("#adminFileForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (!state.adminFileId) return;
+      const open = state.adminFile;
+      if (!open?.writable) return;
       const btn = e.currentTarget.querySelector('button[type="submit"]');
       try {
         if (btn) btn.disabled = true;
-        const saved = await AdminAPI.saveFile(state.token, state.adminFileId, $("#adminFileText")?.value || "");
+        const content = $("#adminFileText")?.value || "";
+        const saved = open.path
+          ? await AdminAPI.saveBrowseFile(state.token, open.path, content)
+          : await AdminAPI.saveFile(state.token, state.adminFileId, content);
         state.adminFile = saved;
         toast("File saved");
         await loadAdminFiles();

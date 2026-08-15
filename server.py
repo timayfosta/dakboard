@@ -55,7 +55,12 @@ CAL_CACHE = ROOT / "data" / "calendar-cache.ics"
 SECRETS = ROOT / "shared" / "secrets.local.js"
 SESSIONS: dict[str, float] = {}  # token -> expires_at
 SESSION_HOURS = 30 * 24
-ADMIN_FILE_MAX_BYTES = 256_000
+ADMIN_FILE_MAX_BYTES = 512_000
+BROWSE_SKIP_NAMES = frozenset({".git", "node_modules", "__pycache__", ".cursor", ".venv", "venv"})
+BROWSE_TEXT_SUFFIXES = frozenset({
+    ".js", ".css", ".html", ".md", ".json", ".py", ".txt", ".env", ".example",
+    ".yml", ".yaml", ".toml", ".sh", ".svg", ".csv", ".gitignore", ".webmanifest",
+})
 ADMIN_FILES: dict[str, dict[str, Any]] = {
     "secrets": {
         "rel": "shared/secrets.local.js",
@@ -134,6 +139,117 @@ def write_admin_file(file_id: str, content: str) -> dict[str, Any]:
     tmp.write_text(content.replace("\r\n", "\n"), encoding="utf-8")
     tmp.replace(path)
     return read_admin_file(file_id)
+
+
+def resolve_browse_path(rel: str) -> Path:
+    raw = (rel or "").replace("\\", "/").strip().lstrip("/")
+    if any(part == ".." for part in raw.split("/")):
+        raise ValueError("Invalid path")
+    root = ROOT.resolve()
+    path = (root / raw).resolve() if raw else root
+    if path != root and root not in path.parents:
+        raise ValueError("Invalid path")
+    parts = path.relative_to(root).parts if path != root else ()
+    if any(part in BROWSE_SKIP_NAMES for part in parts):
+        raise ValueError("That folder is hidden")
+    return path
+
+
+def browse_rel(path: Path) -> str:
+    root = ROOT.resolve()
+    if path == root:
+        return ""
+    return path.relative_to(root).as_posix()
+
+
+def is_text_file(path: Path) -> bool:
+    suffix = path.suffix.lower()
+    if suffix in BROWSE_TEXT_SUFFIXES:
+        return True
+    if suffix:
+        return False
+    try:
+        chunk = path.read_bytes()[:2048]
+    except OSError:
+        return False
+    if b"\x00" in chunk:
+        return False
+    try:
+        chunk.decode("utf-8")
+        return True
+    except UnicodeDecodeError:
+        return False
+
+
+def list_browse_dir(rel: str) -> dict[str, Any]:
+    path = resolve_browse_path(rel)
+    if not path.is_dir():
+        raise FileNotFoundError("Not a folder")
+    entries: list[dict[str, Any]] = []
+    for child in sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+        if child.name in BROWSE_SKIP_NAMES:
+            continue
+        if child.name.startswith(".") and child.name not in {".gitignore", ".env"}:
+            continue
+        item: dict[str, Any] = {
+            "name": child.name,
+            "path": browse_rel(child),
+            "type": "dir" if child.is_dir() else "file",
+        }
+        if child.is_file():
+            try:
+                item["size"] = child.stat().st_size
+            except OSError:
+                item["size"] = 0
+            item["text"] = is_text_file(child)
+        entries.append(item)
+    parent = browse_rel(path.parent) if path != ROOT.resolve() else None
+    return {
+        "root": "family-board-src",
+        "path": browse_rel(path),
+        "parent": parent,
+        "entries": entries,
+    }
+
+
+def read_browse_file(rel: str) -> dict[str, Any]:
+    path = resolve_browse_path(rel)
+    if not path.is_file():
+        raise FileNotFoundError("File not found")
+    rel_path = browse_rel(path)
+    if not is_text_file(path):
+        return {
+            "path": rel_path,
+            "label": path.name,
+            "writable": False,
+            "binary": True,
+            "content": "",
+            "hint": "This file is not text, so it cannot be edited here.",
+        }
+    text = path.read_text(encoding="utf-8")
+    return {
+        "path": rel_path,
+        "label": path.name,
+        "writable": True,
+        "binary": False,
+        "content": text,
+        "hint": f"family-board-src/{rel_path}" if rel_path else path.name,
+    }
+
+
+def write_browse_file(rel: str, content: str) -> dict[str, Any]:
+    path = resolve_browse_path(rel)
+    if path.exists() and path.is_dir():
+        raise ValueError("That path is a folder")
+    if path.exists() and not is_text_file(path):
+        raise PermissionError("This file is not text")
+    if len(content.encode("utf-8")) > ADMIN_FILE_MAX_BYTES:
+        raise ValueError("File is too large")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(content.replace("\r\n", "\n"), encoding="utf-8")
+    tmp.replace(path)
+    return read_browse_file(rel)
 
 
 def load_secrets() -> dict[str, str]:
@@ -363,6 +479,28 @@ class Handler(SimpleHTTPRequestHandler):
             return self.screensaver_manifest()
         if path == "/api/screensaver/photo":
             return self.screensaver_photo(parsed.query)
+        if path == "/api/admin/browse":
+            if not require_admin(self):
+                return
+            qs = urllib.parse.parse_qs(parsed.query)
+            rel = (qs.get("path") or [""])[0]
+            try:
+                return send_json(self, list_browse_dir(rel))
+            except ValueError as exc:
+                return send_json(self, {"error": str(exc)}, 400)
+            except FileNotFoundError:
+                return send_json(self, {"error": "Folder not found"}, 404)
+        if path == "/api/admin/browse/file":
+            if not require_admin(self):
+                return
+            qs = urllib.parse.parse_qs(parsed.query)
+            rel = (qs.get("path") or [""])[0]
+            try:
+                return send_json(self, read_browse_file(rel))
+            except ValueError as exc:
+                return send_json(self, {"error": str(exc)}, 400)
+            except FileNotFoundError:
+                return send_json(self, {"error": "File not found"}, 404)
         if path == "/api/admin/files":
             if not require_admin(self):
                 return
@@ -479,6 +617,18 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.admin_tunnel_start()
+        if path == "/api/admin/browse/file":
+            if not require_admin(self):
+                return
+            try:
+                saved = write_browse_file(str(payload.get("path") or ""), str(payload.get("content") or ""))
+            except FileNotFoundError:
+                return send_json(self, {"error": "File not found"}, 404)
+            except PermissionError as exc:
+                return send_json(self, {"error": str(exc)}, 403)
+            except ValueError as exc:
+                return send_json(self, {"error": str(exc)}, 400)
+            return send_json(self, saved)
         if path.startswith("/api/admin/files/"):
             if not require_admin(self):
                 return

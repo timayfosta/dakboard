@@ -54,6 +54,12 @@ const API = {
   getFile: (token, id) => API.request(`/api/admin/files/${id}`, { token }),
   saveFile: (token, id, content) =>
     API.request(`/api/admin/files/${id}`, { method: "POST", token, body: { content } }),
+  browse: (token, path) =>
+    API.request(`/api/admin/browse?path=${encodeURIComponent(path || "")}`, { token }),
+  readBrowseFile: (token, path) =>
+    API.request(`/api/admin/browse/file?path=${encodeURIComponent(path || "")}`, { token }),
+  saveBrowseFile: (token, path, content) =>
+    API.request("/api/admin/browse/file", { method: "POST", token, body: { path, content } }),
 };
 
 window.AdminAPI = API;
