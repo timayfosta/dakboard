@@ -8,6 +8,10 @@
     location.replace("/phone/index.html" + location.search + location.hash);
   })();
 
+  ["gesturestart", "gesturechange", "gestureend"].forEach((type) => {
+    document.addEventListener(type, (event) => event.preventDefault());
+  });
+
   const TOKEN_KEY = "family-admin-token";
   const THEME_KEY = "family-admin-theme";
   const REQUIRED_API_VERSION = 2;

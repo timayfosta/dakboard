@@ -91,6 +91,7 @@ html, body {
   font-weight: 700;
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
+  touch-action: manipulation;
 }
 
 button, input, select, textarea {
