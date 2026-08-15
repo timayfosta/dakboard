@@ -204,7 +204,22 @@ class Handler(SimpleHTTPRequestHandler):
             return
         self.send_error(404)
 
+    def _public_admin_redirect(self) -> bool:
+        """Send the public hostname to /phone/ — Cloudflare blocks /admin/*."""
+        if not self._is_public_admin_host():
+            return False
+        path = urllib.parse.urlparse(self.path).path
+        if path in ("/", "/index.html", "/admin", "/admin/", "/admin/index.html"):
+            self.send_response(302)
+            self.send_header("Location", "/phone/index.html")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return True
+        return False
+
     def do_GET(self):
+        if self._public_admin_redirect():
+            return
         self._rewrite_phone_to_admin()
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"

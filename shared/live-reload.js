@@ -23,7 +23,8 @@
       }
 
       const bootChanged = prev !== health.bootId;
-      if (bootChanged || sawDown) {
+      // Do not reload just because health flickered (Cloudflare / PWA). Only reload on a new server boot.
+      if (bootChanged) {
         sessionStorage.setItem(BOOT_KEY, health.bootId);
         sawDown = false;
         try {
@@ -44,6 +45,10 @@
 
   function start() {
     if (timer) return;
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
+    if (standalone) return;
     tick();
     timer = setInterval(tick, POLL_MS);
     document.addEventListener("visibilitychange", () => {

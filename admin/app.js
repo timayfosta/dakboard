@@ -1,4 +1,13 @@
 (() => {
+  (function bounceBlockedAdminPath() {
+    const host = location.hostname;
+    const path = location.pathname;
+    if (!path.startsWith("/admin")) return;
+    if (host === "127.0.0.1" || host === "localhost" || host.endsWith(".local")) return;
+    if (/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return;
+    location.replace("/phone/index.html" + location.search + location.hash);
+  })();
+
   const TOKEN_KEY = "family-admin-token";
   const THEME_KEY = "family-admin-theme";
   const REQUIRED_API_VERSION = 2;
@@ -91,8 +100,20 @@
       await refresh();
       syncListPolling();
     } catch (err) {
-      setAuthed(false);
-      toast(apiErrorMessage(err) || "Can't reach server");
+      setAuthed(true);
+      state.serverOk = false;
+      state.serverHint = apiErrorMessage(err) || "Can't reach Family Board. Check the Pi server.";
+      state.data = state.data || {
+        kids: [],
+        chores: [],
+        lists: { grocery: [], reminders: [] },
+        rewards: [],
+        balances: {},
+        today: "",
+        settings: {},
+      };
+      render();
+      toast(state.serverHint);
     }
   }
 
@@ -1560,7 +1581,14 @@
   });
 
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js?v=13").then((reg) => {
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((reg) => {
+        if (location.pathname.startsWith("/phone") && !String(reg.scope).includes("/phone")) {
+          reg.unregister();
+        }
+      });
+    }).catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=14", { scope: "./" }).then((reg) => {
       reg.update();
     }).catch(() => {});
   }
