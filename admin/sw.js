@@ -1,4 +1,4 @@
-const CACHE = "family-admin-v11";
+const CACHE = "family-admin-v13";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -13,7 +13,16 @@ self.addEventListener("activate", (event) => {
 });
 
 function inAdminScope(pathname) {
-  return pathname.startsWith("/admin/") || pathname.startsWith("/phone/");
+  if (pathname.startsWith("/admin/") || pathname.startsWith("/phone/")) return true;
+  return (
+    pathname === "/" ||
+    pathname === "/index.html" ||
+    pathname === "/api.js" ||
+    pathname === "/app.js" ||
+    pathname === "/admin.css" ||
+    pathname === "/sw.js" ||
+    pathname.startsWith("/icons/")
+  );
 }
 
 self.addEventListener("fetch", (event) => {

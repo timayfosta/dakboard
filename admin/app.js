@@ -1458,7 +1458,7 @@
           await fillDeployMeta();
           const tun = res?.boot?.tunnel || res?.services?.tunnel || {};
           if (tun.active === "active") {
-            toast("Tunnel is running — try family.fcchurchofgod.com/phone/index.html");
+            toast("Tunnel is running — try https://family.fcchurchofgod.com/");
             if (statusEl) statusEl.textContent = "Tunnel running";
           } else {
             const detail = res?.error || res?.stdout || "Tunnel did not stay running";
@@ -1560,7 +1560,7 @@
   });
 
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js?v=12").then((reg) => {
+    navigator.serviceWorker.register("sw.js?v=13").then((reg) => {
       reg.update();
     }).catch(() => {});
   }

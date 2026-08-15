@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import ipaddress
 import json
 import mimetypes
 import re
@@ -135,18 +136,51 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
+    def _request_host(self) -> str:
+        return (self.headers.get("Host") or "").split(":")[0].strip().lower()
+
+    def _is_public_admin_host(self) -> bool:
+        """True for the Cloudflare hostname — LAN/localhost keep the screen picker at /."""
+        host = self._request_host()
+        if not host or host in {"127.0.0.1", "localhost", "::1"}:
+            return False
+        if host.endswith(".local"):
+            return False
+        try:
+            ip = ipaddress.ip_address(host)
+            return not (ip.is_private or ip.is_loopback or ip.is_link_local)
+        except ValueError:
+            return True
+
     def _rewrite_phone_to_admin(self) -> None:
-        """Map /phone/* to admin files — Cloudflare quick tunnels often block /admin/* paths."""
+        """Map /phone/* and public / to admin — Cloudflare often blocks /admin/* paths."""
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         query = ("?" + parsed.query) if parsed.query else ""
         # Serve index directly — avoids 301 redirect loops with Cloudflare edge (trailing slash)
-        if path in ("/phone", "/phone/"):
+        if path in ("/phone", "/phone/", "/admin", "/admin/"):
             self.path = f"/admin/index.html{query}"
             return
         if path.startswith("/phone/"):
             suffix = path[len("/phone") :]
             self.path = f"/admin{suffix}{query}"
+            return
+
+        if not self._is_public_admin_host():
+            return
+        if path in ("/", "/index.html"):
+            self.path = f"/admin/index.html{query}"
+            return
+        root_admin = {
+            "/api.js",
+            "/app.js",
+            "/admin.css",
+            "/fonts.css",
+            "/manifest.webmanifest",
+            "/sw.js",
+        }
+        if path in root_admin or path.startswith("/icons/"):
+            self.path = f"/admin{path}{query}"
 
     def end_headers(self):
         if self.path.startswith("/api/"):
