@@ -44,6 +44,8 @@ if [[ -f /etc/systemd/system/family-board-tunnel.service ]]; then
   echo "unit: family-board-tunnel"
   echo "enabled: $(systemctl is-enabled family-board-tunnel 2>/dev/null || echo missing)"
   echo "active:  $(systemctl is-active family-board-tunnel 2>/dev/null || echo inactive)"
+  echo "recent logs:"
+  journalctl -u family-board-tunnel -n 12 --no-pager 2>/dev/null || true
 elif [[ -f /etc/systemd/system/cloudflared.service || -f /lib/systemd/system/cloudflared.service ]]; then
   echo "unit: cloudflared"
   echo "enabled: $(systemctl is-enabled cloudflared 2>/dev/null || echo missing)"

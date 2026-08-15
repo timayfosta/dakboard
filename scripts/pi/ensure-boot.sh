@@ -108,53 +108,43 @@ write_clean_tunnel() {
   fi
 
   mkdir -p /etc/cloudflared
-
-  if [[ -n "${config}" ]]; then
-    cat > /etc/systemd/system/family-board-tunnel.service <<EOF
-[Unit]
-Description=Family Board Cloudflare tunnel
-After=network-online.target
-Wants=network-online.target
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-User=${TARGET_USER}
-ExecStart=${bin} --no-autoupdate tunnel --config ${config} run
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  elif [[ -n "${token}" ]]; then
+  if [[ -n "${token}" ]]; then
     umask 077
     printf 'TUNNEL_TOKEN=%s\n' "${token}" >/etc/cloudflared/env
     chmod 600 /etc/cloudflared/env
-    cat > /etc/systemd/system/family-board-tunnel.service <<EOF
-[Unit]
-Description=Family Board Cloudflare tunnel
-After=network-online.target
-Wants=network-online.target
-StartLimitIntervalSec=0
+  fi
 
-[Service]
-Type=simple
-EnvironmentFile=/etc/cloudflared/env
-ExecStart=${bin} --no-autoupdate tunnel run
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  else
+  if [[ -z "${token}" && -z "${config}" ]]; then
     echo "No Cloudflare config/token found — cannot create tunnel unit"
     return 1
   fi
 
+  install -m 755 "${ROOT}/scripts/pi/run-tunnel.sh" /usr/local/sbin/family-board-tunnel-run
+  # Prefer the Zero Trust token. An old local config.yml can stay "active"
+  # while Cloudflare still shows Down / 1033.
+  cat > /etc/systemd/system/family-board-tunnel.service <<EOF
+[Unit]
+Description=Family Board Cloudflare tunnel
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/cloudflared/env
+ExecStart=/usr/local/sbin/family-board-tunnel-run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
   sed -i 's/\r$//' /etc/systemd/system/family-board-tunnel.service
-  echo "Wrote clean family-board-tunnel.service"
+  if [[ -n "${token}" ]]; then
+    echo "Wrote family-board-tunnel.service (Zero Trust token)"
+  else
+    echo "Wrote family-board-tunnel.service (local config ${config})"
+  fi
   return 0
 }
 
