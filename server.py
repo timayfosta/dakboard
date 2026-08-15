@@ -63,7 +63,10 @@ _oauth_lock = threading.Lock()
 _oauth_access = {"token": "", "expires_at": 0.0}
 _oauth_colors = {"event": {}, "fetched_at": 0.0}
 SESSIONS: dict[str, float] = {}  # token -> expires_at
+FILE_SESSIONS: dict[str, float] = {}  # files token -> expires_at
 SESSION_HOURS = 30 * 24
+FILE_SESSION_HOURS = 8
+FILES_PASSWORD_DEFAULT = "fifimister3"
 ADMIN_FILE_MAX_BYTES = 512_000
 BROWSE_SKIP_NAMES = frozenset({".git", "node_modules", "__pycache__", ".cursor", ".venv", "venv"})
 BROWSE_TEXT_SUFFIXES = frozenset({
@@ -272,6 +275,7 @@ def load_secrets() -> dict[str, str]:
         "googleClientId",
         "googleClientSecret",
         "googleRefreshToken",
+        "filesPassword",
         "deployWebhookSecret",
         "deployBranch",
     ):
@@ -511,6 +515,34 @@ def require_admin(handler: SimpleHTTPRequestHandler) -> bool:
     return True
 
 
+def files_password() -> str:
+    return (load_secrets().get("filesPassword") or FILES_PASSWORD_DEFAULT).strip()
+
+
+def passwords_match(given: str, expected: str) -> bool:
+    left = (given or "").encode("utf-8")
+    right = (expected or "").encode("utf-8")
+    if len(left) != len(right):
+        hmac.compare_digest(right, right)
+        return False
+    return hmac.compare_digest(left, right)
+
+
+def require_files_access(handler: SimpleHTTPRequestHandler) -> bool:
+    if not require_admin(handler):
+        return False
+    token = (handler.headers.get("X-Files-Token") or "").strip()
+    now = time.time()
+    expired = [key for key, exp in FILE_SESSIONS.items() if exp <= now]
+    for key in expired:
+        FILE_SESSIONS.pop(key, None)
+    if token and FILE_SESSIONS.get(token, 0) > now:
+        FILE_SESSIONS[token] = now + FILE_SESSION_HOURS * 3600
+        return True
+    send_json(handler, {"error": "File access locked"}, 403)
+    return False
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -664,7 +696,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/screensaver/photo":
             return self.screensaver_photo(parsed.query)
         if path == "/api/admin/browse":
-            if not require_admin(self):
+            if not require_files_access(self):
                 return
             qs = urllib.parse.parse_qs(parsed.query)
             rel = (qs.get("path") or [""])[0]
@@ -675,7 +707,7 @@ class Handler(SimpleHTTPRequestHandler):
             except FileNotFoundError:
                 return send_json(self, {"error": "Folder not found"}, 404)
         if path == "/api/admin/browse/file":
-            if not require_admin(self):
+            if not require_files_access(self):
                 return
             qs = urllib.parse.parse_qs(parsed.query)
             rel = (qs.get("path") or [""])[0]
@@ -686,7 +718,7 @@ class Handler(SimpleHTTPRequestHandler):
             except FileNotFoundError:
                 return send_json(self, {"error": "File not found"}, 404)
         if path == "/api/admin/files":
-            if not require_admin(self):
+            if not require_files_access(self):
                 return
             return send_json(
                 self,
@@ -705,7 +737,7 @@ class Handler(SimpleHTTPRequestHandler):
                 },
             )
         if path.startswith("/api/admin/files/"):
-            if not require_admin(self):
+            if not require_files_access(self):
                 return
             file_id = path.rsplit("/", 1)[-1]
             try:
@@ -801,8 +833,12 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.admin_tunnel_start()
-        if path == "/api/admin/browse/file":
+        if path == "/api/admin/files/unlock":
             if not require_admin(self):
+                return
+            return self.files_unlock(payload)
+        if path == "/api/admin/browse/file":
+            if not require_files_access(self):
                 return
             try:
                 saved = write_browse_file(str(payload.get("path") or ""), str(payload.get("content") or ""))
@@ -814,7 +850,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return send_json(self, {"error": str(exc)}, 400)
             return send_json(self, saved)
         if path.startswith("/api/admin/files/"):
-            if not require_admin(self):
+            if not require_files_access(self):
                 return
             file_id = path.rsplit("/", 1)[-1]
             try:
@@ -907,6 +943,13 @@ class Handler(SimpleHTTPRequestHandler):
         token = auth.replace("Bearer", "").strip()
         SESSIONS.pop(token, None)
         return send_json(self, {"ok": True})
+
+    def files_unlock(self, payload: dict):
+        if not passwords_match(str(payload.get("password") or ""), files_password()):
+            return send_json(self, {"error": "Wrong password"}, 403)
+        token = secrets.token_urlsafe(24)
+        FILE_SESSIONS[token] = time.time() + FILE_SESSION_HOURS * 3600
+        return send_json(self, {"ok": True, "filesToken": token})
 
     # ---- calendar ----
     def _is_ics_payload(self, data: bytes) -> bool:

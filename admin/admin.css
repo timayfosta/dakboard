@@ -1103,6 +1103,12 @@ button.item {
   margin-top: 0.65rem;
 }
 
+.files-unlock {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
 .file-browser {
   margin-top: 1rem;
   padding-top: 0.85rem;

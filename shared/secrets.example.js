@@ -9,4 +9,7 @@ window.FAMILY_SECRETS = {
   googleClientId: "YOUR_CLIENT_ID.apps.googleusercontent.com",
   googleClientSecret: "YOUR_CLIENT_SECRET",
   googleRefreshToken: "1//YOUR_REFRESH_TOKEN",
+
+  /* Optional extra password for the admin file browser */
+  filesPassword: "YOUR_FILES_PASSWORD",
 };

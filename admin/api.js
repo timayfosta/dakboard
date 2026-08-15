@@ -1,7 +1,8 @@
 const API = {
-  async request(path, { method = "GET", body, token } = {}) {
+  async request(path, { method = "GET", body, token, filesToken } = {}) {
     const headers = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
+    if (filesToken) headers["X-Files-Token"] = filesToken;
     const res = await fetch(path, {
       method,
       headers,
@@ -50,16 +51,18 @@ const API = {
   deployStatus: (token) => API.request("/api/admin/deploy/status", { token }),
   rebootPi: (token) => API.request("/api/admin/reboot", { method: "POST", token, body: {} }),
   startTunnel: (token) => API.request("/api/admin/tunnel-start", { method: "POST", token, body: {} }),
-  listFiles: (token) => API.request("/api/admin/files", { token }),
-  getFile: (token, id) => API.request(`/api/admin/files/${id}`, { token }),
-  saveFile: (token, id, content) =>
-    API.request(`/api/admin/files/${id}`, { method: "POST", token, body: { content } }),
-  browse: (token, path) =>
-    API.request(`/api/admin/browse?path=${encodeURIComponent(path || "")}`, { token }),
-  readBrowseFile: (token, path) =>
-    API.request(`/api/admin/browse/file?path=${encodeURIComponent(path || "")}`, { token }),
-  saveBrowseFile: (token, path, content) =>
-    API.request("/api/admin/browse/file", { method: "POST", token, body: { path, content } }),
+  unlockFiles: (token, password) =>
+    API.request("/api/admin/files/unlock", { method: "POST", token, body: { password } }),
+  listFiles: (token, filesToken) => API.request("/api/admin/files", { token, filesToken }),
+  getFile: (token, id, filesToken) => API.request(`/api/admin/files/${id}`, { token, filesToken }),
+  saveFile: (token, id, content, filesToken) =>
+    API.request(`/api/admin/files/${id}`, { method: "POST", token, body: { content }, filesToken }),
+  browse: (token, path, filesToken) =>
+    API.request(`/api/admin/browse?path=${encodeURIComponent(path || "")}`, { token, filesToken }),
+  readBrowseFile: (token, path, filesToken) =>
+    API.request(`/api/admin/browse/file?path=${encodeURIComponent(path || "")}`, { token, filesToken }),
+  saveBrowseFile: (token, path, content, filesToken) =>
+    API.request("/api/admin/browse/file", { method: "POST", token, body: { path, content }, filesToken }),
 };
 
 window.AdminAPI = API;

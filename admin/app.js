@@ -14,6 +14,7 @@
 
   const TOKEN_KEY = "family-admin-token";
   const THEME_KEY = "family-admin-theme";
+  const FILES_TOKEN_KEY = "family-admin-files-token";
   const REQUIRED_API_VERSION = 3;
   const state = {
     token: localStorage.getItem(TOKEN_KEY) || "",
@@ -30,6 +31,9 @@
     adminFile: null,
     browsePath: "",
     browseListing: null,
+    filesToken: sessionStorage.getItem(FILES_TOKEN_KEY) || "",
+    filesUnlocked: false,
+    filesUnlockError: "",
   };
   let listPollTimer = null;
 
@@ -852,7 +856,7 @@
       btn.addEventListener("click", async () => {
         const id = btn.dataset.openFile;
         try {
-          state.adminFile = await AdminAPI.getFile(state.token, id);
+          state.adminFile = await AdminAPI.getFile(state.token, id, state.filesToken);
           state.adminFileId = id;
           renderTab();
         } catch (err) {
@@ -871,7 +875,7 @@
       btn.addEventListener("click", async () => {
         const filePath = btn.dataset.openBrowse;
         try {
-          state.adminFile = await AdminAPI.readBrowseFile(state.token, filePath);
+          state.adminFile = await AdminAPI.readBrowseFile(state.token, filePath, state.filesToken);
           state.adminFileId = "";
           renderTab();
         } catch (err) {
@@ -885,7 +889,7 @@
     const host = $("#adminFileList");
     if (!host) return;
     try {
-      const data = await AdminAPI.browse(state.token, path ?? state.browsePath);
+      const data = await AdminAPI.browse(state.token, path ?? state.browsePath, state.filesToken);
       state.browsePath = data.path || "";
       state.browseListing = data;
       host.innerHTML = renderFileButtons();
@@ -895,17 +899,38 @@
     }
   }
 
-  async function loadAdminFiles() {
-    const host = $("#adminFileList");
-    if (!host) return;
+  function lockFiles() {
+    state.filesUnlocked = false;
+    state.filesToken = "";
+    state.adminFiles = [];
+    state.adminFile = null;
+    state.adminFileId = "";
+    state.browseListing = null;
     try {
-      const data = await AdminAPI.listFiles(state.token);
+      sessionStorage.removeItem(FILES_TOKEN_KEY);
+    } catch {}
+  }
+
+  async function loadAdminFiles() {
+    if (!state.filesToken) {
+      lockFiles();
+      return;
+    }
+    try {
+      const data = await AdminAPI.listFiles(state.token, state.filesToken);
       state.adminFiles = data.files || [];
+      state.filesUnlocked = true;
     } catch (err) {
-      state.adminFiles = [];
-      if (!state.browseListing) {
-        host.innerHTML = `<p class="muted">${escapeHtml(apiErrorMessage(err) || "Could not list files")}</p>`;
+      if (String(err.message || "").includes("locked") || String(err.message || "").includes("403")) {
+        lockFiles();
+        renderTab();
+        return;
       }
+      state.adminFiles = [];
+    }
+    if (!$("#adminFileList")) {
+      renderTab();
+      return;
     }
     await loadBrowse(state.browsePath);
   }
@@ -1136,9 +1161,24 @@
       </section>
       <section class="card">
         <h2>family-board-src</h2>
+        ${
+          state.filesUnlocked
+            ? `
         <p class="muted">Open the project folder on the Pi. Copy, paste, and save files from here — including when you are away from home.</p>
         <div class="file-list" id="adminFileList">${renderFileButtons()}</div>
         ${renderFileEditor()}
+        <button type="button" class="btn ghost block" id="lockFilesBtn" style="margin-top:0.75rem">Lock files</button>`
+            : `
+        <p class="muted">File access is hidden until you unlock it.</p>
+        <form id="filesUnlockForm" class="files-unlock">
+          <label class="field">
+            <span>Password</span>
+            <input type="password" id="filesUnlockPassword" name="filesPassword" autocomplete="off" />
+          </label>
+          ${state.filesUnlockError ? `<p class="muted">${escapeHtml(state.filesUnlockError)}</p>` : ""}
+          <button type="submit" class="btn block">Unlock files</button>
+        </form>`
+        }
       </section>
       <section class="card">
         <h2>Display links</h2>
@@ -1693,7 +1733,37 @@
 
     const deployBtn = $("#deployServerBtn");
     fillDeployMeta();
-    loadAdminFiles();
+    if (state.filesToken) loadAdminFiles();
+
+    $("#filesUnlockForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const password = $("#filesUnlockPassword")?.value || "";
+      const btn = e.currentTarget.querySelector('button[type="submit"]');
+      try {
+        if (btn) btn.disabled = true;
+        const data = await AdminAPI.unlockFiles(state.token, password);
+        state.filesToken = data.filesToken || "";
+        state.filesUnlocked = true;
+        state.filesUnlockError = "";
+        try {
+          sessionStorage.setItem(FILES_TOKEN_KEY, state.filesToken);
+        } catch {}
+        renderTab();
+      } catch (err) {
+        state.filesUnlockError = apiErrorMessage(err) || "Wrong password";
+        toast(state.filesUnlockError);
+        renderTab();
+        const input = $("#filesUnlockPassword");
+        if (input) input.focus();
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
+    $("#lockFilesBtn")?.addEventListener("click", () => {
+      lockFiles();
+      renderTab();
+    });
 
     $("#copyFileBtn")?.addEventListener("click", async () => {
       const text = $("#adminFileText")?.value || "";
@@ -1720,8 +1790,8 @@
         if (btn) btn.disabled = true;
         const content = $("#adminFileText")?.value || "";
         const saved = open.path
-          ? await AdminAPI.saveBrowseFile(state.token, open.path, content)
-          : await AdminAPI.saveFile(state.token, state.adminFileId, content);
+          ? await AdminAPI.saveBrowseFile(state.token, open.path, content, state.filesToken)
+          : await AdminAPI.saveFile(state.token, state.adminFileId, content, state.filesToken);
         state.adminFile = saved;
         toast("File saved");
         await loadAdminFiles();
