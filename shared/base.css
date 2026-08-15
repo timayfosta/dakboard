@@ -119,6 +119,37 @@ body.kiosk {
   cursor: none;
 }
 
+/* Don't highlight/select text while swiping the TV. Inputs can still be edited. */
+body.kiosk,
+body.tv-stage {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.kiosk *,
+body.tv-stage * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+body.kiosk input,
+body.kiosk textarea,
+body.kiosk [contenteditable],
+body.tv-stage input,
+body.tv-stage textarea,
+body.tv-stage [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+body.kiosk ::selection,
+body.tv-stage ::selection {
+  background: transparent;
+}
+
 /* Mouse testing override: ?kiosk=1&mouse=1 */
 body.kiosk.kiosk-mouse,
 body.kiosk.kiosk-mouse * {
@@ -143,7 +174,7 @@ body.kiosk.kiosk-mouse .kiosk-admin-edge {
   height: 14px;
 }
 
-/* Kiosk nav — hidden drawer, swipe up from bottom edge to reveal */
+/* Kiosk nav — hidden drawer, swipe up anywhere to reveal */
 .kiosk-nav-drawer {
   position: fixed;
   left: 0;

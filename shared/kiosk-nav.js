@@ -1,4 +1,5 @@
 /* Touchscreen / mouse kiosk navigation — swipe drawer, rotate loop, admin swipe-down */
+/* Swipe up anywhere → screen menu. Swipe down anywhere → admin. */
 (function () {
   const params = new URLSearchParams(location.search);
   if (!params.has("kiosk")) return;
@@ -45,6 +46,8 @@
   let pointerFromTop = false;
   let pointerFromLeft = false;
   let pointerFromRight = false;
+  let pointerOnCanvas = false;
+  let pointerStartTarget = null;
   let pointerActive = false;
   let pointerId = null;
   let rotateTimer = null;
@@ -121,6 +124,29 @@
     );
   }
 
+  function scrollableAncestor(el) {
+    let node = el;
+    while (node && node !== document.body && node !== document.documentElement) {
+      if (node.nodeType === 1) {
+        const style = window.getComputedStyle(node);
+        const oy = style.overflowY;
+        if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight + 2) {
+          return node;
+        }
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  function canScrollFurther(el, dy) {
+    const scroller = scrollableAncestor(el);
+    if (!scroller) return false;
+    const max = scroller.scrollHeight - scroller.clientHeight;
+    if (dy < 0) return scroller.scrollTop < max - 2;
+    return scroller.scrollTop > 2;
+  }
+
   function goToId(id) {
     const target = allScreens.find((s) => s.id === id);
     if (!target || target.id === currentScreen.id) return;
@@ -187,6 +213,8 @@
     pointerFromTop = false;
     pointerFromLeft = false;
     pointerFromRight = false;
+    pointerOnCanvas = false;
+    pointerStartTarget = null;
     pointerActive = false;
     pointerId = null;
   }
@@ -268,15 +296,17 @@
     clearTimeout(hideTimer);
   }
 
-  function onPointerStart(clientX, clientY, id) {
+  function onPointerStart(clientX, clientY, id, target) {
     pointerActive = true;
     pointerId = id;
     pointerStartX = clientX;
     pointerStartY = clientY;
+    pointerStartTarget = target || null;
     pointerFromBottom = inBottomZone(clientX, clientY);
     pointerFromTop = inTopZone(clientX, clientY);
     pointerFromLeft = inLeftZone(clientX);
     pointerFromRight = inRightZone(clientX);
+    pointerOnCanvas = !!target?.closest?.("canvas, #wbCanvas");
   }
 
   function onPointerEnd(clientX, clientY) {
@@ -284,29 +314,30 @@
 
     const dx = clientX - pointerStartX;
     const dy = clientY - pointerStartY;
-    const fromBottom = pointerFromBottom;
     const fromTop = pointerFromTop;
     const fromLeft = pointerFromLeft;
     const fromRight = pointerFromRight;
+    const onCanvas = pointerOnCanvas;
+    const startTarget = pointerStartTarget;
     const drawerOpen = drawer.classList.contains("open");
     resetPointer();
 
     bumpPause();
 
-    // Swipe down from top edge → admin
-    if (fromTop && dy > swipeThreshold && Math.abs(dy) > Math.abs(dx)) {
+    const isVertical = Math.abs(dy) > swipeThreshold && Math.abs(dy) > Math.abs(dx);
+    const drawingOnBoard = isWhiteboardPage && (onCanvas || window.Whiteboard?.isDrawing?.());
+    const scrollingList = canScrollFurther(startTarget, dy);
+
+    if (isVertical && !scrollingList && !(drawingOnBoard && !fromTop && !fromBottom)) {
+      if (dy < 0) {
+        showDrawer();
+        return;
+      }
+      if (drawerOpen) {
+        hideDrawer();
+        return;
+      }
       openAdmin();
-      return;
-    }
-
-    // Swipe up from bottom → screen nav drawer
-    if (fromBottom && dy < -swipeThreshold && Math.abs(dy) > Math.abs(dx)) {
-      showDrawer();
-      return;
-    }
-
-    if (drawerOpen && dy > swipeThreshold && Math.abs(dy) > Math.abs(dx)) {
-      hideDrawer();
       return;
     }
 
@@ -330,7 +361,7 @@
       return;
     }
 
-    onPointerStart(e.clientX, e.clientY, e.pointerId);
+    onPointerStart(e.clientX, e.clientY, e.pointerId, e.target);
 
     // Claim whiteboard edge swipes before the canvas starts a stroke.
     // Leave the toolbar alone so its buttons still receive taps.
@@ -354,6 +385,15 @@
   document.addEventListener("pointerdown", onPointerDown, pointerOpts);
   document.addEventListener("pointerup", onPointerUp, pointerOpts);
   document.addEventListener("pointercancel", resetPointer, pointerOpts);
+
+  document.addEventListener(
+    "selectstart",
+    (e) => {
+      if (e.target.closest?.("input, textarea, [contenteditable]")) return;
+      e.preventDefault();
+    },
+    true
+  );
 
   if (mouseMode) {
     document.addEventListener("dblclick", (e) => {
