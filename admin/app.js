@@ -14,10 +14,12 @@
 
   const TOKEN_KEY = "family-admin-token";
   const THEME_KEY = "family-admin-theme";
-  const REQUIRED_API_VERSION = 2;
+  const REQUIRED_API_VERSION = 3;
   const state = {
     token: localStorage.getItem(TOKEN_KEY) || "",
     tab: "lists",
+    listFolder: "grocery",
+    listCompletedOpen: false,
     data: null,
     deferredPrompt: null,
     listsFp: "",
@@ -584,30 +586,94 @@
       </section>`;
   }
 
+  function formatCompletedAt(ms) {
+    const t = Number(ms);
+    if (!t) return "Completed";
+    const d = new Date(t);
+    if (Number.isNaN(d.getTime())) return "Completed";
+    const now = new Date();
+    const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) return `Today · ${time}`;
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) return `Yesterday · ${time}`;
+    return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} · ${time}`;
+  }
+
   function renderLists(d) {
-    const block = (name, title) => `
-      <section class="card">
-        <h2>${title}</h2>
-        <form data-list-add="${name}" class="row" style="margin-bottom:0.65rem">
-          <input name="text" placeholder="Add item" required class="list-add-input" />
-          <button class="btn" type="submit">Add</button>
-        </form>
-        <div class="list">
-          ${(d.lists?.[name] || [])
-            .filter((item) => !item.done)
-            .map(
-              (item) => `
-            <button class="item" data-list-toggle="${name}" data-id="${item.id}" style="text-align:left;width:100%;cursor:pointer">
-              <div class="row">
-                <div class="title">⬜️ ${item.text}</div>
-                <span class="muted" style="flex-shrink:0">Tap to clear</span>
-              </div>
-            </button>`
-            )
-            .join("") || `<p class="muted">No items — add above</p>`}
-        </div>
-      </section>`;
-    return block("grocery", "Groceries") + block("reminders", "Reminders");
+    const folders = [
+      { id: "grocery", title: "Groceries", placeholder: "Add grocery" },
+      { id: "reminders", title: "Reminders", placeholder: "Add reminder" },
+    ];
+    const name = folders.some((f) => f.id === state.listFolder) ? state.listFolder : "grocery";
+    const folder = folders.find((f) => f.id === name);
+    const items = d.lists?.[name] || [];
+    const open = items.filter((item) => !item.done);
+    const done = items
+      .filter((item) => item.done)
+      .slice()
+      .sort((a, b) => Number(b.completedAt || 0) - Number(a.completedAt || 0));
+    const tabs = folders
+      .map((f) => {
+        const count = (d.lists?.[f.id] || []).filter((item) => !item.done).length;
+        return `
+          <button type="button" class="folder-tab${f.id === name ? " active" : ""}" data-list-folder="${f.id}">
+            ${f.title}${count ? ` <span class="folder-count">${count}</span>` : ""}
+          </button>`;
+      })
+      .join("");
+    const openRows =
+      open
+        .map(
+          (item) => `
+        <button class="item" data-list-toggle="${name}" data-id="${item.id}" type="button">
+          <div class="row">
+            <div class="title">⬜️ ${item.text}</div>
+            <span class="muted" style="flex-shrink:0">Tap to complete</span>
+          </div>
+        </button>`
+        )
+        .join("") || `<p class="muted">No items — add above</p>`;
+    const doneRows = done
+      .map(
+        (item) => `
+        <button class="item item-done" data-list-toggle="${name}" data-id="${item.id}" type="button">
+          <div class="row">
+            <div>
+              <div class="title">✅ ${item.text}</div>
+              <div class="muted">${formatCompletedAt(item.completedAt)}</div>
+            </div>
+            <span class="muted" style="flex-shrink:0">Tap to restore</span>
+          </div>
+        </button>`
+      )
+      .join("");
+    return `
+      <div class="folder">
+        <div class="folder-tabs" role="tablist">${tabs}</div>
+        <section class="folder-panel">
+          <form data-list-add="${name}" class="row" style="margin-bottom:0.65rem">
+            <input name="text" placeholder="${folder.placeholder}" required class="list-add-input" />
+            <button class="btn" type="submit">Add</button>
+          </form>
+          <div class="list">${openRows}</div>
+          <div class="completed-box">
+            <button type="button" class="completed-toggle" data-completed-toggle>
+              <span>Completed${done.length ? ` (${done.length})` : ""}</span>
+              <span class="completed-caret">${state.listCompletedOpen ? "▾" : "▸"}</span>
+            </button>
+            <div class="completed-panel${state.listCompletedOpen ? "" : " hidden"}">
+              ${
+                done.length
+                  ? `<div class="list">${doneRows}</div>
+                     <button type="button" class="btn ghost block" data-clear-completed="${name}">Clear completed</button>`
+                  : `<p class="muted">Nothing completed yet</p>`
+              }
+            </div>
+          </div>
+        </section>
+      </div>`;
   }
 
   function renderRewards(d) {
@@ -1154,6 +1220,29 @@
       });
     });
 
+    $$("[data-list-folder]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.listFolder = btn.dataset.listFolder;
+        renderTab();
+      });
+    });
+
+    $("[data-completed-toggle]")?.addEventListener("click", () => {
+      state.listCompletedOpen = !state.listCompletedOpen;
+      renderTab();
+    });
+
+    $("[data-clear-completed]")?.addEventListener("click", async (e) => {
+      const name = e.currentTarget.dataset.clearCompleted;
+      try {
+        await AdminAPI.clearCompletedList(state.token, name);
+        toast("Completed items cleared");
+        await refresh();
+      } catch (err) {
+        toast(apiErrorMessage(err));
+      }
+    });
+
     $$("[data-list-add]").forEach((form) => {
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -1165,7 +1254,7 @@
           await refresh();
           if (res.item && window.ListUndo) {
             ListUndo.offer(`Added "${text}"`, async () => {
-              await AdminAPI.toggleListItem(state.token, name, res.item.id);
+              await AdminAPI.deleteListItem(state.token, name, res.item.id);
               await refresh();
             });
           } else {
@@ -1182,14 +1271,14 @@
         try {
           const name = btn.dataset.listToggle;
           const res = await AdminAPI.toggleListItem(state.token, name, btn.dataset.id);
+          if (res.completed) state.listCompletedOpen = true;
           await refresh();
           if (res.item && window.ListUndo) {
-            ListUndo.offer(`Removed "${res.item.text}"`, async () => {
-              await AdminAPI.restoreListItem(name, res.item, res.index);
+            const label = res.completed ? `Completed "${res.item.text}"` : `Restored "${res.item.text}"`;
+            ListUndo.offer(label, async () => {
+              await AdminAPI.toggleListItem(state.token, name, res.item.id);
               await refresh();
             });
-          } else {
-            toast("Cleared");
           }
         } catch (err) {
           toast(apiErrorMessage(err));

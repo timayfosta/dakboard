@@ -47,7 +47,7 @@ except ImportError as exc:
 
 PORT = 8765
 CHECK_STYLES = frozenset({"circle", "square", "star", "heart", "diamond"})
-API_VERSION = 2
+API_VERSION = 3
 BOOT_ID = uuid.uuid4().hex
 STARTED_AT = int(time.time() * 1000)
 PHOTOS_DIR = ROOT / "data" / "photos"
@@ -312,6 +312,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self.list_toggle(payload)
         if path == "/api/family/lists/restore":
             return self.list_restore(payload)
+        if path == "/api/family/lists/clear-completed":
+            if not require_admin(self):
+                return
+            return self.list_clear_completed(payload)
         if path == "/api/family/rewards/redeem":
             return self.reward_redeem(payload)
         if path == "/api/family/whiteboard":
@@ -649,22 +653,39 @@ class Handler(SimpleHTTPRequestHandler):
         if name not in ("grocery", "reminders"):
             return send_json(self, {"error": "Invalid list"}, 400)
         items = state.setdefault("lists", {}).setdefault(name, [])
-        for i, item in enumerate(items):
+        now = int(time.time() * 1000)
+        for item in items:
             if item.get("id") == item_id:
-                # Checking off clears the item (grocery/reminder complete)
-                removed = items.pop(i)
+                if item.get("done"):
+                    item["done"] = False
+                    item.pop("completedAt", None)
+                    completed = False
+                else:
+                    item["done"] = True
+                    item["completedAt"] = now
+                    completed = True
                 db.save_db(state)
                 return send_json(
                     self,
                     {
-                        "removed": True,
+                        "removed": False,
+                        "completed": completed,
                         "itemId": item_id,
-                        "item": removed,
-                        "index": i,
+                        "item": item,
                         "state": db.public_state(state),
                     },
                 )
         send_json(self, {"error": "Item not found"}, 404)
+
+    def list_clear_completed(self, payload: dict):
+        state = db.load_db()
+        name = payload.get("name")
+        if name not in ("grocery", "reminders"):
+            return send_json(self, {"error": "Invalid list"}, 400)
+        items = state.setdefault("lists", {}).setdefault(name, [])
+        state["lists"][name] = [i for i in items if not (isinstance(i, dict) and i.get("done"))]
+        db.save_db(state)
+        send_json(self, {"ok": True, "state": db.public_state(state)})
 
     def list_restore(self, payload: dict):
         state = db.load_db()

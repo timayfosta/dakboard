@@ -277,21 +277,7 @@ def merged_settings(state: dict[str, Any]) -> dict[str, Any]:
 
 def public_state(state: dict[str, Any] | None = None) -> dict[str, Any]:
     state = state or load_db()
-    # Drop legacy checked-off grocery/reminder rows so admin + TV stay in sync
     lists = state.get("lists") or {}
-    pruned = False
-    clean_lists: dict[str, Any] = {}
-    for name, items in lists.items():
-        if not isinstance(items, list):
-            clean_lists[name] = items
-            continue
-        kept = [i for i in items if not (isinstance(i, dict) and i.get("done"))]
-        clean_lists[name] = kept
-        if len(kept) != len(items):
-            pruned = True
-    if pruned:
-        state["lists"] = clean_lists
-        save_db(state)
     return {
         "version": state.get("version", 1),
         "revision": get_revision(state),
@@ -299,7 +285,7 @@ def public_state(state: dict[str, Any] | None = None) -> dict[str, Any]:
         "chores": state.get("chores", []),
         "balances": state.get("balances", {}),
         "completions": state.get("completions", {}).get(today_key(), {}),
-        "lists": clean_lists if pruned else lists,
+        "lists": lists,
         "rewards": state.get("rewards", []),
         "redemptions": state.get("redemptions", [])[:20],
         "whiteboard": state.get("whiteboard") or {"version": 1, "strokes": [], "updatedAt": 0},

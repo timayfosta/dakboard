@@ -896,6 +896,119 @@ button, input, select, textarea {
   font-size: 16px;
 }
 
+.folder {
+  display: grid;
+}
+
+.folder-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+  padding: 0 0.4rem;
+  position: relative;
+  z-index: 1;
+  margin-bottom: -1px;
+}
+
+.folder-tab {
+  border: 1px solid var(--line);
+  border-bottom: none;
+  background: var(--panel2);
+  color: var(--muted);
+  border-radius: 16px 16px 0 0;
+  min-height: var(--touch);
+  padding: 0.55rem 0.7rem 0.7rem;
+  font-weight: 800;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.folder-tab.active {
+  background: var(--panel);
+  color: var(--ink);
+  position: relative;
+  z-index: 2;
+}
+
+.folder-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 3px;
+  background: var(--panel);
+}
+
+.folder-count {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--muted);
+  background: var(--chip-bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+
+.folder-tab.active .folder-count {
+  color: var(--coral);
+  border-color: var(--coral-ring);
+  background: var(--coral-soft);
+}
+
+.folder-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 0.85rem 0.75rem 0.75rem;
+}
+
+button.item {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item-done .title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.completed-box {
+  margin-top: 0.75rem;
+  border-top: 1px dashed var(--line);
+  padding-top: 0.55rem;
+}
+
+.completed-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 800;
+  min-height: var(--touch);
+  padding: 0.2rem 0.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.completed-caret {
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.completed-panel {
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.2rem;
+}
+
 [data-theme="day"] .emoji-opt {
   filter: none;
 }
