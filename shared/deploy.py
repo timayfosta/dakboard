@@ -216,14 +216,14 @@ def boot_status() -> dict[str, Any]:
                 "enabled": (enabled.stdout or "").strip() or "unknown",
             }
 
-        tunnel = unit("cloudflared")
-        if (tunnel.get("active") or "") not in {"active"}:
-            alt = unit("family-board-tunnel")
-            if (alt.get("active") or "") in {"active"} or (alt.get("enabled") or "") in {
-                "enabled",
-                "static",
-            }:
-                tunnel = alt
+        preferred = unit("family-board-tunnel")
+        official = unit("cloudflared")
+        name = "family-board-tunnel"
+        tunnel = preferred
+        if (official.get("active") or "") == "active":
+            tunnel = official
+            name = "cloudflared"
+        tunnel["unit"] = name
         return {
             "api": unit("family-board-api"),
             "kiosk": unit("family-board-kiosk"),

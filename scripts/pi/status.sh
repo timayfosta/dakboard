@@ -39,6 +39,20 @@ else
   journalctl -u family-board-api -n 15 --no-pager 2>/dev/null || true
 fi
 echo ""
+echo "-- tunnel --"
+if [[ -f /etc/systemd/system/family-board-tunnel.service ]]; then
+  echo "unit: family-board-tunnel"
+  echo "enabled: $(systemctl is-enabled family-board-tunnel 2>/dev/null || echo missing)"
+  echo "active:  $(systemctl is-active family-board-tunnel 2>/dev/null || echo inactive)"
+elif [[ -f /etc/systemd/system/cloudflared.service || -f /lib/systemd/system/cloudflared.service ]]; then
+  echo "unit: cloudflared"
+  echo "enabled: $(systemctl is-enabled cloudflared 2>/dev/null || echo missing)"
+  echo "active:  $(systemctl is-active cloudflared 2>/dev/null || echo inactive)"
+else
+  echo "No tunnel unit yet (there is no cloudflare.service)."
+  echo "Use:  systemctl status family-board-tunnel"
+fi
+echo ""
 echo "Chromium kiosk: $(pgrep -af 'chromium.*(FamilyBoardKiosk|kiosk=1)' | head -1 || echo not running)"
 echo ""
 echo "Start now:  bash $ROOT/scripts/pi/start-now.sh"

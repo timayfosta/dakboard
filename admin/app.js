@@ -917,7 +917,10 @@
       };
       if (boot.api) bits.push(`api ${fmt(boot.api)}`);
       if (boot.kiosk) bits.push(`kiosk ${fmt(boot.kiosk)}`);
-      if (boot.tunnel) bits.push(`tunnel ${fmt(boot.tunnel)}`);
+      if (boot.tunnel) {
+        const name = boot.tunnel.unit ? ` ${boot.tunnel.unit}` : "";
+        bits.push(`tunnel${name} ${fmt(boot.tunnel)}`);
+      }
       el.textContent = bits.join(" · ");
     } catch {
       el.textContent = "Can't reach server health check";

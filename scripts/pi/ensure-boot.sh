@@ -182,6 +182,10 @@ retire_broken_cloudflared() {
 
 enable_now() {
   local unit="$1"
+  if ! systemctl cat "${unit}" >/dev/null 2>&1; then
+    echo "  ${unit}: not installed (skip)"
+    return 1
+  fi
   systemctl enable "${unit}" >/dev/null 2>&1 || true
   systemctl reset-failed "${unit}" >/dev/null 2>&1 || true
   systemctl restart "${unit}" >/dev/null 2>&1 || systemctl start "${unit}" >/dev/null 2>&1 || true
