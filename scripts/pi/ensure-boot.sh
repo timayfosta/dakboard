@@ -35,39 +35,63 @@ if [[ -x "${ROOT}/scripts/pi/write-sudoers.sh" ]]; then
   bash "${ROOT}/scripts/pi/write-sudoers.sh" "${TARGET_USER}" "${ROOT}"
 fi
 
-write_tunnel_unit() {
-  local cf_bin=""
+cf_bin() {
   if command -v cloudflared >/dev/null 2>&1; then
-    cf_bin="$(command -v cloudflared)"
+    command -v cloudflared
   elif [[ -x /usr/bin/cloudflared ]]; then
-    cf_bin=/usr/bin/cloudflared
+    echo /usr/bin/cloudflared
   elif [[ -x /usr/local/bin/cloudflared ]]; then
-    cf_bin=/usr/local/bin/cloudflared
+    echo /usr/local/bin/cloudflared
   else
-    echo "cloudflared is not installed — skip tunnel unit"
     return 1
   fi
+}
 
+unit_ok() {
+  local file="$1"
+  [[ -f "${file}" ]] || return 1
+  systemd-analyze verify "${file}" >/dev/null 2>&1
+}
+
+extract_token() {
+  local file="$1"
+  [[ -f "${file}" ]] || return 1
+  grep -oE -- '--token[= ][^[:space:]]+' "${file}" 2>/dev/null | tail -1 | sed -E 's/--token[= ]//' | tr -d '\r'
+}
+
+write_clean_tunnel() {
+  local bin="$1"
   local config=""
-  for candidate in \
+  local token=""
+  local src
+
+  for src in \
     "${HOME_DIR}/.cloudflared/config.yml" \
     "${HOME_DIR}/.cloudflared/config.yaml" \
     /etc/cloudflared/config.yml \
     /etc/cloudflared/config.yaml
   do
-    if [[ -f "${candidate}" ]]; then
-      config="${candidate}"
+    if [[ -f "${src}" ]]; then
+      config="${src}"
       break
     fi
   done
 
-  local token_file=""
-  for candidate in /etc/cloudflared/token "${HOME_DIR}/.cloudflared/token"; do
-    if [[ -s "${candidate}" ]]; then
-      token_file="${candidate}"
+  for src in /etc/cloudflared/token "${HOME_DIR}/.cloudflared/token"; do
+    if [[ -s "${src}" ]]; then
+      token="$(tr -d '\r\n' < "${src}")"
       break
     fi
   done
+
+  if [[ -z "${token}" ]]; then
+    token="$(extract_token /etc/systemd/system/cloudflared.service || true)"
+  fi
+  if [[ -z "${token}" ]]; then
+    token="$(extract_token /etc/systemd/system/cloudflared.service.bad || true)"
+  fi
+
+  mkdir -p /etc/cloudflared
 
   if [[ -n "${config}" ]]; then
     cat > /etc/systemd/system/family-board-tunnel.service <<EOF
@@ -75,80 +99,112 @@ write_tunnel_unit() {
 Description=Family Board Cloudflare tunnel
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=${TARGET_USER}
-ExecStart=${cf_bin} --no-autoupdate tunnel --config ${config} run
+ExecStart=${bin} --no-autoupdate tunnel --config ${config} run
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
 EOF
-    echo "Wrote family-board-tunnel.service (config file)"
-    return 0
-  fi
-
-  if [[ -n "${token_file}" ]]; then
-    mkdir -p /etc/cloudflared
+  elif [[ -n "${token}" ]]; then
     umask 077
-    {
-      printf "TUNNEL_TOKEN="
-      tr -d "\r\n" < "${token_file}"
-      printf "\n"
-    } >/etc/cloudflared/env
+    printf 'TUNNEL_TOKEN=%s\n' "${token}" >/etc/cloudflared/env
     chmod 600 /etc/cloudflared/env
     cat > /etc/systemd/system/family-board-tunnel.service <<EOF
 [Unit]
 Description=Family Board Cloudflare tunnel
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 EnvironmentFile=/etc/cloudflared/env
-ExecStart=${cf_bin} --no-autoupdate tunnel run
+ExecStart=${bin} --no-autoupdate tunnel run
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
 EOF
-    echo "Wrote family-board-tunnel.service (token)"
-    return 0
+  else
+    echo "No Cloudflare config/token found — cannot create tunnel unit"
+    return 1
   fi
 
-  echo "No Cloudflare config/token found — cannot create tunnel unit"
-  return 1
+  sed -i 's/\r$//' /etc/systemd/system/family-board-tunnel.service
+  echo "Wrote clean family-board-tunnel.service"
+  return 0
+}
+
+retire_broken_cloudflared() {
+  local src=""
+  if [[ -f /etc/systemd/system/cloudflared.service ]]; then
+    src=/etc/systemd/system/cloudflared.service
+  elif [[ -f /lib/systemd/system/cloudflared.service ]]; then
+    src=/lib/systemd/system/cloudflared.service
+  else
+    return 1
+  fi
+
+  if unit_ok "${src}"; then
+    return 1
+  fi
+
+  echo "Official cloudflared.service has a bad unit file — replacing it"
+  systemctl disable --now cloudflared.service >/dev/null 2>&1 || true
+  if [[ "${src}" == /etc/systemd/system/cloudflared.service ]]; then
+    mv -f "${src}" /etc/systemd/system/cloudflared.service.bad
+  fi
+  return 0
 }
 
 enable_now() {
   local unit="$1"
-  if ! systemctl list-unit-files "${unit}" >/dev/null 2>&1; then
-    return 1
-  fi
   systemctl enable "${unit}" >/dev/null 2>&1 || true
   systemctl reset-failed "${unit}" >/dev/null 2>&1 || true
   systemctl restart "${unit}" >/dev/null 2>&1 || systemctl start "${unit}" >/dev/null 2>&1 || true
   echo "  ${unit}: $(systemctl is-enabled "${unit}" 2>/dev/null || echo disabled) / $(systemctl is-active "${unit}" 2>/dev/null || echo inactive)"
-  return 0
 }
 
 systemctl daemon-reload
 
-enable_now family-board-api.service || true
-enable_now family-board-kiosk.service || true
+enable_now family-board-api.service
+enable_now family-board-kiosk.service
 
-if [[ -f /etc/systemd/system/cloudflared.service || -f /lib/systemd/system/cloudflared.service ]]; then
-  enable_now cloudflared.service || true
-elif write_tunnel_unit; then
-  systemctl daemon-reload
-  enable_now family-board-tunnel.service || true
+BIN="$(cf_bin || true)"
+if [[ -z "${BIN}" ]]; then
+  echo "  tunnel: cloudflared is not installed"
 else
-  echo "  tunnel: not installed (1033 will continue until cloudflared is set up once)"
+  official=""
+  if [[ -f /etc/systemd/system/cloudflared.service ]]; then
+    official=/etc/systemd/system/cloudflared.service
+  elif [[ -f /lib/systemd/system/cloudflared.service ]]; then
+    official=/lib/systemd/system/cloudflared.service
+  fi
+
+  if [[ -n "${official}" ]] && unit_ok "${official}"; then
+    enable_now cloudflared.service
+    if ! systemctl is-active --quiet cloudflared.service; then
+      echo "cloudflared.service did not stay running — using clean Family Board tunnel unit"
+      write_clean_tunnel "${BIN}" || true
+      systemctl daemon-reload
+      enable_now family-board-tunnel.service
+    fi
+  else
+    retire_broken_cloudflared || true
+    if write_clean_tunnel "${BIN}"; then
+      systemctl daemon-reload
+      enable_now family-board-tunnel.service
+    else
+      echo "  tunnel: not configured (1033 will continue until a token/config exists)"
+    fi
+  fi
 fi
 
 echo "Boot enable done."

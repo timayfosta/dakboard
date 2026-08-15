@@ -879,6 +879,7 @@
         <p class="muted" id="deployMeta">Checking deploy status…</p>
         <button class="btn block" type="button" id="deployServerBtn">Pull updates &amp; restart now</button>
         <button class="btn secondary block" type="button" id="restartServerBtn">Restart only</button>
+        <button class="btn danger block" type="button" id="rebootPiBtn" style="margin-top:0.55rem">Reboot Raspberry Pi</button>
         <p class="muted restart-status hidden" id="restartStatus"></p>
       </section>
       <section class="card">
@@ -1461,6 +1462,37 @@
           /* connection drop is expected */
         }
         await waitForServerRestart(statusEl, restartBtn);
+      });
+    }
+
+    const rebootBtn = $("#rebootPiBtn");
+    if (rebootBtn) {
+      rebootBtn.addEventListener("click", async () => {
+        if (
+          !confirm(
+            "Reboot the Raspberry Pi?\n\nThe TV will go dark for about a minute, then Family Board should come back on its own."
+          )
+        ) {
+          return;
+        }
+        const statusEl = $("#restartStatus");
+        rebootBtn.disabled = true;
+        if (statusEl) {
+          statusEl.classList.remove("hidden");
+          statusEl.textContent = "Rebooting the Pi… this page will disconnect.";
+        }
+        try {
+          const res = await AdminAPI.rebootPi(state.token);
+          if (!res?.ok) {
+            toast(res?.error || "Reboot failed");
+            rebootBtn.disabled = false;
+            return;
+          }
+          toast("Pi is rebooting");
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Reboot failed — try again on the home Wi‑Fi");
+          rebootBtn.disabled = false;
+        }
       });
     }
 

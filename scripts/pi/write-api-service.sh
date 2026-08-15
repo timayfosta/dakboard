@@ -10,17 +10,15 @@ cat > /etc/systemd/system/family-board-api.service <<EOF
 Description=Family Board local API server
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=${TARGET_USER}
 WorkingDirectory=${APP_DIR}
 ExecStart=/usr/bin/python3 -u ${APP_DIR}/server.py
-ExecStartPost=+/bin/bash -c 'systemctl enable --now cloudflared.service 2>/dev/null || systemctl enable --now family-board-tunnel.service 2>/dev/null || true'
-ExecStartPost=+/bin/bash -c 'systemctl enable family-board-kiosk.service 2>/dev/null || true'
 Restart=always
 RestartSec=3
-StartLimitIntervalSec=0
 Environment=PYTHONUNBUFFERED=1
 StandardOutput=journal
 StandardError=journal
@@ -28,3 +26,4 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 EOF
+sed -i 's/\r$//' /etc/systemd/system/family-board-api.service

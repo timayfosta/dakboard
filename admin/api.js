@@ -44,6 +44,7 @@ const API = {
     API.request("/api/admin/restart", { method: "POST", token, body: {} }),
   deploy: (token) => API.request("/api/admin/deploy", { method: "POST", token, body: {} }),
   deployStatus: (token) => API.request("/api/admin/deploy/status", { token }),
+  rebootPi: (token) => API.request("/api/admin/reboot", { method: "POST", token, body: {} }),
 };
 
 window.AdminAPI = API;

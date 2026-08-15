@@ -10,6 +10,7 @@ fi
 TARGET_USER="${1:?usage: write-sudoers.sh <user> <app_dir>}"
 APP_DIR="${2:?}"
 WRAPPER=/usr/local/sbin/family-board-boot
+REBOOT=/usr/local/sbin/family-board-reboot
 
 cat > "${WRAPPER}" <<EOF
 #!/bin/bash
@@ -17,8 +18,17 @@ exec /bin/bash ${APP_DIR}/scripts/pi/ensure-boot.sh
 EOF
 chmod 755 "${WRAPPER}"
 
+cat > "${REBOOT}" <<'EOF'
+#!/bin/bash
+if command -v systemctl >/dev/null 2>&1; then
+  exec systemctl reboot
+fi
+exec /sbin/reboot
+EOF
+chmod 755 "${REBOOT}"
+
 cat > /etc/sudoers.d/family-board <<EOF
-${TARGET_USER} ALL=(root) NOPASSWD: ${WRAPPER}
+${TARGET_USER} ALL=(root) NOPASSWD: ${WRAPPER}, ${REBOOT}
 EOF
 chmod 440 /etc/sudoers.d/family-board
 

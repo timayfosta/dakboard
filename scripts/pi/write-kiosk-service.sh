@@ -11,6 +11,7 @@ cat > /etc/systemd/system/family-board-kiosk.service <<EOF
 Description=Family Board Chromium kiosk
 After=family-board-api.service graphical.target
 Wants=family-board-api.service graphical.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -20,11 +21,11 @@ Environment=XAUTHORITY=${HOME_DIR}/.Xauthority
 Environment=FAMILY_BOARD_SKIP_SERVER=1
 WorkingDirectory=${APP_DIR}
 ExecStart=${APP_DIR}/scripts/pi/start-kiosk.sh
-Restart=always
+Restart=on-failure
 RestartSec=12
-StartLimitIntervalSec=0
 TimeoutStartSec=300
 
 [Install]
 WantedBy=graphical.target
 EOF
+sed -i 's/\r$//' /etc/systemd/system/family-board-kiosk.service

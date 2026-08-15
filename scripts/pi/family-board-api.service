@@ -1,7 +1,8 @@
 [Unit]
 Description=Family Board local API server
-After=network.target
-Wants=network.target
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -10,7 +11,6 @@ WorkingDirectory=/home/pi/family-board-src
 ExecStart=/usr/bin/python3 -u /home/pi/family-board-src/server.py
 Restart=always
 RestartSec=3
-StartLimitIntervalSec=0
 Environment=PYTHONUNBUFFERED=1
 StandardOutput=journal
 StandardError=journal

@@ -309,6 +309,11 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             return self.admin_deploy()
 
+        if path == "/api/admin/reboot":
+            if not require_admin(self):
+                return
+            return self.admin_reboot()
+
         send_json(self, {"error": "Not found", "path": path, "hint": "Restart server: npm start"}, 404)
 
     def do_PUT(self):
@@ -956,6 +961,11 @@ class Handler(SimpleHTTPRequestHandler):
     def admin_deploy(self):
         result = deploy.deploy_async(schedule_server_restart, restart=True)
         status = 200 if result.get("ok") else 409
+        send_json(self, result, status)
+
+    def admin_reboot(self):
+        result = deploy.schedule_pi_reboot()
+        status = 200 if result.get("ok") else 400
         send_json(self, result, status)
 
     def deploy_webhook(self):

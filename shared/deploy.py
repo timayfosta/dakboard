@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -257,6 +258,35 @@ def enable_boot_services() -> dict[str, Any]:
             "returncode": proc.returncode,
         }
     return {"ok": True, "stdout": out, "services": boot_status()}
+
+
+def schedule_pi_reboot(delay_s: float = 1.2) -> dict[str, Any]:
+    """Reboot the Pi after the HTTP response is sent. No-op on Windows."""
+    if sys.platform == "win32":
+        return {"ok": False, "error": "Reboot is only available on the Raspberry Pi"}
+
+    reboot = Path("/usr/local/sbin/family-board-reboot")
+
+    def _run() -> None:
+        time.sleep(delay_s)
+        try:
+            if reboot.is_file():
+                proc = _run_sudo([str(reboot)], timeout=15)
+            else:
+                proc = _run_sudo(["systemctl", "reboot"], timeout=15)
+                if proc.returncode != 0:
+                    proc = _run_sudo(["/sbin/reboot"], timeout=15)
+            if proc.returncode != 0:
+                print(
+                    "Pi reboot failed: "
+                    + ((proc.stderr or proc.stdout or "sudo reboot denied").strip()),
+                    flush=True,
+                )
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            print(f"Pi reboot failed: {exc}", flush=True)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"ok": True, "rebooting": True}
 
 
 def restart_service(schedule_restart_fn) -> dict[str, Any]:

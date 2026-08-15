@@ -2,6 +2,7 @@
 Description=Family Board Chromium kiosk
 After=family-board-api.service graphical.target
 Wants=family-board-api.service graphical.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -11,9 +12,8 @@ Environment=XAUTHORITY=/home/pi/.Xauthority
 Environment=FAMILY_BOARD_SKIP_SERVER=1
 WorkingDirectory=/home/pi/family-board-src
 ExecStart=/home/pi/family-board-src/scripts/pi/start-kiosk.sh
-Restart=always
+Restart=on-failure
 RestartSec=12
-StartLimitIntervalSec=0
 TimeoutStartSec=300
 
 [Install]
