@@ -20,6 +20,29 @@
     return day;
   }
 
+  const GOOGLE_EVENT_COLORS = {
+    1: "#a4bdfc",
+    2: "#7ae7bf",
+    3: "#dbadff",
+    4: "#ff887c",
+    5: "#fbd75b",
+    6: "#ffb878",
+    7: "#46d6db",
+    8: "#e1e1e1",
+    9: "#5484ed",
+    10: "#51b749",
+    11: "#dc2127",
+  };
+
+  function parseColorValue(raw) {
+    if (raw == null || raw === "") return "";
+    const v = String(raw).trim();
+    const hex = v.match(/#([0-9a-f]{3}|[0-9a-f]{6})\b/i);
+    if (hex) return hex[0];
+    const id = GOOGLE_EVENT_COLORS[v] || GOOGLE_EVENT_COLORS[Number(v)];
+    return id || "";
+  }
+
   function normalizeEvent(ev) {
     return {
       id: ev.id || `${ev.title}-${ev.start.getTime()}`,
@@ -28,6 +51,7 @@
       end: ev.end instanceof Date ? ev.end : new Date(ev.end || ev.start),
       allDay: !!ev.allDay,
       location: ev.location || "",
+      color: parseColorValue(ev.color),
     };
   }
 
@@ -146,6 +170,7 @@
           end: endDate,
           allDay: master.allDay,
           location: master.location,
+          color: master.color,
         })
       );
     };
@@ -224,6 +249,16 @@
 
   function parseIcs(text, daysAhead = 21) {
     const flat = unfoldIcsLines(text);
+    const header = flat.split("BEGIN:VEVENT")[0] || "";
+    const headerColor = (() => {
+      const pick = (key) => {
+        const match = header.match(new RegExp(`^${key}(;[^:]*)?:(.*)$`, "mi"));
+        return match ? match[2].trim() : "";
+      };
+      return parseColorValue(
+        pick("COLOR") || pick("X-APPLE-CALENDAR-COLOR") || pick("X-OUTLOOK-COLOR")
+      );
+    })();
     const blocks = flat.split("BEGIN:VEVENT").slice(1);
     const rangeStart = addDays(startOfDay(new Date()), -1);
     const rangeEnd = addDays(new Date(), daysAhead);
@@ -273,6 +308,8 @@
         });
       });
 
+      const colorRow =
+        get("COLOR") || get("X-APPLE-CALENDAR-COLOR") || get("X-GOOGLE-CALENDAR-COLOR");
       const base = {
         id: (uid && uid.value) || `ics-${i}`,
         title: unescapeIcs((summary && summary.value) || "(No title)"),
@@ -280,6 +317,7 @@
         end: end.date,
         allDay: start.allDay,
         location: unescapeIcs((loc && loc.value) || ""),
+        color: parseColorValue(colorRow && colorRow.value) || headerColor,
         rrule: rrule ? rrule.value : "",
         exdates,
       };
@@ -347,6 +385,7 @@
             end: item.end?.dateTime || item.end?.date || item.end || item.start,
             allDay: !!(item.allDay || item.start?.date),
             location: item.location || "",
+            color: item.color || item.backgroundColor || item.colorId,
           })
         );
       }
@@ -402,6 +441,7 @@
         end,
         allDay,
         location: item.location || "",
+        color: item.colorId,
       });
     });
   }

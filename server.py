@@ -55,6 +55,85 @@ CAL_CACHE = ROOT / "data" / "calendar-cache.ics"
 SECRETS = ROOT / "shared" / "secrets.local.js"
 SESSIONS: dict[str, float] = {}  # token -> expires_at
 SESSION_HOURS = 30 * 24
+ADMIN_FILE_MAX_BYTES = 256_000
+ADMIN_FILES: dict[str, dict[str, Any]] = {
+    "secrets": {
+        "rel": "shared/secrets.local.js",
+        "label": "Secrets",
+        "hint": "Paste the Google Calendar secret iCal URL, admin password, and deploy webhook here. This file is gitignored.",
+        "writable": True,
+        "fallback": "shared/secrets.example.js",
+    },
+    "secrets-example": {
+        "rel": "shared/secrets.example.js",
+        "label": "Secrets example",
+        "hint": "Template only. Copy values into Secrets — this file is not saved.",
+        "writable": False,
+    },
+    "config": {
+        "rel": "shared/config.js",
+        "label": "App config",
+        "hint": "Weather location, calendar IDs, and display size. A git pull may overwrite this file.",
+        "writable": True,
+    },
+    "kiosk-env": {
+        "rel": "scripts/pi/kiosk.env",
+        "label": "Pi kiosk env",
+        "hint": "Display rotation and start URL used when the kiosk launches on the Pi.",
+        "writable": True,
+    },
+}
+
+
+def admin_file_meta(file_id: str) -> dict[str, Any] | None:
+    meta = ADMIN_FILES.get(file_id)
+    if not meta:
+        return None
+    path = (ROOT / str(meta["rel"])).resolve()
+    root = ROOT.resolve()
+    if path != root and root not in path.parents:
+        return None
+    return {**meta, "id": file_id, "path": path}
+
+
+def read_admin_file(file_id: str) -> dict[str, Any]:
+    meta = admin_file_meta(file_id)
+    if not meta:
+        raise FileNotFoundError("Unknown file")
+    path: Path = meta["path"]
+    exists = path.is_file()
+    text = ""
+    if exists:
+        text = path.read_text(encoding="utf-8")
+    elif meta.get("fallback"):
+        fallback = (ROOT / str(meta["fallback"])).resolve()
+        if fallback.is_file() and (fallback == ROOT.resolve() or ROOT.resolve() in fallback.parents):
+            text = fallback.read_text(encoding="utf-8")
+    return {
+        "id": meta["id"],
+        "label": meta["label"],
+        "hint": meta["hint"],
+        "rel": meta["rel"],
+        "writable": bool(meta["writable"]),
+        "exists": exists,
+        "content": text,
+    }
+
+
+def write_admin_file(file_id: str, content: str) -> dict[str, Any]:
+    meta = admin_file_meta(file_id)
+    if not meta:
+        raise FileNotFoundError("Unknown file")
+    if not meta["writable"]:
+        raise PermissionError("This file is read-only")
+    if len(content.encode("utf-8")) > ADMIN_FILE_MAX_BYTES:
+        raise ValueError("File is too large")
+    path: Path = meta["path"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(content.replace("\r\n", "\n"), encoding="utf-8")
+    tmp.replace(path)
+    return read_admin_file(file_id)
 
 
 def load_secrets() -> dict[str, str]:
@@ -284,6 +363,35 @@ class Handler(SimpleHTTPRequestHandler):
             return self.screensaver_manifest()
         if path == "/api/screensaver/photo":
             return self.screensaver_photo(parsed.query)
+        if path == "/api/admin/files":
+            if not require_admin(self):
+                return
+            return send_json(
+                self,
+                {
+                    "files": [
+                        {
+                            "id": fid,
+                            "label": meta["label"],
+                            "hint": meta["hint"],
+                            "rel": meta["rel"],
+                            "writable": bool(meta["writable"]),
+                            "exists": (ROOT / str(meta["rel"])).is_file(),
+                        }
+                        for fid, meta in ADMIN_FILES.items()
+                    ]
+                },
+            )
+        if path.startswith("/api/admin/files/"):
+            if not require_admin(self):
+                return
+            file_id = path.rsplit("/", 1)[-1]
+            try:
+                return send_json(self, read_admin_file(file_id))
+            except FileNotFoundError:
+                return send_json(self, {"error": "Unknown file"}, 404)
+        if path in {"/shared/secrets.local.js", "/shared/secrets.local.js/"}:
+            return send_json(self, {"error": "Not found"}, 404)
 
         super().do_GET()
 
@@ -371,6 +479,19 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.admin_tunnel_start()
+        if path.startswith("/api/admin/files/"):
+            if not require_admin(self):
+                return
+            file_id = path.rsplit("/", 1)[-1]
+            try:
+                saved = write_admin_file(file_id, str(payload.get("content") or ""))
+            except FileNotFoundError:
+                return send_json(self, {"error": "Unknown file"}, 404)
+            except PermissionError as exc:
+                return send_json(self, {"error": str(exc)}, 403)
+            except ValueError as exc:
+                return send_json(self, {"error": str(exc)}, 400)
+            return send_json(self, saved)
 
         send_json(self, {"error": "Not found", "path": path, "hint": "Restart server: npm start"}, 404)
 

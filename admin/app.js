@@ -25,6 +25,9 @@
     listsFp: "",
     serverOk: true,
     serverHint: "",
+    adminFiles: [],
+    adminFileId: "",
+    adminFile: null,
   };
   let listPollTimer = null;
 
@@ -774,6 +777,71 @@
       .join("");
   }
 
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function renderFileButtons() {
+    const files = state.adminFiles || [];
+    if (!files.length) return `<p class="muted">Loading files…</p>`;
+    return files
+      .map(
+        (f) => `
+      <button type="button" class="btn secondary block file-open-btn${f.id === state.adminFileId ? " active" : ""}" data-open-file="${f.id}">
+        ${escapeHtml(f.label)}
+        <span class="muted">${f.exists ? escapeHtml(f.rel) : "not created yet"}</span>
+      </button>`
+      )
+      .join("");
+  }
+
+  function renderFileEditor() {
+    const open = state.adminFile;
+    if (!open) return "";
+    return `
+      <form id="adminFileForm" class="file-editor-form">
+        <h3>${escapeHtml(open.label)}</h3>
+        <p class="muted">${escapeHtml(open.hint)}</p>
+        <textarea id="adminFileText" class="file-editor" spellcheck="false" ${open.writable ? "" : "readonly"}>${escapeHtml(open.content)}</textarea>
+        <div class="file-editor-actions">
+          <button type="button" class="btn secondary block" id="copyFileBtn">Copy all</button>
+          ${open.writable ? `<button type="submit" class="btn block">Save file</button>` : ""}
+        </div>
+      </form>`;
+  }
+
+  function bindFileOpenButtons() {
+    $$("[data-open-file]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.openFile;
+        try {
+          state.adminFile = await AdminAPI.getFile(state.token, id);
+          state.adminFileId = id;
+          renderTab();
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Could not open file");
+        }
+      });
+    });
+  }
+
+  async function loadAdminFiles() {
+    const host = $("#adminFileList");
+    if (!host) return;
+    try {
+      const data = await AdminAPI.listFiles(state.token);
+      state.adminFiles = data.files || [];
+      host.innerHTML = renderFileButtons();
+      bindFileOpenButtons();
+    } catch (err) {
+      host.innerHTML = `<p class="muted">${escapeHtml(apiErrorMessage(err) || "Could not list files")}</p>`;
+    }
+  }
+
   function renderMore(d) {
     const nm = {
       enabled: false,
@@ -997,6 +1065,12 @@
         <button class="btn secondary" id="installBtn" ${state.deferredPrompt ? "" : "disabled"}>
           ${state.deferredPrompt ? "Install Family Admin" : "Use browser menu to install"}
         </button>
+      </section>
+      <section class="card">
+        <h2>Config files</h2>
+        <p class="muted">Open a file to copy or paste secrets yourself. Saves on this device (the Pi).</p>
+        <div class="file-list" id="adminFileList">${renderFileButtons()}</div>
+        ${renderFileEditor()}
       </section>
       <section class="card">
         <h2>Display links</h2>
@@ -1551,6 +1625,34 @@
 
     const deployBtn = $("#deployServerBtn");
     fillDeployMeta();
+    loadAdminFiles();
+
+    $("#copyFileBtn")?.addEventListener("click", async () => {
+      const text = $("#adminFileText")?.value || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        toast("Copied");
+      } catch {
+        toast("Copy failed — select the text and copy");
+      }
+    });
+
+    $("#adminFileForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!state.adminFileId) return;
+      const btn = e.currentTarget.querySelector('button[type="submit"]');
+      try {
+        if (btn) btn.disabled = true;
+        const saved = await AdminAPI.saveFile(state.token, state.adminFileId, $("#adminFileText")?.value || "");
+        state.adminFile = saved;
+        toast("File saved");
+        await loadAdminFiles();
+      } catch (err) {
+        toast(apiErrorMessage(err) || "Save failed");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
     if (deployBtn) {
       deployBtn.addEventListener("click", async () => {
         if (

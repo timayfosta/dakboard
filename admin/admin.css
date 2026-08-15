@@ -1059,3 +1059,46 @@ button.item {
 [data-theme="day"] .nav {
   box-shadow: 0 -4px 18px rgba(15, 23, 42, 0.06);
 }
+
+.file-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0.35rem;
+}
+
+.file-open-btn {
+  text-align: left;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.file-open-btn.active {
+  border-color: var(--coral);
+}
+
+.file-editor-form {
+  margin-top: 0.85rem;
+}
+
+.file-editor-form h3 {
+  font-family: var(--display);
+  font-size: 1.15rem;
+  margin-bottom: 0.25rem;
+}
+
+.file-editor {
+  width: 100%;
+  min-height: 16rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+  white-space: pre;
+  overflow: auto;
+}
+
+.file-editor-actions {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}

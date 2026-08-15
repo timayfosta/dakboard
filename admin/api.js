@@ -50,6 +50,10 @@ const API = {
   deployStatus: (token) => API.request("/api/admin/deploy/status", { token }),
   rebootPi: (token) => API.request("/api/admin/reboot", { method: "POST", token, body: {} }),
   startTunnel: (token) => API.request("/api/admin/tunnel-start", { method: "POST", token, body: {} }),
+  listFiles: (token) => API.request("/api/admin/files", { token }),
+  getFile: (token, id) => API.request(`/api/admin/files/${id}`, { token }),
+  saveFile: (token, id, content) =>
+    API.request(`/api/admin/files/${id}`, { method: "POST", token, body: { content } }),
 };
 
 window.AdminAPI = API;

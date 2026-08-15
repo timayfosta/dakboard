@@ -290,46 +290,46 @@
 
     .agenda-rows {
       list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.38rem;
       padding-top: 0.15rem;
       width: 100%;
     }
 
     .agenda-row {
       display: grid;
-      grid-template-columns: minmax(5.5rem, 22%) 1fr;
-      gap: 0.75rem;
-      align-items: start;
-      padding: 0.7rem 0.2rem 0.7rem 0.45rem;
-      border-bottom: 1px solid var(--hairline-soft);
-      border-left: 4px solid var(--kid-color, transparent);
+      grid-template-columns: minmax(8.4rem, 30%) 1fr;
+      align-items: center;
+      gap: 0;
+      padding: 0.58rem 0.8rem 0.58rem 0.95rem;
+      border: none;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--event-color, #8b909a) 20%, transparent);
+      box-shadow: inset 5px 0 0 var(--event-color, #8b909a);
     }
-
-    .agenda-row:last-child { border-bottom: none; }
 
     .agenda-row .time {
       font-weight: 800;
-      font-size: clamp(1.05rem, 2.6cqw, 1.35rem);
-      color: var(--kid-color, var(--sky));
-      padding-top: 0.15rem;
+      font-size: clamp(1.02rem, 2.5cqw, 1.28rem);
+      color: rgba(255, 255, 255, 0.9);
+      padding: 0.05rem 0.8rem 0.05rem 0;
+      margin-right: 0.75rem;
+      border-right: 1px solid rgba(255, 255, 255, 0.16);
       font-variant-numeric: tabular-nums;
-      white-space: nowrap;
+      line-height: 1.2;
     }
 
     .agenda-row .title {
       font-weight: 700;
       font-size: clamp(1.25rem, 3.2cqw, 1.7rem);
       line-height: 1.3;
-    }
-
-    .agenda-row .kid-tag {
-      display: inline-block;
-      margin-right: 0.4rem;
-      font-size: 1.35rem;
-      line-height: 1;
+      color: #fff;
+      min-width: 0;
     }
 
     .agenda-row.all-day .time {
-      color: var(--kid-color, var(--sunny));
+      color: rgba(255, 255, 255, 0.9);
     }
 
     .empty-note {
@@ -952,7 +952,15 @@
 
     function formatTime(ev) {
       if (ev.allDay) return "All day";
-      return ev.start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+      const opts = { hour: "numeric", minute: "2-digit" };
+      const start = ev.start.toLocaleTimeString(undefined, opts);
+      if (!ev.end || ev.end <= ev.start) return start;
+      const sameDay =
+        ev.end.getFullYear() === ev.start.getFullYear() &&
+        ev.end.getMonth() === ev.start.getMonth() &&
+        ev.end.getDate() === ev.start.getDate();
+      if (!sameDay) return start;
+      return `${start} - ${ev.end.toLocaleTimeString(undefined, opts)}`;
     }
 
     let calendarSource = "";
@@ -991,13 +999,11 @@
             : "";
           const rows = g.events
             .map((ev) => {
-              const kid = FamilyCalendarColors.matchKid(ev.title, agendaKids);
-              const kidStyle = kid ? `--kid-color:${kid.color}` : "";
-              const kidTag = kid ? `<span class="kid-tag emoji">${kid.emoji || ""}</span>` : "";
+              const color = FamilyCalendarColors.resolveColor(ev, agendaKids);
               return `
-              <li class="agenda-row${ev.allDay ? " all-day" : ""}" style="${kidStyle}">
+              <li class="agenda-row${ev.allDay ? " all-day" : ""}" style="--event-color:${color}">
                 <div class="time">${formatTime(ev)}</div>
-                <div class="title">${kidTag}${ev.title}</div>
+                <div class="title">${ev.title}</div>
               </li>`;
             })
             .join("");

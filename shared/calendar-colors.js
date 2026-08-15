@@ -1,5 +1,7 @@
 /* Match calendar events to kids for color-coded agenda rows */
 (function () {
+  const FALLBACK_COLOR = "#8b909a";
+
   function matchKid(title, kids) {
     if (!title || !kids?.length) return null;
     const lower = String(title).toLowerCase();
@@ -14,5 +16,11 @@
     return null;
   }
 
-  window.FamilyCalendarColors = { matchKid };
+  function resolveColor(ev, kids) {
+    if (ev?.color) return ev.color;
+    const kid = matchKid(ev?.title, kids);
+    return kid?.color || FALLBACK_COLOR;
+  }
+
+  window.FamilyCalendarColors = { matchKid, resolveColor };
 })();
