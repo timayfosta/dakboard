@@ -180,6 +180,8 @@
       gap: 0.45rem 0.5rem;
       flex-shrink: 0;
       min-height: 0;
+      container-type: inline-size;
+      --hero-size: clamp(5.6rem, 23cqi, 9.2rem);
     }
 
     .clock-card {
@@ -190,13 +192,12 @@
       padding: 0.35rem 0.45rem 0.3rem;
       min-width: 0;
       overflow: hidden;
-      container-type: inline-size;
     }
 
     .clock-card .time {
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: clamp(5.6rem, 46cqw, 9.2rem);
+      font-size: var(--hero-size);
       line-height: 0.86;
       letter-spacing: -0.045em;
       white-space: nowrap;
@@ -207,7 +208,7 @@
       width: 100%;
       overflow: hidden;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: max-content minmax(0, 1fr);
       align-items: start;
       gap: 0.3rem;
       padding: 0.35rem 0.35rem 0.3rem;
@@ -219,14 +220,12 @@
       justify-content: flex-end;
       gap: 0.2rem;
       min-width: 0;
-      width: 100%;
-      overflow: hidden;
-      container-type: inline-size;
+      width: max-content;
     }
 
     .wx-icon {
-      width: clamp(36px, 18cqw, 64px);
-      height: clamp(36px, 18cqw, 64px);
+      width: calc(var(--hero-size) * 0.42);
+      height: calc(var(--hero-size) * 0.42);
       flex-shrink: 0;
       display: grid;
       place-items: center;
@@ -241,12 +240,11 @@
 
     .wx-now-compact .temp {
       font-family: var(--font-display);
-      font-size: clamp(2.8rem, 42cqw, 6.4rem);
+      font-size: var(--hero-size);
       font-weight: 800;
       line-height: 0.86;
       letter-spacing: -0.03em;
       min-width: 0;
-      overflow: hidden;
     }
 
     .forecast {
@@ -455,8 +453,8 @@
     }
 
     .right-col {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
       gap: 0.45rem;
       min-height: 0;
       height: 100%;
@@ -466,12 +464,11 @@
 
     .month-panel {
       width: 100%;
-      flex: 1 1 48%;
       min-height: 0;
+      height: 100%;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      /* horizontal padding -25%, vertical matched to horizontal */
       padding: 0.225rem;
       container-type: size;
     }
@@ -573,14 +570,7 @@
     }
 
     .lists {
-      display: grid;
-      grid-template-columns: 1fr;
-      grid-template-rows: 1fr 1fr;
-      gap: 0.45rem;
-      flex: 1 1 52%;
-      min-height: 0;
-      overflow: hidden;
-      width: 100%;
+      display: contents;
     }
 
     .list-panel .block-title {
@@ -593,17 +583,11 @@
       font-size: 1.36rem;
     }
 
-    .list-scroll {
+    .list-clip {
       position: relative;
       flex: 1;
       min-height: 0;
-      overflow-x: hidden;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 0.45rem;
-      padding-bottom: 0.15rem;
-      -webkit-overflow-scrolling: touch;
+      overflow: hidden;
     }
 
     .checklist {
@@ -684,6 +668,7 @@
     .list-panel .list-add-btn {
       font-size: 1.76rem;
       padding: 0.7rem 0.1rem;
+      flex-shrink: 0;
     }
 
     .add-row {
@@ -764,20 +749,20 @@
                 <span>Groceries</span>
                 <span class="list-source" id="grocerySource">Sync</span>
               </div>
-              <div class="list-scroll">
+              <div class="list-clip">
                 <ul class="checklist" id="groceryList" data-list="grocery"></ul>
-                <button type="button" class="list-add-btn" data-open-list="grocery">+ Add grocery</button>
               </div>
+              <button type="button" class="list-add-btn" data-open-list="grocery">+ Add grocery</button>
             </section>
             <section class="panel list-panel" aria-label="Reminders">
               <div class="block-title">
                 <span>Reminders</span>
                 <span class="list-source" id="reminderSource">Sync</span>
               </div>
-              <div class="list-scroll">
+              <div class="list-clip">
                 <ul class="checklist" id="reminderList" data-list="reminders"></ul>
-                <button type="button" class="list-add-btn" data-open-list="reminders">+ Add reminder</button>
               </div>
+              <button type="button" class="list-add-btn" data-open-list="reminders">+ Add reminder</button>
             </section>
           </div>
         </div>

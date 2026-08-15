@@ -832,7 +832,7 @@
     const state = {
       data: null,
       kidId: null,
-      viewAll: false,
+      viewAll: true,
       busy: false,
       fingerprints: { kids: "", chores: "", all: "", data: "" },
     };
@@ -1324,7 +1324,16 @@
       document.getElementById("reminderOverlay").classList.remove("show");
     });
 
+    updateViewToggle();
     load(true);
+    window.addEventListener("pageshow", () => {
+      if (!document.body.classList.contains("kiosk") || state.viewAll) return;
+      state.viewAll = true;
+      updateViewToggle();
+      state.fingerprints.chores = "";
+      state.fingerprints.all = "";
+      if (state.data) renderAll(true);
+    });
     setInterval(() => load(false), 2000);
     setInterval(() => checkReminders(), 60000);
     document.addEventListener("visibilitychange", () => {
