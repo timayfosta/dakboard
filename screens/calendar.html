@@ -455,7 +455,7 @@
     .right-col {
       display: grid;
       grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
-      gap: 0.45rem;
+      gap: 0.2rem;
       min-height: 0;
       height: 100%;
       overflow: hidden;
@@ -564,9 +564,13 @@
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
-      padding: 0.55rem 0.5rem;
+      padding: 0.2rem 0.5rem 0.35rem;
       height: 100%;
       width: 100%;
+    }
+
+    .list-panel[aria-label="Reminders"] {
+      margin-top: -1.35rem;
     }
 
     .lists {
@@ -574,13 +578,9 @@
     }
 
     .list-panel .block-title {
-      font-size: clamp(2.3rem, 6.8cqw, 2.9rem);
-      margin-bottom: 0.4rem;
+      font-size: clamp(3.45rem, 10.2cqw, 4.35rem);
+      margin-bottom: 0.15rem;
       flex-shrink: 0;
-    }
-
-    .list-panel .list-source {
-      font-size: 1.36rem;
     }
 
     .list-clip {
@@ -594,24 +594,24 @@
       list-style: none;
       display: flex;
       flex-direction: column;
-      gap: 0.45rem;
+      gap: 0.08rem;
       flex-shrink: 0;
     }
 
     .checklist li {
       display: grid;
       grid-template-columns: auto 1fr;
-      gap: 0.5rem;
+      gap: 0.35rem;
       align-items: start;
       background: transparent;
       border-radius: 0;
-      padding: 0.6rem 0.12rem;
+      padding: 0.18rem 0.12rem;
       border: none;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       cursor: default;
       font-weight: 700;
-      font-size: clamp(2.3rem, 6.4cqw, 3rem);
-      line-height: 1.25;
+      font-size: clamp(1.15rem, 3.2cqw, 1.5rem);
+      line-height: 1.2;
       flex-shrink: 0;
     }
 
@@ -636,27 +636,27 @@
       grid-template-columns: 1fr;
       background: transparent;
       border: none;
-      font-size: 2.1rem;
+      font-size: 1.05rem;
       white-space: normal;
     }
 
     .checklist .list-dot {
       color: var(--ink-soft);
-      font-size: 2.7rem;
-      line-height: 1.25;
-      width: 36px;
+      font-size: 1.35rem;
+      line-height: 1.2;
+      width: 18px;
       text-align: center;
     }
 
     .box {
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
-      border: 2px solid rgba(255, 255, 255, 0.18);
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+      border: 1.5px solid rgba(255, 255, 255, 0.18);
       background: transparent;
       display: grid;
       place-items: center;
-      font-size: 1.6rem;
+      font-size: 0.8rem;
       color: #000;
     }
 
@@ -666,8 +666,8 @@
     }
 
     .list-panel .list-add-btn {
-      font-size: 1.76rem;
-      padding: 0.7rem 0.1rem;
+      font-size: 0.88rem;
+      padding: 0.35rem 0.1rem;
       flex-shrink: 0;
     }
 
@@ -747,7 +747,6 @@
             <section class="panel list-panel" aria-label="Grocery list">
               <div class="block-title">
                 <span>Groceries</span>
-                <span class="list-source" id="grocerySource">Sync</span>
               </div>
               <div class="list-clip">
                 <ul class="checklist" id="groceryList" data-list="grocery"></ul>
@@ -757,7 +756,6 @@
             <section class="panel list-panel" aria-label="Reminders">
               <div class="block-title">
                 <span>Reminders</span>
-                <span class="list-source" id="reminderSource">Sync</span>
               </div>
               <div class="list-clip">
                 <ul class="checklist" id="reminderList" data-list="reminders"></ul>
