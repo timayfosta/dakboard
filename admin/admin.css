@@ -845,6 +845,27 @@ button, input, select, textarea {
 }
 
 /* Admin appearance: day / night */
+.theme-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+}
+
+.theme-block + .theme-block {
+  border-top: 1px solid var(--line);
+}
+
+.theme-block strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.theme-block .night-hint {
+  margin: 0.15rem 0 0;
+}
+
 .theme-switch {
   display: inline-flex;
   align-items: center;

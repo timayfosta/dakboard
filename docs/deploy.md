@@ -85,7 +85,7 @@ Kiosk opens the first screen in `shared/screens.js` with `?kiosk=1`:
 - Auto-rotates every 45 seconds (configurable in `shared/screens.js`)
 - Touch anywhere to pause rotation for 2 minutes
 
-**Add a new screen:** create `screens/your-screen.html`, then add an entry to `FAMILY_SCREENS.screens` in `shared/screens.js` with `enabled: true`.
+**Add a new screen:** create `screens/your-screen.html` with `<div data-screen-chrome></div>` at the top of `.screen` (shared time, date, weather header). Include `shared/screen-chrome.css`, `shared/screen-chrome.js`, and `shared/weather-icons.js`, then add an entry to `FAMILY_SCREENS.screens` in `shared/screens.js` with `enabled: true`.
 
 The **Family Whiteboard** (`screens/whiteboard.html`) saves drawings to the Pi and syncs across displays. Open it from the kiosk carousel (📝 Board dot).
 

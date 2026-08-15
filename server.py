@@ -245,7 +245,7 @@ class Handler(SimpleHTTPRequestHandler):
                         "last": deploy.get_last_result(),
                         "boot": deploy.boot_status(),
                     },
-                    "features": ["settings", "screensaver", "whiteboard", "nightMode", "rotation", "liveReload"],
+                    "features": ["settings", "screensaver", "whiteboard", "nightMode", "kioskTheme", "rotation", "liveReload"],
                 },
             )
         if path == "/api/auth/me":
@@ -722,6 +722,8 @@ class Handler(SimpleHTTPRequestHandler):
     def settings_update(self, payload: dict):
         state = db.load_db()
         settings = state.setdefault("settings", {})
+        if "kioskTheme" in payload:
+            settings["kioskTheme"] = "day" if payload.get("kioskTheme") == "day" else "night"
         night = payload.get("nightMode")
         if isinstance(night, dict):
             current = settings.get("nightMode") or {}

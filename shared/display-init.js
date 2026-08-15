@@ -1,5 +1,14 @@
 /* Portrait canvas scaling — 1080×1920 design, fits any display */
 (function () {
+  try {
+    const t = localStorage.getItem("family-kiosk-theme");
+    if (t === "day" || t === "night") {
+      document.documentElement.setAttribute("data-theme", t);
+    }
+  } catch {
+    /* private mode */
+  }
+
   const cfg = window.FAMILY_CONFIG?.display || { width: 1080, height: 1920 };
   const designW = Number(cfg.width) || 1080;
   const designH = Number(cfg.height) || 1920;

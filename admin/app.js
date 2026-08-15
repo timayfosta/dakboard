@@ -52,9 +52,41 @@
     $$("[data-theme-set]").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.themeSet === active);
     });
+    syncKioskThemeButtons();
+  }
+
+  function currentKioskTheme() {
+    return state.data?.settings?.kioskTheme === "day" ? "day" : "night";
+  }
+
+  function syncKioskThemeButtons() {
+    const active = currentKioskTheme();
+    $$("[data-kiosk-theme-set]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.kioskThemeSet === active);
+    });
+  }
+
+  async function saveKioskTheme(theme) {
+    const next = theme === "day" ? "day" : "night";
+    if (!state.data) state.data = { settings: {} };
+    if (!state.data.settings) state.data.settings = {};
+    state.data.settings.kioskTheme = next;
+    syncKioskThemeButtons();
+    try {
+      await AdminAPI.saveSettings(state.token, { kioskTheme: next });
+      toast(next === "day" ? "Kiosk set to day" : "Kiosk set to night");
+    } catch (err) {
+      toast(apiErrorMessage(err));
+      await refresh();
+    }
   }
 
   document.addEventListener("click", (e) => {
+    const kioskBtn = e.target.closest("[data-kiosk-theme-set]");
+    if (kioskBtn) {
+      saveKioskTheme(kioskBtn.dataset.kioskThemeSet);
+      return;
+    }
     const btn = e.target.closest("[data-theme-set]");
     if (!btn) return;
     applyTheme(btn.dataset.themeSet);
@@ -784,10 +816,25 @@
         <div class="row night-head">
           <h2>Appearance</h2>
         </div>
-        <p class="muted night-hint">Day / Night theme for this admin app (saved on this phone).</p>
-        <div class="theme-switch" role="group" aria-label="Appearance">
-          <button type="button" data-theme-set="day"><span class="ico" aria-hidden="true">☀</span> Day</button>
-          <button type="button" data-theme-set="night"><span class="ico" aria-hidden="true">☾</span> Night</button>
+        <div class="theme-block">
+          <div>
+            <strong>Admin</strong>
+            <p class="muted night-hint">This phone. Saved on this device.</p>
+          </div>
+          <div class="theme-switch" role="group" aria-label="Admin appearance">
+            <button type="button" data-theme-set="day"><span class="ico" aria-hidden="true">☀</span> Day</button>
+            <button type="button" data-theme-set="night"><span class="ico" aria-hidden="true">☾</span> Night</button>
+          </div>
+        </div>
+        <div class="theme-block">
+          <div>
+            <strong>Kiosk</strong>
+            <p class="muted night-hint">TV / Pi display. Updates live.</p>
+          </div>
+          <div class="theme-switch" role="group" aria-label="Kiosk appearance">
+            <button type="button" data-kiosk-theme-set="day"><span class="ico" aria-hidden="true">☀</span> Day</button>
+            <button type="button" data-kiosk-theme-set="night"><span class="ico" aria-hidden="true">☾</span> Night</button>
+          </div>
         </div>
       </section>
       <section class="card ss-card">

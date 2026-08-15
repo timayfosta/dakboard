@@ -6,7 +6,7 @@ body.wb-page {
   overflow: hidden;
   touch-action: none;
   overscroll-behavior: none;
-  background: #161616;
+  background: var(--wb-canvas);
 }
 
 body.wb-page {
@@ -19,8 +19,22 @@ body.wb-page.kiosk {
   cursor: none;
 }
 
+body.tv-stage.wb-page {
+  position: relative;
+  inset: auto;
+}
+
+.wb-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--wb-canvas);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
 #wbCanvas {
-  position: fixed;
+  position: absolute;
   inset: 0;
   display: block;
   width: 100%;
@@ -31,15 +45,14 @@ body.wb-page.kiosk {
 }
 
 .wb-toolbar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
   z-index: 20;
+  flex-shrink: 0;
   padding: 0.4rem 0.5rem;
   padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
-  background: rgba(10, 10, 10, 0.92);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--nav-bg);
+  border: 1px solid var(--line);
+  border-radius: 16px;
   backdrop-filter: blur(10px);
   touch-action: manipulation;
 }
@@ -80,7 +93,7 @@ body.wb-page.kiosk {
   width: clamp(44px, 9vw, 52px);
   height: clamp(44px, 9vw, 52px);
   border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  border: 2px solid var(--check-border);
   overflow: hidden;
   cursor: pointer;
   display: block;
@@ -125,7 +138,7 @@ body.wb-page.kiosk {
   height: clamp(44px, 9vw, 52px);
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: #171717;
+  background: var(--wb-tool);
   font-size: clamp(1.05rem, 3.8vw, 1.3rem);
   line-height: 1;
   color: var(--ink-soft);
@@ -136,7 +149,7 @@ body.wb-page.kiosk {
 .wb-utensil.active {
   color: var(--ink);
   border-color: var(--coral);
-  background: rgba(255, 122, 89, 0.12);
+  background: color-mix(in srgb, var(--coral) 12%, transparent);
 }
 
 .wb-utensil:active {
@@ -162,7 +175,7 @@ body.wb-page.kiosk {
   height: clamp(44px, 9vw, 52px);
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: #171717;
+  background: var(--wb-tool);
   display: grid;
   place-items: center;
 }
@@ -174,7 +187,7 @@ body.wb-page.kiosk {
 
 .wb-size.active {
   border-color: var(--coral);
-  background: rgba(255, 122, 89, 0.12);
+  background: color-mix(in srgb, var(--coral) 12%, transparent);
 }
 
 .wb-actions {
@@ -189,7 +202,7 @@ body.wb-page.kiosk {
   padding: 0;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: #171717;
+  background: var(--wb-tool);
   font-weight: 800;
   font-size: clamp(1rem, 3.5vw, 1.2rem);
   color: var(--ink-soft);
