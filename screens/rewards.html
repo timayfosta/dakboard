@@ -89,6 +89,12 @@
       padding: 0.55rem 0.95rem;
     }
 
+    .receipt-btn.open {
+      background: var(--gold-soft);
+      color: var(--gold-ink);
+      border-color: var(--gold-line);
+    }
+
     .receipt-overlay {
       display: none;
       position: absolute;
@@ -96,31 +102,32 @@
       z-index: 70;
       align-items: center;
       justify-content: center;
-      padding: 1rem;
-      background: rgba(0, 0, 0, 0.55);
+      padding: 0.7rem;
+      background: rgba(0, 0, 0, 0.62);
     }
 
     .receipt-overlay.show { display: flex; }
 
     .receipt-sheet {
       position: relative;
-      width: min(92%, 520px);
-      max-height: 86%;
+      width: min(96%, 980px);
+      height: min(94%, 1680px);
+      max-height: 94%;
       display: flex;
       flex-direction: column;
       background: #f4efe4;
       color: #1c1914;
       border-radius: 4px;
       box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
-      font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+      font-family: var(--font-display), ui-monospace, "Cascadia Mono", Consolas, monospace;
     }
 
     .receipt-sheet::before,
     .receipt-sheet::after {
       content: "";
-      height: 10px;
+      height: 14px;
       background:
-        radial-gradient(circle at 8px 0, transparent 7px, #f4efe4 8px) 0 0 / 16px 10px repeat-x;
+        radial-gradient(circle at 10px 0, transparent 9px, #f4efe4 10px) 0 0 / 20px 14px repeat-x;
     }
 
     .receipt-sheet::after {
@@ -129,37 +136,47 @@
 
     .receipt-close {
       position: absolute;
-      top: 0.55rem;
-      right: 0.55rem;
-      width: 40px;
-      height: 40px;
+      top: 0.7rem;
+      right: 0.7rem;
+      width: 72px;
+      height: 72px;
       border: 0;
       background: transparent;
-      font-size: 1.6rem;
+      font-size: 3rem;
+      line-height: 1;
       color: #1c1914;
     }
 
     .receipt-head {
       text-align: center;
-      padding: 1.1rem 1rem 0.7rem;
+      padding: 1.4rem 1.2rem 1rem;
       border-bottom: 2px dashed #c4b8a4;
     }
 
     .receipt-head .shop-name {
       font-family: var(--font-display);
-      font-size: 1.55rem;
+      font-size: clamp(2.2rem, 6.4cqw, 2.9rem);
       font-weight: 800;
       letter-spacing: 0.04em;
     }
 
-    .receipt-head .who {
+    .receipt-head .sub {
+      font-size: clamp(1.35rem, 3.8cqw, 1.75rem);
       font-weight: 800;
-      margin-top: 0.25rem;
+      margin-top: 0.2rem;
+    }
+
+    .receipt-head .who {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(3.45rem, 10.2cqw, 4.35rem);
+      line-height: 1.05;
+      margin-top: 0.45rem;
     }
 
     .receipt-body {
       overflow: auto;
-      padding: 0.7rem 1rem;
+      padding: 0.85rem 1.15rem;
       flex: 1;
       min-height: 0;
     }
@@ -167,30 +184,48 @@
     .receipt-line {
       display: grid;
       grid-template-columns: 1fr auto;
-      gap: 0.35rem 0.75rem;
-      padding: 0.4rem 0;
+      gap: 0.35rem 0.85rem;
+      padding: 0.7rem 0.65rem;
+      margin: 0 0 0.35rem;
+      border-radius: 10px;
       border-bottom: 1px dashed #d7cbb8;
-      font-size: 0.92rem;
-      font-weight: 700;
+      font-size: clamp(1.725rem, 4.8cqw, 2.25rem);
+      font-weight: 800;
+      line-height: 1.2;
     }
 
     .receipt-line .meta {
       grid-column: 1 / -1;
       color: #6b6256;
-      font-size: 0.78rem;
+      font-size: 0.72em;
       font-weight: 700;
     }
 
-    .receipt-line.bad .amt { color: #b42318; }
+    .receipt-line.chore,
+    .receipt-line.good {
+      color: #157347;
+      background: rgba(21, 115, 71, 0.08);
+    }
+
+    .receipt-line.consequence,
+    .receipt-line.bad {
+      color: #b42318;
+      background: rgba(180, 35, 24, 0.08);
+    }
+
+    .receipt-line.chore .amt,
     .receipt-line.good .amt { color: #157347; }
 
+    .receipt-line.consequence .amt,
+    .receipt-line.bad .amt { color: #b42318; }
+
     .receipt-total {
-      padding: 0.85rem 1rem 1.1rem;
+      padding: 1.1rem 1.2rem 1.35rem;
       border-top: 2px dashed #c4b8a4;
       display: flex;
       justify-content: space-between;
       font-weight: 800;
-      font-size: 1.15rem;
+      font-size: clamp(2.15rem, 6.2cqw, 2.85rem);
     }
 
     .shop {
@@ -387,7 +422,7 @@
       <button type="button" class="receipt-close" id="receiptClose" aria-label="Close receipt">×</button>
       <header class="receipt-head">
         <div class="shop-name">FAMILY BOARD</div>
-        <div>STAR RECEIPT</div>
+        <div class="sub">STAR RECEIPT</div>
         <div class="who" id="receiptWho"></div>
       </header>
       <div class="receipt-body" id="receiptBody"></div>
@@ -413,7 +448,7 @@
   <script src="../shared/screens.js"></script>
   <script src="../shared/kiosk-nav.js"></script>
   <script>
-    const state = { data: null, kidId: null, fp: "" };
+    const state = { data: null, kidId: null, receiptKidId: null, fp: "" };
 
     if (new URLSearchParams(location.search).has("kiosk")) {
       document.body.classList.add("kiosk");
@@ -459,7 +494,7 @@
                   <div class="bal"><span class="emoji">${kid.emoji || "⭐"}</span> ★ ${state.data.balances[kid.id] || 0}</div>
                   <div class="name">${kid.name}</div>
                 </button>
-                <button type="button" class="receipt-btn" data-receipt="${kid.id}">🧾 Receipt</button>
+                <button type="button" class="receipt-btn${state.receiptKidId === kid.id ? " open" : ""}" data-receipt="${kid.id}">🧾 Receipt</button>
               </div>`;
           })
           .join("");
@@ -481,6 +516,8 @@
         if (!btn) return;
         btn.classList.toggle("active", kid.id === state.kidId);
         btn.querySelector(".bal").innerHTML = `<span class="emoji">${kid.emoji || "⭐"}</span> ★ ${state.data.balances[kid.id] || 0}`;
+        const receiptBtn = root.querySelector(`[data-receipt="${kid.id}"]`);
+        receiptBtn?.classList.toggle("open", state.receiptKidId === kid.id);
       });
     }
 
@@ -590,10 +627,9 @@
       return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
     }
 
-    function openReceipt(kidId) {
+    function fillReceipt(kidId) {
       const kid = activeKids().find((k) => k.id === kidId);
-      if (!kid) return;
-      state.kidId = kidId;
+      if (!kid) return false;
       const rows = (state.data?.starLog || [])
         .filter((row) => row.kidId === kidId)
         .slice()
@@ -601,12 +637,11 @@
       document.getElementById("receiptWho").textContent = `${kid.emoji || ""} ${kid.name}`;
       const body = document.getElementById("receiptBody");
       if (!rows.length) {
-        body.innerHTML = `<p style="text-align:center;font-weight:700;color:#6b6256">No activity yet</p>`;
+        body.innerHTML = `<p style="text-align:center;font-weight:800;font-size:clamp(1.725rem, 4.8cqw, 2.25rem);color:#6b6256">No activity yet</p>`;
       } else {
         body.innerHTML = rows
           .map((row) => {
             const stars = Number(row.stars || 0);
-            const good = stars >= 0;
             const late = row.late ? " · LATE (half stars)" : "";
             const kind =
               row.type === "consequence"
@@ -616,8 +651,16 @@
                   : row.type === "adjust"
                     ? "Adjustment"
                     : "Chore";
+            const tone =
+              row.type === "consequence"
+                ? "consequence"
+                : row.type === "chore" || !row.type
+                  ? "chore"
+                  : stars >= 0
+                    ? "good"
+                    : "bad";
             return `
-              <div class="receipt-line ${good ? "good" : "bad"}">
+              <div class="receipt-line ${tone}">
                 <span>${row.icon || ""} ${row.title}</span>
                 <span class="amt">${stars >= 0 ? "+" : ""}★${stars}</span>
                 <span class="meta">${receiptDate(row.at)} · ${kind}${late}</span>
@@ -626,18 +669,36 @@
           .join("");
       }
       document.getElementById("receiptTotal").textContent = `★ ${state.data.balances[kid.id] || 0}`;
+      return true;
+    }
+
+    function openReceipt(kidId) {
+      if (state.receiptKidId === kidId) {
+        closeReceipt();
+        return;
+      }
+      closeReceipt();
+      const kid = activeKids().find((k) => k.id === kidId);
+      if (!kid || !fillReceipt(kidId)) return;
+      state.kidId = kidId;
+      state.receiptKidId = kidId;
       document.getElementById("receiptOverlay").classList.add("show");
-      renderAll();
+      document.querySelectorAll("[data-receipt]").forEach((btn) => {
+        btn.classList.toggle("open", btn.dataset.receipt === kidId);
+      });
     }
 
     function closeReceipt() {
+      state.receiptKidId = null;
       document.getElementById("receiptOverlay").classList.remove("show");
+      document.querySelectorAll("[data-receipt]").forEach((btn) => btn.classList.remove("open"));
     }
 
     function renderAll() {
       renderPicker();
       renderShop();
       renderRecent();
+      if (state.receiptKidId) fillReceipt(state.receiptKidId);
     }
 
     async function load() {

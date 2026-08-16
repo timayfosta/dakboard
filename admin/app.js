@@ -489,18 +489,41 @@
     renderTab();
   }
 
+  function normalizeTab(tab) {
+    if (tab === "cons") return "consequences";
+    return tab || "lists";
+  }
+
   function renderTab() {
-    $$(".nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === state.tab));
+    state.tab = normalizeTab(state.tab);
+    $$(".nav [data-tab]").forEach((b) => {
+      b.classList.toggle("active", normalizeTab(b.dataset.tab) === state.tab);
+    });
     const root = $("#tabContent");
     const d = state.data;
-    if (state.tab === "kids") root.innerHTML = renderKids(d);
-    if (state.tab === "chores") root.innerHTML = renderChores(d);
-    if (state.tab === "consequences") root.innerHTML = renderConsequences(d);
-    if (state.tab === "lists") root.innerHTML = renderLists(d);
-    if (state.tab === "rewards") root.innerHTML = renderRewards(d);
-    if (state.tab === "more") root.innerHTML = renderMore(d);
-    wireTabActions();
-    syncThemeButtons();
+    if (!root) return;
+    if (!d) {
+      root.innerHTML = `<p class="muted">Loading…</p>`;
+      return;
+    }
+    try {
+      const views = {
+        kids: renderKids,
+        chores: renderChores,
+        consequences: renderConsequences,
+        lists: renderLists,
+        rewards: renderRewards,
+        more: renderMore,
+      };
+      const view = views[state.tab] || views.lists;
+      root.innerHTML = view(d);
+      wireTabActions();
+      syncThemeButtons();
+    } catch (err) {
+      console.error(err);
+      root.innerHTML = `<section class="card"><p class="muted">Couldn't open this tab. Refresh and try again.</p></section>`;
+      toast("Couldn't open that tab");
+    }
   }
 
   function renderKids(d) {
@@ -694,7 +717,7 @@
           <div class="field"><label>Assign to</label>
             <div class="chips" id="consKids">
               <button type="button" class="chip chip-all" data-kid-all>All kids</button>
-              ${d.kids
+              ${(d.kids || [])
                 .filter((k) => k.active !== false)
                 .map(
                   (k) =>
@@ -1625,10 +1648,17 @@
         const id = btn.dataset.applyCons;
         const item = (state.data?.consequences || []).find((c) => c.id === id);
         if (!item) return;
-        const names = (item.kidIds || []).map(kidName).join(", ") || "nobody";
+        const kidIds = (item.kidIds || []).length
+          ? item.kidIds
+          : (state.data?.kids || []).filter((k) => k.active !== false).map((k) => k.id);
+        if (!kidIds.length) {
+          toast("Assign at least one kid first");
+          return;
+        }
+        const names = kidIds.map(kidName).join(", ");
         if (!confirm(`Give ${item.icon || "⚠️"} ${item.title} (−★${item.stars || 1}) to ${names}?`)) return;
         try {
-          await AdminAPI.applyConsequence(state.token, id, item.kidIds);
+          await AdminAPI.applyConsequence(state.token, id, kidIds);
           toast("Consequence given");
           await refresh();
         } catch (err) {
@@ -2145,11 +2175,12 @@
     await enterAdmin();
   });
 
-  $$(".nav button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      state.tab = btn.dataset.tab;
-      renderTab();
-    });
+  $(".nav")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-tab]");
+    if (!btn) return;
+    e.preventDefault();
+    state.tab = normalizeTab(btn.dataset.tab);
+    renderTab();
   });
 
   window.addEventListener("beforeinstallprompt", (e) => {
@@ -2166,7 +2197,7 @@
         }
       });
     }).catch(() => {});
-    navigator.serviceWorker.register("sw.js?v=14", { scope: "./" }).then((reg) => {
+    navigator.serviceWorker.register("sw.js?v=16", { scope: "./" }).then((reg) => {
       reg.update();
     }).catch(() => {});
   }

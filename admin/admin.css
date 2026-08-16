@@ -453,8 +453,10 @@ button, input, select, textarea {
   place-items: center;
   gap: 0.1rem;
   padding: 0.3rem 0.15rem;
+  min-width: 0;
   min-height: calc(var(--nav-h) - 8px);
   border-radius: 10px;
+  pointer-events: auto;
 }
 
 .nav button .ico { font-size: 1.35rem; line-height: 1; }
