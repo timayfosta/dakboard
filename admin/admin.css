@@ -436,7 +436,7 @@ button, input, select, textarea {
   background: var(--nav-bg);
   border-top: 1px solid var(--line);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 0.15rem;
   z-index: 20;
   max-width: 640px;

@@ -62,6 +62,127 @@
       color: var(--gold-ink);
     }
 
+    .pick-card {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      min-width: 0;
+    }
+
+    .receipt-btn {
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--ink);
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: 0.78rem;
+      padding: 0.28rem 0.45rem;
+    }
+
+    .receipt-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 70;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: rgba(0, 0, 0, 0.55);
+    }
+
+    .receipt-overlay.show { display: flex; }
+
+    .receipt-sheet {
+      position: relative;
+      width: min(92%, 520px);
+      max-height: 86%;
+      display: flex;
+      flex-direction: column;
+      background: #f4efe4;
+      color: #1c1914;
+      border-radius: 4px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+      font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+    }
+
+    .receipt-sheet::before,
+    .receipt-sheet::after {
+      content: "";
+      height: 10px;
+      background:
+        radial-gradient(circle at 8px 0, transparent 7px, #f4efe4 8px) 0 0 / 16px 10px repeat-x;
+    }
+
+    .receipt-sheet::after {
+      transform: rotate(180deg);
+    }
+
+    .receipt-close {
+      position: absolute;
+      top: 0.55rem;
+      right: 0.55rem;
+      width: 40px;
+      height: 40px;
+      border: 0;
+      background: transparent;
+      font-size: 1.6rem;
+      color: #1c1914;
+    }
+
+    .receipt-head {
+      text-align: center;
+      padding: 1.1rem 1rem 0.7rem;
+      border-bottom: 2px dashed #c4b8a4;
+    }
+
+    .receipt-head .shop-name {
+      font-family: var(--font-display);
+      font-size: 1.55rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+
+    .receipt-head .who {
+      font-weight: 800;
+      margin-top: 0.25rem;
+    }
+
+    .receipt-body {
+      overflow: auto;
+      padding: 0.7rem 1rem;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .receipt-line {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.35rem 0.75rem;
+      padding: 0.4rem 0;
+      border-bottom: 1px dashed #d7cbb8;
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    .receipt-line .meta {
+      grid-column: 1 / -1;
+      color: #6b6256;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .receipt-line.bad .amt { color: #b42318; }
+    .receipt-line.good .amt { color: #157347; }
+
+    .receipt-total {
+      padding: 0.85rem 1rem 1.1rem;
+      border-top: 2px dashed #c4b8a4;
+      display: flex;
+      justify-content: space-between;
+      font-weight: 800;
+      font-size: 1.15rem;
+    }
+
     .shop {
       flex: 1;
       display: flex;
@@ -235,6 +356,21 @@
       <ul class="recent-list" id="recentList"></ul>
     </section>
   </div>
+  <div class="receipt-overlay" id="receiptOverlay" role="dialog" aria-modal="true" aria-labelledby="receiptWho">
+    <article class="receipt-sheet">
+      <button type="button" class="receipt-close" id="receiptClose" aria-label="Close receipt">×</button>
+      <header class="receipt-head">
+        <div class="shop-name">FAMILY BOARD</div>
+        <div>STAR RECEIPT</div>
+        <div class="who" id="receiptWho"></div>
+      </header>
+      <div class="receipt-body" id="receiptBody"></div>
+      <footer class="receipt-total">
+        <span>BALANCE</span>
+        <span id="receiptTotal">★ 0</span>
+      </footer>
+    </article>
+  </div>
   </div>
 
   <div class="toast" id="toast" aria-live="polite"></div>
@@ -292,11 +428,14 @@
           .map((kid) => {
             const active = kid.id === state.kidId;
             return `
-              <button class="pick${active ? " active" : ""}" data-kid="${kid.id}" style="--active:${kid.color}">
-                <div class="emoji">${kid.emoji || "⭐"}</div>
-                <div class="name">${kid.name}</div>
-                <div class="bal">★ ${state.data.balances[kid.id] || 0}</div>
-              </button>`;
+              <div class="pick-card">
+                <button class="pick${active ? " active" : ""}" data-kid="${kid.id}" style="--active:${kid.color}">
+                  <div class="emoji">${kid.emoji || "⭐"}</div>
+                  <div class="name">${kid.name}</div>
+                  <div class="bal">★ ${state.data.balances[kid.id] || 0}</div>
+                </button>
+                <button type="button" class="receipt-btn" data-receipt="${kid.id}">🧾 Receipt</button>
+              </div>`;
           })
           .join("");
         root.querySelectorAll("[data-kid]").forEach((btn) => {
@@ -305,6 +444,9 @@
             state.fp = "";
             renderAll();
           });
+        });
+        root.querySelectorAll("[data-receipt]").forEach((btn) => {
+          btn.addEventListener("click", () => openReceipt(btn.dataset.receipt));
         });
         return;
       }
@@ -409,6 +551,56 @@
         .join("");
     }
 
+    function receiptDate(ms) {
+      const d = new Date(ms);
+      if (Number.isNaN(d.getTime())) return "";
+      return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    }
+
+    function openReceipt(kidId) {
+      const kid = activeKids().find((k) => k.id === kidId);
+      if (!kid) return;
+      state.kidId = kidId;
+      const rows = (state.data?.starLog || [])
+        .filter((row) => row.kidId === kidId)
+        .slice()
+        .sort((a, b) => (a.at || 0) - (b.at || 0));
+      document.getElementById("receiptWho").textContent = `${kid.emoji || ""} ${kid.name}`;
+      const body = document.getElementById("receiptBody");
+      if (!rows.length) {
+        body.innerHTML = `<p style="text-align:center;font-weight:700;color:#6b6256">No activity yet</p>`;
+      } else {
+        body.innerHTML = rows
+          .map((row) => {
+            const stars = Number(row.stars || 0);
+            const good = stars >= 0;
+            const late = row.late ? " · LATE (half stars)" : "";
+            const kind =
+              row.type === "consequence"
+                ? "Consequence"
+                : row.type === "redeem"
+                  ? "Reward"
+                  : row.type === "adjust"
+                    ? "Adjustment"
+                    : "Chore";
+            return `
+              <div class="receipt-line ${good ? "good" : "bad"}">
+                <span>${row.icon || ""} ${row.title}</span>
+                <span class="amt">${stars >= 0 ? "+" : ""}★${stars}</span>
+                <span class="meta">${receiptDate(row.at)} · ${kind}${late}</span>
+              </div>`;
+          })
+          .join("");
+      }
+      document.getElementById("receiptTotal").textContent = `★ ${state.data.balances[kid.id] || 0}`;
+      document.getElementById("receiptOverlay").classList.add("show");
+      renderAll();
+    }
+
+    function closeReceipt() {
+      document.getElementById("receiptOverlay").classList.remove("show");
+    }
+
     function renderAll() {
       renderPicker();
       renderShop();
@@ -423,6 +615,7 @@
           rewards: data.rewards,
           balances: data.balances,
           redemptions: data.redemptions,
+          starLog: data.starLog,
           kidId: state.kidId,
         });
         if (fp === state.fp) return;
@@ -437,6 +630,11 @@
         console.warn(err);
       }
     }
+
+    document.getElementById("receiptClose").addEventListener("click", closeReceipt);
+    document.getElementById("receiptOverlay").addEventListener("click", (e) => {
+      if (e.target.id === "receiptOverlay") closeReceipt();
+    });
 
     ScreenChrome.init();
     load();

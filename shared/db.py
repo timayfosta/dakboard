@@ -7,7 +7,7 @@ import threading
 import time
 import uuid
 from copy import deepcopy
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +105,9 @@ def default_state() -> dict[str, Any]:
             {"id": "friend", "title": "Friend playdate", "cost": 22, "icon": "🎉", "active": True},
         ],
         "redemptions": [],
+        "consequences": [],
+        "consequenceHits": [],
+        "starLog": [],
         "whiteboard": {"version": 1, "strokes": [], "updatedAt": 0},
         "screensaverPhotos": [],
         "settings": {
@@ -228,6 +231,138 @@ def today_key() -> str:
     return date.today().isoformat()
 
 
+CONSEQUENCE_TTL_MS = 24 * 60 * 60 * 1000
+STAR_LOG_MAX = 2500
+
+
+def now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def day_noon_ms(day: str) -> int:
+    try:
+        year, month, day_n = [int(part) for part in day.split("-")[:3]]
+        return int(datetime(year, month, day_n, 12, 0).timestamp() * 1000)
+    except Exception:  # noqa: BLE001
+        return now_ms()
+
+
+def append_star_log(state: dict[str, Any], **entry: Any) -> dict[str, Any]:
+    log = state.setdefault("starLog", [])
+    row = {
+        "id": entry.get("id") or _id("log"),
+        "kidId": entry.get("kidId") or "",
+        "type": entry.get("type") or "chore",
+        "title": entry.get("title") or "",
+        "icon": entry.get("icon") or "",
+        "stars": int(entry.get("stars") or 0),
+        "late": bool(entry.get("late")),
+        "at": int(entry.get("at") or now_ms()),
+        "day": entry.get("day") or today_key(),
+        "ref": entry.get("ref") or "",
+    }
+    log.append(row)
+    if len(log) > STAR_LOG_MAX:
+        state["starLog"] = log[-2000:]
+    return row
+
+
+def remove_star_log(state: dict[str, Any], *, ref: str, kid_id: str, day: str) -> None:
+    log = state.get("starLog") or []
+    state["starLog"] = [
+        row
+        for row in log
+        if not (row.get("ref") == ref and row.get("kidId") == kid_id and row.get("day") == day)
+    ]
+
+
+def recent_consequence_hits(state: dict[str, Any]) -> list[dict[str, Any]]:
+    cutoff = now_ms() - CONSEQUENCE_TTL_MS
+    return [hit for hit in (state.get("consequenceHits") or []) if int(hit.get("at") or 0) >= cutoff]
+
+
+def rollover_completions(state: dict[str, Any]) -> bool:
+    """Drop completed-chore display buckets when the calendar day changes."""
+    today = today_key()
+    meta = state.setdefault("meta", {})
+    if meta.get("lastChoreDay") == today:
+        return False
+    completions = state.get("completions") or {}
+    if isinstance(completions, dict):
+        state["completions"] = {key: value for key, value in completions.items() if key == today}
+    meta["lastChoreDay"] = today
+    return True
+
+
+def migrate_star_log(state: dict[str, Any]) -> bool:
+    if "starLog" in state:
+        return False
+    chores = {chore.get("id"): chore for chore in (state.get("chores") or [])}
+    log: list[dict[str, Any]] = []
+    for day, bucket in (state.get("completions") or {}).items():
+        if not isinstance(bucket, dict):
+            continue
+        at = day_noon_ms(str(day))
+        for key, entry in bucket.items():
+            if ":" not in str(key):
+                continue
+            chore_id, kid_id = str(key).rsplit(":", 1)
+            chore = chores.get(chore_id) or {}
+            stars = completion_stars(entry, chore)
+            late = bool(isinstance(entry, dict) and entry.get("late"))
+            log.append(
+                {
+                    "id": _id("log"),
+                    "kidId": kid_id,
+                    "type": "chore",
+                    "title": chore.get("title") or "Chore",
+                    "icon": chore.get("icon") or "✅",
+                    "stars": stars,
+                    "late": late,
+                    "at": int(entry.get("at") or at) if isinstance(entry, dict) else at,
+                    "day": str(day),
+                    "ref": f"chore:{chore_id}",
+                }
+            )
+    for redeem in state.get("redemptions") or []:
+        if not isinstance(redeem, dict):
+            continue
+        log.append(
+            {
+                "id": redeem.get("id") or _id("log"),
+                "kidId": redeem.get("kidId") or "",
+                "type": "redeem",
+                "title": redeem.get("title") or "Reward",
+                "icon": redeem.get("icon") or "🎁",
+                "stars": -int(redeem.get("cost") or 0),
+                "late": False,
+                "at": int(redeem.get("at") or now_ms()),
+                "day": datetime.fromtimestamp(int(redeem.get("at") or now_ms()) / 1000).date().isoformat()
+                if redeem.get("at")
+                else today_key(),
+                "ref": f"redeem:{redeem.get('id') or ''}",
+            }
+        )
+    log.sort(key=lambda row: int(row.get("at") or 0))
+    state["starLog"] = log
+    return True
+
+
+def prepare_state(state: dict[str, Any]) -> bool:
+    dirty = False
+    if "consequences" not in state:
+        state["consequences"] = []
+        dirty = True
+    if "consequenceHits" not in state:
+        state["consequenceHits"] = []
+        dirty = True
+    if migrate_star_log(state):
+        dirty = True
+    if rollover_completions(state):
+        dirty = True
+    return dirty
+
+
 KIOSK_SCREEN_IDS = ("calendar", "chores", "rewards", "whiteboard")
 
 
@@ -279,12 +414,17 @@ def merged_settings(state: dict[str, Any]) -> dict[str, Any]:
 
 def public_state(state: dict[str, Any] | None = None) -> dict[str, Any]:
     state = state or load_db()
+    if prepare_state(state):
+        save_db(state)
     lists = state.get("lists") or {}
     return {
         "version": state.get("version", 1),
         "revision": get_revision(state),
         "kids": state.get("kids", []),
         "chores": state.get("chores", []),
+        "consequences": state.get("consequences", []),
+        "consequenceHits": recent_consequence_hits(state),
+        "starLog": (state.get("starLog") or [])[-1000:],
         "balances": state.get("balances", {}),
         "completions": state.get("completions", {}).get(today_key(), {}),
         "lists": lists,

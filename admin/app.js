@@ -153,6 +153,7 @@
       state.data = state.data || {
         kids: [],
         chores: [],
+        consequences: [],
         lists: { grocery: [], reminders: [] },
         rewards: [],
         balances: {},
@@ -250,6 +251,11 @@
     "✅", "🛏️", "🍽️", "🧸", "📚", "🗑️", "🐾", "🌱", "👕", "👟", "📖", "🍴",
     "🧹", "🪥", "🚿", "🧺", "🪴", "📦", "🧼", "🚗", "🍳", "🎒", "🧴", "🛁",
     "🧽", "💡", "🔑", "🏠", "🍎", "🥛",
+  ];
+
+  const CONSEQUENCE_EMOJIS = [
+    "⚠️", "😠", "🚫", "📵", "🧹", "📉", "🧊", "⏰", "📣", "💥",
+    "👎", "🧯", "🪨", "🌧️", "😤", "🛑", "📌", "🔒", "📵", "🧹",
   ];
 
   const KID_COLORS = [
@@ -489,6 +495,7 @@
     const d = state.data;
     if (state.tab === "kids") root.innerHTML = renderKids(d);
     if (state.tab === "chores") root.innerHTML = renderChores(d);
+    if (state.tab === "consequences") root.innerHTML = renderConsequences(d);
     if (state.tab === "lists") root.innerHTML = renderLists(d);
     if (state.tab === "rewards") root.innerHTML = renderRewards(d);
     if (state.tab === "more") root.innerHTML = renderMore(d);
@@ -624,6 +631,104 @@
             </article>`;
           })
           .join("")}
+      </section>`;
+  }
+
+  function resetConsequenceForm() {
+    const form = $("#consForm");
+    if (!form) return;
+    form.reset();
+    const idInput = form.querySelector('[name="id"]');
+    if (idInput) idInput.value = "";
+    setEmojiPicker(form, "icon", "⚠️");
+    form.querySelectorAll("[data-kid-chip]").forEach((chip) => chip.classList.remove("on"));
+    form.querySelector("[data-kid-all]")?.classList.remove("on");
+    const heading = form.closest(".card")?.querySelector("h2");
+    if (heading) heading.textContent = "Add consequence";
+    form.querySelector('button[type="submit"]').textContent = "Save consequence";
+    $("#cancelConsEdit")?.classList.add("hidden");
+  }
+
+  function populateConsequenceForm(item) {
+    const form = $("#consForm");
+    if (!form || !item) return;
+    let idInput = form.querySelector('[name="id"]');
+    if (!idInput) {
+      idInput = document.createElement("input");
+      idInput.type = "hidden";
+      idInput.name = "id";
+      form.prepend(idInput);
+    }
+    idInput.value = item.id;
+    form.querySelector('[name="title"]').value = item.title || "";
+    form.querySelector('[name="stars"]').value = item.stars || 1;
+    const hintInput = form.querySelector('[name="hint"]');
+    if (hintInput) hintInput.value = item.hint || "";
+    setEmojiPicker(form, "icon", item.icon || "⚠️");
+    const kidIds = new Set(item.kidIds || []);
+    form.querySelectorAll("[data-kid-chip]").forEach((chip) => {
+      chip.classList.toggle("on", kidIds.has(chip.dataset.kidChip));
+    });
+    syncAllKidChip(form);
+    const heading = form.closest(".card")?.querySelector("h2");
+    if (heading) heading.textContent = "Edit consequence";
+    form.querySelector('button[type="submit"]').textContent = "Update consequence";
+    $("#cancelConsEdit")?.classList.remove("hidden");
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderConsequences(d) {
+    return `
+      <section class="card">
+        <h2>Add consequence</h2>
+        <p class="muted">Give this to assigned kids to deduct stars. The deduction stays; it only shows on their chore list for 24 hours.</p>
+        <form id="consForm">
+          <input type="hidden" name="id" value="" />
+          <div class="field"><label>Title</label><input name="title" required placeholder="Screen time lost" /></div>
+          <div class="field">
+            <label>Emoji</label>
+            ${renderEmojiPicker("icon", CONSEQUENCE_EMOJIS, "⚠️")}
+          </div>
+          <div class="field"><label>Stars to deduct</label><input name="stars" type="number" min="1" max="99" value="1" /></div>
+          <div class="field"><label>Hint (optional)</label><input name="hint" placeholder="Why this was given" /></div>
+          <div class="field"><label>Assign to</label>
+            <div class="chips" id="consKids">
+              <button type="button" class="chip chip-all" data-kid-all>All kids</button>
+              ${d.kids
+                .filter((k) => k.active !== false)
+                .map(
+                  (k) =>
+                    `<button type="button" class="chip" data-kid-chip="${k.id}">${k.emoji} ${k.name}</button>`
+                )
+                .join("")}
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn block" type="submit">Save consequence</button>
+            <button class="btn ghost block hidden" type="button" id="cancelConsEdit">Cancel edit</button>
+          </div>
+        </form>
+      </section>
+      <section class="list">
+        ${(d.consequences || [])
+          .filter((c) => c.active !== false)
+          .map((c) => {
+            const kids = (c.kidIds || []).map(kidName).join(", ") || "Unassigned";
+            return `<article class="item">
+              <div class="item-head">
+                <div class="item-main">
+                  <div class="title">${c.icon || "⚠️"} ${c.title}</div>
+                  <div class="muted">−★${c.stars || 1} · ${kids}</div>
+                </div>
+                <button type="button" class="btn-x" data-del-cons="${c.id}" aria-label="Remove ${c.title}">×</button>
+              </div>
+              <div class="actions">
+                <button class="btn secondary compact" type="button" data-apply-cons="${c.id}">Give now</button>
+                <button class="btn ghost compact" type="button" data-edit-cons-id="${c.id}">Edit</button>
+              </div>
+            </article>`;
+          })
+          .join("") || `<p class="muted">No consequences yet.</p>`}
       </section>`;
   }
 
@@ -1446,6 +1551,89 @@
         if (!chore) return;
         populateChoreForm(chore);
         $("#cancelChoreEdit")?.classList.remove("hidden");
+      });
+    });
+
+    const consForm = $("#consForm");
+    if (consForm) {
+      const allKidBtn = consForm.querySelector("[data-kid-all]");
+      allKidBtn?.addEventListener("click", () => {
+        const turnOn = !allKidBtn.classList.contains("on");
+        setAllKidChips(consForm, turnOn);
+      });
+      consForm.querySelectorAll("[data-kid-chip]").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          chip.classList.toggle("on");
+          syncAllKidChip(consForm);
+        });
+      });
+      consForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const fd = new FormData(consForm);
+        const editing = !!fd.get("id");
+        const kidIds = selectedKidIds(consForm);
+        if (!kidIds.length) {
+          toast("Assign at least one kid");
+          return;
+        }
+        try {
+          await AdminAPI.saveConsequence(state.token, {
+            id: fd.get("id") || undefined,
+            title: fd.get("title"),
+            icon: fd.get("icon"),
+            stars: Number(fd.get("stars") || 1),
+            hint: fd.get("hint") || "",
+            kidIds,
+          });
+          toast(editing ? "Consequence updated" : "Consequence saved");
+          resetConsequenceForm();
+          await refresh();
+        } catch (err) {
+          toast(apiErrorMessage(err));
+        }
+      });
+    }
+
+    $("#cancelConsEdit")?.addEventListener("click", () => resetConsequenceForm());
+
+    $$("[data-edit-cons-id]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const item = (state.data?.consequences || []).find((c) => c.id === btn.dataset.editConsId);
+        if (!item) return;
+        populateConsequenceForm(item);
+      });
+    });
+
+    $$("[data-del-cons]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.delCons;
+        const item = (state.data?.consequences || []).find((c) => c.id === id);
+        const label = item ? `${item.icon || "⚠️"} ${item.title}` : "this consequence";
+        if (!confirm(`Remove ${label}? Past star deductions stay.`)) return;
+        try {
+          await AdminAPI.deleteConsequence(state.token, id);
+          toast("Consequence removed");
+          await refresh();
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Remove failed");
+        }
+      });
+    });
+
+    $$("[data-apply-cons]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.applyCons;
+        const item = (state.data?.consequences || []).find((c) => c.id === id);
+        if (!item) return;
+        const names = (item.kidIds || []).map(kidName).join(", ") || "nobody";
+        if (!confirm(`Give ${item.icon || "⚠️"} ${item.title} (−★${item.stars || 1}) to ${names}?`)) return;
+        try {
+          await AdminAPI.applyConsequence(state.token, id, item.kidIds);
+          toast("Consequence given");
+          await refresh();
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Could not apply");
+        }
       });
     });
 

@@ -21,6 +21,10 @@ const API = {
   state: () => API.request("/api/family/state"),
   saveKid: (token, item) => API.request("/api/family/kids", { method: "POST", token, body: item }),
   saveChore: (token, item) => API.request("/api/family/chores", { method: "POST", token, body: item }),
+  saveConsequence: (token, item) =>
+    API.request("/api/family/consequences", { method: "POST", token, body: item }),
+  applyConsequence: (token, id, kidIds) =>
+    API.request("/api/family/consequences/apply", { method: "POST", token, body: { id, kidIds } }),
   saveReward: (token, item) => API.request("/api/family/rewards", { method: "POST", token, body: item }),
   adjustStars: (token, kidId, delta) =>
     API.request("/api/family/stars", { method: "POST", token, body: { kidId, delta } }),
@@ -38,6 +42,7 @@ const API = {
     API.request(`/api/family/lists/${name}/${itemId}`, { method: "DELETE", token }),
   deleteKid: (token, id) => API.request(`/api/family/kids/${id}`, { method: "DELETE", token }),
   deleteChore: (token, id) => API.request(`/api/family/chores/${id}`, { method: "DELETE", token }),
+  deleteConsequence: (token, id) => API.request(`/api/family/consequences/${id}`, { method: "DELETE", token }),
   deleteReward: (token, id) => API.request(`/api/family/rewards/${id}`, { method: "DELETE", token }),
   saveSettings: (token, settings) =>
     API.request("/api/family/settings", { method: "POST", token, body: settings }),

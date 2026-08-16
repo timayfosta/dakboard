@@ -256,6 +256,28 @@
       color: var(--on-accent);
     }
 
+    .chore.consequence {
+      cursor: default;
+      border-color: color-mix(in srgb, var(--alert) 55%, transparent);
+      background: color-mix(in srgb, var(--alert) 18%, transparent);
+      opacity: 1;
+    }
+
+    .chore.consequence .chore-text h3 {
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .chore.consequence .check {
+      background: var(--alert);
+      border-color: var(--alert);
+      color: #fff;
+    }
+
+    .chore.consequence .stars-badge {
+      color: #fecaca;
+    }
+
     .chore.is-leaving,
     .chore.is-returning {
       pointer-events: none;
@@ -894,6 +916,22 @@
       return { todo, done };
     }
 
+    function consequenceHitsForKid(kidId) {
+      return (state.data?.consequenceHits || []).filter((hit) => hit.kidId === kidId);
+    }
+
+    function consequenceRowHtml(hit) {
+      return `
+        <li class="chore done consequence" data-hit="${hit.id}" aria-label="Consequence">
+          <div class="chore-ico"><span class="emoji">${hit.icon || "⚠️"}</span></div>
+          <div class="chore-text">
+            <h3>${hit.title}</h3>
+            <p><span class="stars-badge">−★ ${hit.stars || 1}</span> · ${hit.hint || "Consequence"}</p>
+          </div>
+          <div class="check check-circle">!</div>
+        </li>`;
+    }
+
     function pickDoneAnim() {
       return DONE_ANIMS[Math.floor(Math.random() * DONE_ANIMS.length)];
     }
@@ -1108,6 +1146,7 @@
           chores: state.data.chores,
           balances: state.data.balances,
           completions: state.data.completions,
+          consequenceHits: state.data.consequenceHits,
           today: state.data.today,
         });
         state.fingerprints.kids = "";
@@ -1172,7 +1211,12 @@
       }
 
       const { todo, done } = splitChores(kid.id);
-      const fp = fingerprint([...todo.map((c) => c.id), ...done.map((c) => c.id)]);
+      const hits = consequenceHitsForKid(kid.id);
+      const fp = fingerprint([
+        ...todo.map((c) => c.id),
+        ...done.map((c) => c.id),
+        ...hits.map((h) => h.id),
+      ]);
       if (!force && fp === state.fingerprints.chores) return;
       state.fingerprints.chores = fp;
 
@@ -1180,11 +1224,14 @@
         ? todo.map((c) => choreRowHtml(c, kid.id, false)).join("")
         : `<li class="empty"><div class="big">${done.length ? "🎉" : "✨"}</div>${done.length ? "All quests complete!" : "No quests yet"}</li>`;
 
-      doneZone.hidden = !done.length;
-      doneList.innerHTML = done.map((c) => choreRowHtml(c, kid.id, true)).join("");
+      doneZone.hidden = !done.length && !hits.length;
+      doneList.innerHTML = [
+        ...hits.map((hit) => consequenceRowHtml(hit)),
+        ...done.map((c) => choreRowHtml(c, kid.id, true)),
+      ].join("");
 
       activeList.querySelectorAll(".chore").forEach(bindChore);
-      doneList.querySelectorAll(".chore").forEach(bindChore);
+      doneList.querySelectorAll(".chore:not(.consequence)").forEach(bindChore);
     }
 
     function renderAllGrid(force) {
@@ -1290,6 +1337,7 @@
           chores: data.chores,
           balances: data.balances,
           completions: data.completions,
+          consequenceHits: data.consequenceHits,
           today: data.today,
         });
         if (!forceRender && nextFp === state.fingerprints.data) return;

@@ -682,6 +682,8 @@ class Handler(SimpleHTTPRequestHandler):
             return send_json(self, {"items": db.load_db().get("kids", [])})
         if path == "/api/family/chores":
             return send_json(self, {"items": db.load_db().get("chores", [])})
+        if path == "/api/family/consequences":
+            return send_json(self, {"items": db.load_db().get("consequences", [])})
         if path == "/api/family/rewards":
             return send_json(self, {"items": db.load_db().get("rewards", [])})
         if path.startswith("/api/family/lists/"):
@@ -792,6 +794,14 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.chores_upsert(payload)
+        if path == "/api/family/consequences/apply":
+            if not require_admin(self):
+                return
+            return self.consequence_apply(payload)
+        if path == "/api/family/consequences":
+            if not require_admin(self):
+                return
+            return self.consequences_upsert(payload)
         if path == "/api/family/rewards":
             if not require_admin(self):
                 return
@@ -886,6 +896,14 @@ class Handler(SimpleHTTPRequestHandler):
                 kid_ids = chore.get("kidIds") or []
                 if kid_id in kid_ids:
                     chore["kidIds"] = [x for x in kid_ids if x != kid_id]
+            for cons in state.get("consequences", []):
+                kid_ids = cons.get("kidIds") or []
+                if kid_id in kid_ids:
+                    cons["kidIds"] = [x for x in kid_ids if x != kid_id]
+            state["consequenceHits"] = [
+                hit for hit in (state.get("consequenceHits") or []) if hit.get("kidId") != kid_id
+            ]
+            state["starLog"] = [row for row in (state.get("starLog") or []) if row.get("kidId") != kid_id]
             for day_bucket in state.get("completions", {}).values():
                 if isinstance(day_bucket, dict):
                     for key in list(day_bucket.keys()):
@@ -904,6 +922,11 @@ class Handler(SimpleHTTPRequestHandler):
                             del day_bucket[key]
             db.save_db(state)
             return send_json(self, {"ok": True})
+        if path.startswith("/api/family/consequences/"):
+            cons_id = path.split("/")[-1]
+            state["consequences"] = [c for c in state.get("consequences", []) if c.get("id") != cons_id]
+            db.save_db(state)
+            return send_json(self, {"ok": True, "state": db.public_state(state)})
         if path.startswith("/api/family/rewards/"):
             reward_id = path.split("/")[-1]
             state["rewards"] = [r for r in state.get("rewards", []) if r.get("id") != reward_id]
@@ -1124,6 +1147,79 @@ class Handler(SimpleHTTPRequestHandler):
         db.save_db(state)
         send_json(self, {"item": chore, "state": db.public_state(state)})
 
+    def consequences_upsert(self, payload: dict):
+        state = db.load_db()
+        rows = state.setdefault("consequences", [])
+        existing = next((row for row in rows if row.get("id") == payload.get("id")), {})
+        item = {
+            "id": payload.get("id") or new_id("cons"),
+            "title": (payload.get("title") or existing.get("title") or "Consequence").strip(),
+            "icon": payload.get("icon") or existing.get("icon") or "⚠️",
+            "stars": max(1, min(99, int(payload.get("stars") or existing.get("stars") or 1))),
+            "kidIds": payload.get("kidIds")
+            if payload.get("kidIds") is not None
+            else (existing.get("kidIds") or []),
+            "hint": (
+                payload.get("hint")
+                if payload.get("hint") is not None
+                else (existing.get("hint") or "")
+            ).strip(),
+            "active": payload.get("active", existing.get("active", True)),
+        }
+        for i, row in enumerate(rows):
+            if row.get("id") == item["id"]:
+                rows[i] = {**row, **item}
+                break
+        else:
+            rows.append(item)
+        db.save_db(state)
+        send_json(self, {"item": item, "state": db.public_state(state)})
+
+    def consequence_apply(self, payload: dict):
+        state = db.load_db()
+        cons_id = payload.get("id") or payload.get("consequenceId")
+        item = next((row for row in state.get("consequences", []) if row.get("id") == cons_id), None)
+        if not item:
+            return send_json(self, {"error": "Consequence not found"}, 404)
+        kid_ids = payload.get("kidIds") if payload.get("kidIds") is not None else (item.get("kidIds") or [])
+        kid_ids = [kid for kid in kid_ids if kid]
+        if not kid_ids:
+            return send_json(self, {"error": "Assign at least one kid"}, 400)
+        stars = max(1, min(99, int(item.get("stars") or 1)))
+        stamped = db.now_ms()
+        day = db.today_key()
+        bal = state.setdefault("balances", {})
+        hits = state.setdefault("consequenceHits", [])
+        applied = []
+        for kid_id in kid_ids:
+            bal[kid_id] = max(0, int(bal.get(kid_id) or 0) - stars)
+            hit = {
+                "id": new_id("hit"),
+                "consequenceId": item["id"],
+                "kidId": kid_id,
+                "title": item.get("title") or "Consequence",
+                "icon": item.get("icon") or "⚠️",
+                "stars": stars,
+                "hint": item.get("hint") or "",
+                "at": stamped,
+            }
+            hits.append(hit)
+            db.append_star_log(
+                state,
+                kidId=kid_id,
+                type="consequence",
+                title=item.get("title") or "Consequence",
+                icon=item.get("icon") or "⚠️",
+                stars=-stars,
+                at=stamped,
+                day=day,
+                ref=f"cons:{item['id']}:{hit['id']}",
+            )
+            applied.append(hit)
+        state["consequenceHits"] = db.recent_consequence_hits(state)
+        db.save_db(state)
+        send_json(self, {"ok": True, "applied": applied, "state": db.public_state(state)})
+
     def rewards_upsert(self, payload: dict):
         state = db.load_db()
         reward = {
@@ -1151,6 +1247,16 @@ class Handler(SimpleHTTPRequestHandler):
             return send_json(self, {"error": "kidId required"}, 400)
         bal = state.setdefault("balances", {})
         bal[kid_id] = max(0, int(bal.get(kid_id) or 0) + delta)
+        if delta:
+            db.append_star_log(
+                state,
+                kidId=kid_id,
+                type="adjust",
+                title="Star adjustment",
+                icon="⭐",
+                stars=delta,
+                ref=f"adjust:{db.now_ms()}",
+            )
         db.save_db(state)
         send_json(self, {"balance": bal[kid_id], "state": db.public_state(state)})
 
@@ -1509,13 +1615,27 @@ class Handler(SimpleHTTPRequestHandler):
             refund = db.completion_stars(bucket.get(key), chore)
             del bucket[key]
             bal[kid_id] = max(0, bal[kid_id] - refund)
+            db.remove_star_log(state, ref=f"chore:{chore_id}", kid_id=kid_id, day=day)
             done = False
             stars_earned = 0
             late = False
         else:
             stars_earned, late = db.chore_stars_for_now(chore)
-            bucket[key] = {"stars": stars_earned, "late": late}
+            stamped = db.now_ms()
+            bucket[key] = {"stars": stars_earned, "late": late, "at": stamped}
             bal[kid_id] += stars_earned
+            db.append_star_log(
+                state,
+                kidId=kid_id,
+                type="chore",
+                title=chore.get("title") or "Chore",
+                icon=chore.get("icon") or "✅",
+                stars=stars_earned,
+                late=late,
+                at=stamped,
+                day=day,
+                ref=f"chore:{chore_id}",
+            )
             done = True
 
         db.save_db(state)
@@ -1544,18 +1664,30 @@ class Handler(SimpleHTTPRequestHandler):
             return send_json(self, {"error": "Not enough stars", "balance": current}, 400)
         bal[kid_id] = current - cost
         kid = next((k for k in state.get("kids", []) if k.get("id") == kid_id), {})
+        stamped = db.now_ms()
+        redeem_id = new_id("redeem")
         state.setdefault("redemptions", []).insert(
             0,
             {
-                "id": new_id("redeem"),
+                "id": redeem_id,
                 "kidId": kid_id,
                 "kidName": kid.get("name") or kid_id,
                 "rewardId": reward_id,
                 "title": reward.get("title"),
                 "icon": reward.get("icon"),
                 "cost": cost,
-                "at": int(time.time() * 1000),
+                "at": stamped,
             },
+        )
+        db.append_star_log(
+            state,
+            kidId=kid_id,
+            type="redeem",
+            title=reward.get("title") or "Reward",
+            icon=reward.get("icon") or "🎁",
+            stars=-cost,
+            at=stamped,
+            ref=f"redeem:{redeem_id}",
         )
         db.save_db(state)
         send_json(self, {"ok": True, "balance": bal[kid_id], "state": db.public_state(state)})

@@ -120,7 +120,7 @@
 
   function ignoreGestureTarget(el) {
     return !!el?.closest?.(
-      ".touch-input-overlay.open, .alert-overlay.show, .alert-pill.show, .screensaver-layer.active"
+      ".touch-input-overlay.open, .alert-overlay.show, .alert-pill.show, .receipt-overlay.show, .screensaver-layer.active"
     );
   }
 
