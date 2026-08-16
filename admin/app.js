@@ -519,6 +519,7 @@
       root.innerHTML = view(d);
       wireTabActions();
       syncThemeButtons();
+      window.TouchInput?.markTextFields?.(root);
     } catch (err) {
       console.error(err);
       root.innerHTML = `<section class="card"><p class="muted">Couldn't open this tab. Refresh and try again.</p></section>`;
@@ -532,7 +533,7 @@
         <h2>Add kid</h2>
         <form id="kidForm">
           <input type="hidden" name="id" value="" />
-          <div class="field"><label>Name</label><input name="name" required placeholder="Maya" /></div>
+          <div class="field"><label>Name</label><input type="text" inputmode="text" name="name" required placeholder="Maya" /></div>
           <div class="field">
             <label>Emoji</label>
             ${renderEmojiPicker("emoji", KID_EMOJIS, "🐻")}
@@ -598,13 +599,13 @@
         <h2>Add chore</h2>
         <form id="choreForm">
           <input type="hidden" name="id" value="" />
-          <div class="field"><label>Title</label><input name="title" required placeholder="Make bed" /></div>
+          <div class="field"><label>Title</label><input type="text" inputmode="text" name="title" required placeholder="Make bed" /></div>
           <div class="field">
             <label>Emoji</label>
             ${renderEmojiPicker("icon", CHORE_EMOJIS, "✅")}
           </div>
           <div class="field"><label>Stars</label><input name="stars" type="number" min="1" max="99" value="1" /></div>
-          <div class="field"><label>Hint (optional)</label><input name="hint" placeholder="Before school — pull covers neat" /></div>
+          <div class="field"><label>Hint (optional)</label><input type="text" inputmode="text" name="hint" placeholder="Before school — pull covers neat" /></div>
           <div class="field"><label>Period</label>
             <select name="period">
               <option value="chore">Anytime today</option>
@@ -707,13 +708,13 @@
         <p class="muted">Give this to assigned kids to deduct stars. The deduction stays; it only shows on their chore list for 24 hours.</p>
         <form id="consForm">
           <input type="hidden" name="id" value="" />
-          <div class="field"><label>Title</label><input name="title" required placeholder="Screen time lost" /></div>
+          <div class="field"><label>Title</label><input type="text" inputmode="text" name="title" required placeholder="Screen time lost" /></div>
           <div class="field">
             <label>Emoji</label>
             ${renderEmojiPicker("icon", CONSEQUENCE_EMOJIS, "⚠️")}
           </div>
           <div class="field"><label>Stars to deduct</label><input name="stars" type="number" min="1" max="99" value="1" /></div>
-          <div class="field"><label>Hint (optional)</label><input name="hint" placeholder="Why this was given" /></div>
+          <div class="field"><label>Hint (optional)</label><input type="text" inputmode="text" name="hint" placeholder="Why this was given" /></div>
           <div class="field"><label>Assign to</label>
             <div class="chips" id="consKids">
               <button type="button" class="chip chip-all" data-kid-all>All kids</button>
@@ -823,7 +824,7 @@
         <div class="folder-tabs" role="tablist">${tabs}</div>
         <section class="folder-panel">
           <form data-list-add="${name}" class="row" style="margin-bottom:0.65rem">
-            <input name="text" placeholder="${folder.placeholder}" required class="list-add-input" />
+            <input type="text" inputmode="text" name="text" placeholder="${folder.placeholder}" required class="list-add-input" />
             <button class="btn" type="submit">Add</button>
           </form>
           <div class="list">${openRows}</div>
@@ -850,8 +851,8 @@
       <section class="card">
         <h2>Add reward</h2>
         <form id="rewardForm">
-          <div class="field"><label>Title</label><input name="title" required placeholder="Pick dessert" /></div>
-          <div class="field"><label>Emoji</label><input name="icon" value="🎁" maxlength="4" /></div>
+          <div class="field"><label>Title</label><input type="text" inputmode="text" name="title" required placeholder="Pick dessert" /></div>
+          <div class="field"><label>Emoji</label><input type="text" inputmode="text" name="icon" value="🎁" maxlength="4" /></div>
           <div class="field"><label>Star cost</label><input name="cost" type="number" min="1" value="10" /></div>
           <button class="btn block" type="submit">Save reward</button>
         </form>
@@ -1199,11 +1200,11 @@
             </div>
             <div class="field">
               <label>Label</label>
-              <input name="label" placeholder="Family trip" required />
+              <input type="text" inputmode="text" name="label" placeholder="Family trip" required />
             </div>
             <div class="field">
               <label>Link or URLs</label>
-              <textarea name="url" rows="3" placeholder="https://photos.app.goo.gl/..." required></textarea>
+              <textarea name="url" rows="3" inputmode="text" placeholder="https://photos.app.goo.gl/..." required></textarea>
             </div>
             <button class="btn secondary block" type="submit">Add album</button>
           </form>
@@ -1301,7 +1302,7 @@
         <form id="filesUnlockForm" class="files-unlock">
           <label class="field">
             <span>Password</span>
-            <input type="password" id="filesUnlockPassword" name="filesPassword" autocomplete="off" />
+            <input type="password" inputmode="text" id="filesUnlockPassword" name="filesPassword" autocomplete="off" />
           </label>
           ${state.filesUnlockError ? `<p class="muted">${escapeHtml(state.filesUnlockError)}</p>` : ""}
           <button type="submit" class="btn block">Unlock files</button>
@@ -2204,6 +2205,7 @@
 
   // Boot straight into admin (no password)
   (async () => {
+    window.TouchInput?.attach?.();
     await checkServer();
     await enterAdmin();
   })();
