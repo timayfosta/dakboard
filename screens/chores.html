@@ -29,18 +29,13 @@
 
     .kid-title {
       font-family: var(--font-display);
-      font-size: clamp(1.9rem, 5.8cqw, 2.75rem);
+      font-size: clamp(3.45rem, 10.2cqw, 4.35rem);
       font-weight: 800;
       line-height: 1.05;
       min-width: 0;
-      white-space: nowrap;
+      white-space: normal;
       overflow: hidden;
-      text-overflow: ellipsis;
       text-shadow: 0 2px 18px color-mix(in srgb, var(--kid-accent, var(--coral)) 45%, transparent);
-    }
-
-    .kid-title .title-stars {
-      color: var(--sunny);
     }
 
     [data-theme="day"] .kid-title {
@@ -63,9 +58,10 @@
       background: var(--surface);
       color: var(--ink-soft);
       border-radius: 999px;
-      padding: 0.55rem 0.95rem;
+      padding: 0.55rem 1.15rem;
       font-weight: 800;
-      font-size: 0.95rem;
+      font-size: clamp(1.45rem, 4.2cqw, 1.9rem);
+      line-height: 1.1;
       white-space: nowrap;
     }
 
@@ -76,15 +72,22 @@
     }
 
     .star-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: 1rem;
+      font-size: clamp(2.15rem, 6.2cqw, 2.85rem);
       background: var(--gold-wash);
       border: 1px solid var(--gold-line);
       color: var(--sunny);
       border-radius: 999px;
-      padding: 0.4rem 0.7rem;
+      padding: 0.45rem 0.95rem;
       white-space: nowrap;
+    }
+
+    .star-pill .emoji {
+      font-size: clamp(2.4rem, 7cqw, 3.2rem);
     }
 
     .star-pill.bump { animation: star-bump 0.35s ease; }
@@ -258,14 +261,14 @@
 
     .chore.consequence {
       cursor: default;
-      border-color: color-mix(in srgb, var(--alert) 55%, transparent);
-      background: color-mix(in srgb, var(--alert) 18%, transparent);
+      border-color: color-mix(in srgb, var(--alert) 60%, transparent);
+      background: color-mix(in srgb, var(--alert) 16%, var(--surface-2));
       opacity: 1;
     }
 
     .chore.consequence .chore-text h3 {
       text-decoration: none;
-      color: #fff;
+      color: var(--ink);
     }
 
     .chore.consequence .check {
@@ -275,7 +278,7 @@
     }
 
     .chore.consequence .stars-badge {
-      color: #fecaca;
+      color: var(--alert);
     }
 
     .chore.is-leaving,
@@ -362,9 +365,9 @@
 
     .chore-text h3 {
       font-family: var(--font-display);
-      font-size: 1.05rem;
+      font-size: clamp(1.725rem, 4.8cqw, 2.25rem);
       font-weight: 800;
-      line-height: 1.1;
+      line-height: 1.12;
     }
 
     .chore-list.active-list .chore {
@@ -376,18 +379,18 @@
     }
 
     .chore-list.active-list .chore-text h3 {
-      font-size: clamp(1.35rem, 4.2cqw, 1.9rem);
+      font-size: clamp(1.725rem, 4.8cqw, 2.25rem);
       line-height: 1.12;
     }
 
     .chore-list.active-list .chore-text p {
-      font-size: 0.82rem;
+      font-size: 1.15rem;
     }
 
     .chore-text p {
       color: var(--ink-soft);
       font-weight: 700;
-      font-size: 0.74rem;
+      font-size: 1.05rem;
       margin-top: 0.12rem;
       line-height: 1.25;
     }
@@ -478,22 +481,36 @@
     .kid-panel-head {
       flex-shrink: 0;
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0.35rem;
+      gap: 0.1rem;
       padding: 0.55rem 0.45rem;
       background: color-mix(in srgb, var(--kid, var(--coral)) 12%, var(--mix-base));
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: clamp(1rem, 2.8cqw, 1.25rem);
-      line-height: 1.1;
       text-align: center;
     }
 
+    .kid-panel-name {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(3.45rem, 10.2cqw, 4.35rem);
+      line-height: 1.05;
+    }
+
     .kid-panel-head .stars {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.3rem;
       color: var(--sunny);
-      font-size: inherit;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(2.6rem, 7.8cqw, 3.5rem);
+      line-height: 1;
+    }
+
+    .kid-panel-head .stars .emoji {
+      font-size: clamp(2.6rem, 7.8cqw, 3.5rem);
     }
 
     .kid-panel-list {
@@ -518,7 +535,7 @@
     }
 
     .all-grid .chore-text h3 {
-      font-size: clamp(0.92rem, 2.4cqw, 1.08rem);
+      font-size: clamp(1.725rem, 4.8cqw, 2.25rem);
       line-height: 1.15;
     }
 
@@ -598,7 +615,7 @@
       padding: 0.35rem 0.28rem 0.32rem;
       text-align: center;
       color: var(--ink);
-      min-height: 92px;
+      min-height: 148px;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -610,26 +627,30 @@
       background: var(--surface-3);
     }
 
-    .profile .name-line {
-      flex: 1;
+    .profile .name {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(3.45rem, 10.2cqw, 4.35rem);
+      line-height: 1.05;
+      min-width: 0;
+      padding: 0 0.1rem;
+    }
+
+    .profile .name-stars {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.2rem;
-      min-height: 0;
-      padding: 0 0.1rem;
+      gap: 0.3rem;
+      color: var(--sunny);
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: clamp(1.05rem, 3cqw, 1.28rem);
-      line-height: 1.05;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: clamp(2.6rem, 7.8cqw, 3.5rem);
+      line-height: 1;
+      flex-shrink: 0;
     }
 
-    .profile .name-line .name-stars {
-      color: var(--sunny);
-      flex-shrink: 0;
+    .profile .name-stars .emoji {
+      font-size: clamp(2.6rem, 7.8cqw, 3.5rem);
     }
 
     .profile .meta {
@@ -922,13 +943,13 @@
 
     function consequenceRowHtml(hit) {
       return `
-        <li class="chore done consequence" data-hit="${hit.id}" aria-label="Consequence">
+        <li class="chore consequence" data-hit="${hit.id}" aria-label="Consequence">
           <div class="chore-ico"><span class="emoji">${hit.icon || "⚠️"}</span></div>
           <div class="chore-text">
             <h3>${hit.title}</h3>
-            <p><span class="stars-badge">−★ ${hit.stars || 1}</span> · ${hit.hint || "Consequence"}</p>
+            <p><span class="stars-badge">★ ${hit.stars || 1}</span> · ${hit.hint || "Consequence"}</p>
           </div>
-          <div class="check check-circle">!</div>
+          <div class="check check-circle">×</div>
         </li>`;
     }
 
@@ -1043,8 +1064,9 @@
       }
 
       const balance = state.data.balances[kid.id] || 0;
-      titleEl.innerHTML = `<span class="emoji">${kid.emoji || "⭐"}</span> ${kid.name}'s Quests · <span class="title-stars">★${balance}</span>`;
-      starsEl.hidden = true;
+      titleEl.textContent = kid.name;
+      starsEl.hidden = false;
+      starsEl.innerHTML = `<span class="emoji">${kid.emoji || "⭐"}</span> ★ ${balance}`;
       const { done, total, remaining } = progress(kid.id);
       labelEl.textContent =
         total === 0
@@ -1220,18 +1242,20 @@
       if (!force && fp === state.fingerprints.chores) return;
       state.fingerprints.chores = fp;
 
-      activeList.innerHTML = todo.length
-        ? todo.map((c) => choreRowHtml(c, kid.id, false)).join("")
-        : `<li class="empty"><div class="big">${done.length ? "🎉" : "✨"}</div>${done.length ? "All quests complete!" : "No quests yet"}</li>`;
+      if (todo.length || hits.length) {
+        activeList.innerHTML = [
+          ...todo.map((c) => choreRowHtml(c, kid.id, false)),
+          ...hits.map((hit) => consequenceRowHtml(hit)),
+        ].join("");
+      } else {
+        activeList.innerHTML = `<li class="empty"><div class="big">${done.length ? "🎉" : "✨"}</div>${done.length ? "All quests complete!" : "No quests yet"}</li>`;
+      }
 
-      doneZone.hidden = !done.length && !hits.length;
-      doneList.innerHTML = [
-        ...hits.map((hit) => consequenceRowHtml(hit)),
-        ...done.map((c) => choreRowHtml(c, kid.id, true)),
-      ].join("");
+      doneZone.hidden = !done.length;
+      doneList.innerHTML = done.map((c) => choreRowHtml(c, kid.id, true)).join("");
 
-      activeList.querySelectorAll(".chore").forEach(bindChore);
-      doneList.querySelectorAll(".chore:not(.consequence)").forEach(bindChore);
+      activeList.querySelectorAll(".chore:not(.consequence)").forEach(bindChore);
+      doneList.querySelectorAll(".chore").forEach(bindChore);
     }
 
     function renderAllGrid(force) {
@@ -1240,7 +1264,8 @@
       const fp = fingerprint(
         kids.map((k) => {
           const { todo } = splitChores(k.id);
-          return [k.id, ...todo.map((c) => c.id)];
+          const hits = consequenceHitsForKid(k.id);
+          return [k.id, ...todo.map((c) => c.id), ...hits.map((h) => h.id)];
         })
       );
       if (!force && fp === state.fingerprints.all) return;
@@ -1249,24 +1274,25 @@
       grid.innerHTML = kids
         .map((kid) => {
           const { todo } = splitChores(kid.id);
+          const hits = consequenceHitsForKid(kid.id);
+          const rows = [
+            ...todo.map((c) => choreRowHtml(c, kid.id, false)),
+            ...hits.map((hit) => consequenceRowHtml(hit)),
+          ];
           return `
             <div class="kid-panel" style="--kid:${kid.color}">
               <div class="kid-panel-head">
-                <span class="kid-panel-name"><span class="emoji">${kid.emoji}</span> ${kid.name}</span>
-                <span class="stars">· ★${state.data.balances[kid.id] || 0}</span>
+                <span class="stars"><span class="emoji">${kid.emoji || "⭐"}</span> ★ ${state.data.balances[kid.id] || 0}</span>
+                <span class="kid-panel-name">${kid.name}</span>
               </div>
               <ul class="kid-panel-list">
-                ${
-                  todo.length
-                    ? todo.map((c) => choreRowHtml(c, kid.id, false)).join("")
-                    : `<li class="panel-empty">All done! 🎉</li>`
-                }
+                ${rows.length ? rows.join("") : `<li class="panel-empty">All done! 🎉</li>`}
               </ul>
             </div>`;
         })
         .join("");
 
-      grid.querySelectorAll(".chore").forEach(bindChore);
+      grid.querySelectorAll(".chore:not(.consequence)").forEach(bindChore);
     }
 
     function renderProfiles(force) {
@@ -1290,7 +1316,8 @@
           const active = !state.viewAll && kid.id === state.kidId;
           return `
             <button class="profile${active ? " active" : ""}" data-kid="${kid.id}" style="--active:${kid.color}" role="tab" aria-selected="${active}">
-              <div class="name-line"><span class="emoji">${kid.emoji || "⭐"}</span> ${kid.name} <span class="name-stars">★${state.data.balances[kid.id] || 0}</span></div>
+              <div class="name-stars"><span class="emoji">${kid.emoji || "⭐"}</span> ★ ${state.data.balances[kid.id] || 0}</div>
+              <div class="name">${kid.name}</div>
               <div class="meta">${done}/${total} done</div>
               <div class="bar"><span style="width:${Math.round(pct * 100)}%"></span></div>
             </button>`;

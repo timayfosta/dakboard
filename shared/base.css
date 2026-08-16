@@ -150,8 +150,6 @@ html, body {
 .alert-icon,
 .pick .emoji,
 .reward .icon,
-.kid-panel-name,
-.name-line,
 .big {
   font-family: var(--font-emoji), var(--font-body);
   font-weight: 400 !important;

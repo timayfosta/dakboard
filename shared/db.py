@@ -232,6 +232,7 @@ def today_key() -> str:
 
 
 CONSEQUENCE_TTL_MS = 24 * 60 * 60 * 1000
+REDEMPTION_TTL_MS = 48 * 60 * 60 * 1000
 STAR_LOG_MAX = 2500
 
 
@@ -279,6 +280,19 @@ def remove_star_log(state: dict[str, Any], *, ref: str, kid_id: str, day: str) -
 def recent_consequence_hits(state: dict[str, Any]) -> list[dict[str, Any]]:
     cutoff = now_ms() - CONSEQUENCE_TTL_MS
     return [hit for hit in (state.get("consequenceHits") or []) if int(hit.get("at") or 0) >= cutoff]
+
+
+def recent_redemptions(state: dict[str, Any]) -> list[dict[str, Any]]:
+    cutoff = now_ms() - REDEMPTION_TTL_MS
+    return [row for row in (state.get("redemptions") or []) if int(row.get("at") or 0) >= cutoff]
+
+
+def prune_redemptions(state: dict[str, Any]) -> bool:
+    kept = recent_redemptions(state)
+    if len(kept) == len(state.get("redemptions") or []):
+        return False
+    state["redemptions"] = kept
+    return True
 
 
 def rollover_completions(state: dict[str, Any]) -> bool:
@@ -360,6 +374,8 @@ def prepare_state(state: dict[str, Any]) -> bool:
         dirty = True
     if rollover_completions(state):
         dirty = True
+    if prune_redemptions(state):
+        dirty = True
     return dirty
 
 
@@ -429,7 +445,7 @@ def public_state(state: dict[str, Any] | None = None) -> dict[str, Any]:
         "completions": state.get("completions", {}).get(today_key(), {}),
         "lists": lists,
         "rewards": state.get("rewards", []),
-        "redemptions": state.get("redemptions", [])[:20],
+        "redemptions": recent_redemptions(state),
         "whiteboard": state.get("whiteboard") or {"version": 1, "strokes": [], "updatedAt": 0},
         "settings": merged_settings(state),
         "screensaverPhotos": state.get("screensaverPhotos") or [],

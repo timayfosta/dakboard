@@ -50,16 +50,26 @@
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--active, var(--coral)) 25%, transparent);
     }
 
-    .pick .emoji { font-size: 1.55rem; line-height: 1; }
     .pick .name {
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: 0.95rem;
+      font-size: clamp(3.45rem, 10.2cqw, 4.35rem);
+      line-height: 1.05;
     }
     .pick .bal {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      font-family: var(--font-display);
       font-weight: 800;
-      font-size: 0.8rem;
+      font-size: clamp(2.6rem, 7.8cqw, 3.5rem);
+      line-height: 1;
       color: var(--gold-ink);
+    }
+    .pick .bal .emoji {
+      font-size: clamp(2.6rem, 7.8cqw, 3.5rem);
+      line-height: 1;
     }
 
     .pick-card {
@@ -75,8 +85,8 @@
       color: var(--ink);
       border-radius: 999px;
       font-weight: 800;
-      font-size: 0.78rem;
-      padding: 0.28rem 0.45rem;
+      font-size: clamp(1.25rem, 3.6cqw, 1.65rem);
+      padding: 0.55rem 0.95rem;
     }
 
     .receipt-overlay {
@@ -187,7 +197,7 @@
       flex: 1;
       display: flex;
       flex-direction: column;
-      min-height: 0;
+      min-height: 10rem;
     }
 
     .shop-head {
@@ -200,18 +210,20 @@
 
     .shop-head h2 {
       font-family: var(--font-display);
-      font-size: 1.45rem;
+      font-size: clamp(2.15rem, 6.2cqw, 2.85rem);
       font-weight: 800;
+      line-height: 1.1;
     }
 
     .balance-pill {
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: 1.15rem;
+      font-size: clamp(2.15rem, 6.2cqw, 2.85rem);
+      line-height: 1;
       background: var(--gold-soft);
       color: var(--gold-ink);
       border-radius: 999px;
-      padding: 0.4rem 0.85rem;
+      padding: 0.45rem 0.95rem;
     }
 
     .reward-grid {
@@ -243,40 +255,51 @@
       opacity: 0.55;
     }
 
+    .reward-top {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+    }
+
     .reward .icon {
-      font-size: 1.9rem;
+      font-size: clamp(2.6rem, 7.5cqw, 3.4rem);
       line-height: 1;
     }
 
     .reward .title {
       font-family: var(--font-display);
       font-weight: 800;
-      font-size: 1.1rem;
+      font-size: clamp(2.15rem, 6.2cqw, 2.85rem);
       line-height: 1.15;
       flex: 1;
     }
 
     .reward .cost {
+      font-family: var(--font-display);
       font-weight: 800;
       color: var(--gold-ink);
       background: var(--gold-softer);
       border-radius: 999px;
-      padding: 0.3rem 0.65rem;
+      padding: 0.35rem 0.8rem;
       width: fit-content;
-      font-size: 0.95rem;
+      font-size: clamp(2.15rem, 6.2cqw, 2.85rem);
+      line-height: 1;
     }
 
     .recent {
-      flex-shrink: 0;
-      max-height: 28%;
+      flex: 0 1 auto;
+      max-height: 52%;
       display: flex;
       flex-direction: column;
       min-height: 0;
+      background: color-mix(in srgb, var(--gold-soft, var(--gold-wash)) 55%, var(--panel));
+      border: 2px solid var(--gold-line, var(--line));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--sunny, #f5c84c) 18%, transparent);
     }
 
     .recent h2 {
       font-family: var(--font-display);
-      font-size: 1.25rem;
+      font-size: clamp(1.85rem, 5.4cqw, 2.4rem);
       font-weight: 800;
       margin-bottom: 0.55rem;
       flex-shrink: 0;
@@ -285,28 +308,31 @@
     .recent-list {
       list-style: none;
       overflow: auto;
-      flex: 1;
+      flex: 0 1 auto;
       min-height: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
+      gap: 0.5rem;
     }
 
     .recent-list li {
       background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 0.55rem 0.7rem;
-      font-weight: 700;
+      border: 2px solid var(--gold-line, var(--line));
+      border-radius: 16px;
+      padding: 0.75rem 0.9rem;
+      font-weight: 800;
       display: flex;
       justify-content: space-between;
-      gap: 0.5rem;
-      font-size: 0.92rem;
+      align-items: center;
+      gap: 0.65rem;
+      font-size: clamp(1.35rem, 3.8cqw, 1.75rem);
+      line-height: 1.2;
     }
 
     .recent-list .meta {
       color: var(--ink-soft);
       white-space: nowrap;
+      font-size: 0.85em;
     }
 
     .toast {
@@ -430,9 +456,8 @@
             return `
               <div class="pick-card">
                 <button class="pick${active ? " active" : ""}" data-kid="${kid.id}" style="--active:${kid.color}">
-                  <div class="emoji">${kid.emoji || "⭐"}</div>
+                  <div class="bal"><span class="emoji">${kid.emoji || "⭐"}</span> ★ ${state.data.balances[kid.id] || 0}</div>
                   <div class="name">${kid.name}</div>
-                  <div class="bal">★ ${state.data.balances[kid.id] || 0}</div>
                 </button>
                 <button type="button" class="receipt-btn" data-receipt="${kid.id}">🧾 Receipt</button>
               </div>`;
@@ -455,7 +480,7 @@
         const btn = root.querySelector(`[data-kid="${kid.id}"]`);
         if (!btn) return;
         btn.classList.toggle("active", kid.id === state.kidId);
-        btn.querySelector(".bal").textContent = `★ ${state.data.balances[kid.id] || 0}`;
+        btn.querySelector(".bal").innerHTML = `<span class="emoji">${kid.emoji || "⭐"}</span> ★ ${state.data.balances[kid.id] || 0}`;
       });
     }
 
@@ -497,9 +522,11 @@
           const can = bal >= r.cost;
           return `
             <button class="reward${can ? "" : " locked"}" data-reward="${r.id}">
-              <div class="icon"><span class="emoji">${r.icon || "🎁"}</span></div>
+              <div class="reward-top">
+                <div class="icon"><span class="emoji">${r.icon || "🎁"}</span></div>
+                <div class="cost">★ ${r.cost}</div>
+              </div>
               <div class="title">${r.title}</div>
-              <div class="cost">★ ${r.cost}</div>
             </button>`;
         })
         .join("");
@@ -530,15 +557,21 @@
       });
     }
 
+    const RECENT_WIN_MS = 48 * 60 * 60 * 1000;
+
+    function recentWins() {
+      const cutoff = Date.now() - RECENT_WIN_MS;
+      return (state.data?.redemptions || []).filter((item) => Number(item.at || 0) >= cutoff);
+    }
+
     function renderRecent() {
       const list = document.getElementById("recentList");
-      const items = state.data?.redemptions || [];
+      const items = recentWins();
       if (!items.length) {
         list.innerHTML = `<li><span>No redemptions yet — earn stars on the chore screen!</span></li>`;
         return;
       }
       list.innerHTML = items
-        .slice(0, 8)
         .map((item) => {
           const when = new Date(item.at).toLocaleString(undefined, {
             month: "short",
