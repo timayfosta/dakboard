@@ -353,12 +353,13 @@
     @keyframes anim-rocket-r { from { transform: translateY(170px) scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
 
     .chore-ico {
-      width: 42px;
-      height: 42px;
-      border-radius: 12px;
+      width: clamp(3.1rem, 8.4cqw, 4rem);
+      height: clamp(3.1rem, 8.4cqw, 4rem);
+      border-radius: 14px;
       display: grid;
       place-items: center;
-      font-size: 1.35rem;
+      font-size: clamp(2.6rem, 7.8cqw, 3.5rem);
+      line-height: 1;
       background: var(--panel);
       border: 1px solid var(--line);
     }
@@ -402,14 +403,14 @@
     }
 
     .check {
-      width: 42px;
-      height: 42px;
+      width: clamp(2.8rem, 7.4cqw, 3.6rem);
+      height: clamp(2.8rem, 7.4cqw, 3.6rem);
       border-radius: 50%;
       border: 2px solid var(--check-border);
       background: var(--surface);
       display: grid;
       place-items: center;
-      font-size: 1.15rem;
+      font-size: clamp(1.55rem, 4.4cqw, 2rem);
       font-weight: 800;
       color: transparent;
     }
@@ -540,14 +541,18 @@
     }
 
     .all-grid .chore-ico {
-      width: 34px;
-      height: 34px;
-      font-size: 1.05rem;
-      border-radius: 8px;
+      width: clamp(2.8rem, 7.4cqw, 3.6rem);
+      height: clamp(2.8rem, 7.4cqw, 3.6rem);
+      font-size: clamp(2.2rem, 6.4cqw, 3rem);
+      border-radius: 12px;
     }
 
     .all-grid .chore-text p { font-size: 0.62rem; display: none; }
-    .all-grid .check { width: 30px; height: 30px; font-size: 0.95rem; }
+    .all-grid .check {
+      width: clamp(2.4rem, 6.4cqw, 3.1rem);
+      height: clamp(2.4rem, 6.4cqw, 3.1rem);
+      font-size: clamp(1.35rem, 3.8cqw, 1.75rem);
+    }
 
     .panel-empty {
       margin: auto;

@@ -11,10 +11,12 @@ window.FAMILY_CONFIG = {
     rotate: "right",
   },
 
-  /* Open-Meteo + NWS alerts use lat/lon. Update for your home. */
+  /* Rochelle, IL 61068 — NWS station KRPJ (Rochelle Municipal Airport). */
   weather: {
     latitude: 41.9239,
     longitude: -89.0687,
+    zip: "61068",
+    station: "KRPJ",
     placeLabel: "Rochelle, IL",
     timezone: "America/Chicago",
     tempUnit: "fahrenheit", // or "celsius"

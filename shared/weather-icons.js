@@ -52,6 +52,12 @@
     return map[code] || "partlyCloudy";
   }
 
+  function moon(cx, cy, r) {
+    return `
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--wx-moon)"/>
+      <circle cx="${cx + r * 0.38}" cy="${cy - r * 0.22}" r="${r * 0.84}" fill="var(--wx-moon-cut)"/>`;
+  }
+
   function sun(cx, cy, r) {
     const rays = [];
     for (let i = 0; i < 8; i++) {
@@ -81,11 +87,17 @@
   }
 
   const SVG = {
-    clear: () => svgShell(`${sun(32, 32, 13)}`),
+    clear: (isDay) => svgShell(isDay ? `${sun(32, 32, 13)}` : `${moon(34, 30, 14)}`),
 
-    mostlyClear: () => svgShell(`${sun(22, 22, 10)}${cloud(18, 28, 0.85, "var(--wx-cloud)")}`),
+    mostlyClear: (isDay) =>
+      svgShell(
+        `${isDay ? sun(22, 22, 10) : moon(22, 20, 10)}${cloud(18, 28, 0.85, "var(--wx-cloud)")}`
+      ),
 
-    partlyCloudy: () => svgShell(`${sun(24, 18, 9)}${cloud(14, 26, 1, "var(--wx-cloud)")}`),
+    partlyCloudy: (isDay) =>
+      svgShell(
+        `${isDay ? sun(24, 18, 9) : moon(24, 16, 9)}${cloud(14, 26, 1, "var(--wx-cloud)")}`
+      ),
 
     overcast: () => svgShell(`${cloud(8, 18, 1.05, "var(--wx-cloud-mid)")}${cloud(12, 30, 0.95, "var(--wx-cloud)")}`),
 
@@ -164,9 +176,10 @@
   };
 
   window.WeatherIcons = {
-    svg(code) {
+    svg(code, isDay = true) {
       const type = typeForCode(code);
-      return (SVG[type] || SVG.partlyCloudy)();
+      const draw = SVG[type] || SVG.partlyCloudy;
+      return draw.length ? draw(isDay !== false) : draw();
     },
     label(code) {
       return LABELS[typeForCode(code)] || "Weather";

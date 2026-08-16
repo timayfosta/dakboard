@@ -47,6 +47,8 @@
   --mix-shadow: #333;
   --mix-base: #111;
   --wx-sun: #f5c84c;
+  --wx-moon: #e8eef8;
+  --wx-moon-cut: var(--bg0);
   --wx-cloud: #b8c2d0;
   --wx-cloud-mid: #9aa3b2;
   --wx-cloud-dark: #7a8494;
@@ -117,6 +119,8 @@
   --mix-shadow: #cbd5e1;
   --mix-base: #ffffff;
   --wx-sun: #eab308;
+  --wx-moon: #334155;
+  --wx-moon-cut: var(--bg0);
   --wx-cloud: #64748b;
   --wx-cloud-mid: #475569;
   --wx-cloud-dark: #334155;

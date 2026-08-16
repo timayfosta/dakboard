@@ -307,6 +307,208 @@ def load_config_calendar() -> dict[str, Any]:
     return {"calendarId": cal_id, "daysAhead": days}
 
 
+ROCHELLE_WEATHER = {
+    "latitude": 41.9239,
+    "longitude": -89.0687,
+    "zip": "61068",
+    "station": "KRPJ",
+    "place": "Rochelle, IL",
+    "timezone": "America/Chicago",
+}
+_weather_cache: dict[str, Any] = {"at": 0.0, "data": None}
+WEATHER_CACHE_SEC = 45
+NWS_UA = "FamilyBoard/1.0 (Rochelle IL 61068 kiosk)"
+
+
+def load_config_weather() -> dict[str, Any]:
+    cfg = dict(ROCHELLE_WEATHER)
+    text = CONFIG_JS.read_text(encoding="utf-8") if CONFIG_JS.exists() else ""
+    lat = re.search(r"latitude:\s*(-?\d+(?:\.\d+)?)", text)
+    lon = re.search(r"longitude:\s*(-?\d+(?:\.\d+)?)", text)
+    station = re.search(r'station:\s*"([^"]+)"', text)
+    place = re.search(r'placeLabel:\s*"([^"]+)"', text)
+    zip_code = re.search(r'zip:\s*"([^"]+)"', text)
+    tz = re.search(r'timezone:\s*"([^"]+)"', text)
+    if lat:
+        cfg["latitude"] = float(lat.group(1))
+    if lon:
+        cfg["longitude"] = float(lon.group(1))
+    if station:
+        cfg["station"] = station.group(1).strip() or cfg["station"]
+    if place:
+        cfg["place"] = place.group(1).strip() or cfg["place"]
+    if zip_code:
+        cfg["zip"] = zip_code.group(1).strip() or cfg["zip"]
+    if tz:
+        cfg["timezone"] = tz.group(1).strip() or cfg["timezone"]
+    return cfg
+
+
+def _weather_http_json(url: str, timeout: int = 12) -> dict[str, Any]:
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/geo+json, application/json",
+            "User-Agent": NWS_UA,
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _nws_code_from_text(text: str, icon: str) -> tuple[int, bool]:
+    blob = f"{icon} {text}".lower()
+    is_day = "/night/" not in icon.lower()
+    pairs = (
+        ("tsra", 95),
+        ("thunder", 95),
+        ("blizzard", 75),
+        ("heavy snow", 75),
+        ("snow", 71),
+        ("sleet", 66),
+        ("freezing", 66),
+        ("rain_showers", 80),
+        ("shra", 80),
+        ("shower", 80),
+        ("heavy rain", 65),
+        ("rain", 61),
+        ("drizzle", 51),
+        ("fog", 45),
+        ("haze", 45),
+        ("ovc", 3),
+        ("overcast", 3),
+        ("cloudy", 3),
+        ("bkn", 3),
+        ("sct", 2),
+        ("partly", 2),
+        ("few", 1),
+        ("mostly clear", 1),
+        ("mostly sunny", 1),
+        ("skc", 0),
+        ("clear", 0),
+        ("sunny", 0),
+        ("fair", 0),
+    )
+    for needle, code in pairs:
+        if needle in blob:
+            return code, is_day
+    return 2, is_day
+
+
+def _c_to_f(value: float) -> float:
+    return value * 9.0 / 5.0 + 32.0
+
+
+def _nws_current(cfg: dict[str, Any]) -> dict[str, Any] | None:
+    station = cfg.get("station") or "KRPJ"
+    data = _weather_http_json(f"https://api.weather.gov/stations/{station}/observations/latest")
+    props = data.get("properties") or {}
+    temp = (props.get("temperature") or {}).get("value")
+    if temp is None:
+        return None
+    stamp = str(props.get("timestamp") or "")
+    if stamp:
+        try:
+            observed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            age = datetime.now(timezone.utc) - observed.astimezone(timezone.utc)
+            if age.total_seconds() > 3 * 60 * 60:
+                return None
+        except Exception:  # noqa: BLE001
+            pass
+    icon = str(props.get("icon") or "")
+    text = str(props.get("textDescription") or "")
+    code, is_day = _nws_code_from_text(text, icon)
+    wind = (props.get("windSpeed") or {}).get("value")
+    wind_unit = str((props.get("windSpeed") or {}).get("unitCode") or "")
+    if wind is None:
+        wind_mph = None
+    elif "m_s" in wind_unit:
+        wind_mph = float(wind) * 2.23694
+    else:
+        wind_mph = float(wind) * 0.621371
+    return {
+        "temperature_2m": round(_c_to_f(float(temp)), 1),
+        "weather_code": code,
+        "wind_speed_10m": None if wind_mph is None else round(wind_mph, 1),
+        "is_day": 1 if is_day else 0,
+        "source": f"NWS {station}",
+        "observedAt": stamp,
+    }
+
+
+def _open_meteo(cfg: dict[str, Any]) -> dict[str, Any]:
+    lat = cfg["latitude"]
+    lon = cfg["longitude"]
+    tz = urllib.parse.quote(str(cfg.get("timezone") or "America/Chicago"))
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+        "&current=temperature_2m,weather_code,wind_speed_10m,is_day"
+        "&minutely_15=temperature_2m,weather_code,is_day"
+        "&forecast_minutely_15=8"
+        "&daily=weather_code,temperature_2m_max,temperature_2m_min"
+        "&temperature_unit=fahrenheit&wind_speed_unit=mph"
+        f"&timezone={tz}&forecast_days=4"
+    )
+    return _weather_http_json(url, timeout=15)
+
+
+def _latest_minutely(om: dict[str, Any]) -> dict[str, Any] | None:
+    minute = om.get("minutely_15") or {}
+    temps = minute.get("temperature_2m") or []
+    codes = minute.get("weather_code") or []
+    days = minute.get("is_day") or []
+    for i in range(len(temps) - 1, -1, -1):
+        if temps[i] is None:
+            continue
+        return {
+            "temperature_2m": float(temps[i]),
+            "weather_code": int(codes[i] if i < len(codes) and codes[i] is not None else 2),
+            "is_day": int(days[i] if i < len(days) and days[i] is not None else 1),
+            "source": "Open-Meteo 15min",
+        }
+    return None
+
+
+def fetch_weather() -> dict[str, Any]:
+    now = time.time()
+    cached = _weather_cache.get("data")
+    if cached and now - float(_weather_cache.get("at") or 0) < WEATHER_CACHE_SEC:
+        return cached
+    cfg = load_config_weather()
+    om = _open_meteo(cfg)
+    current = None
+    try:
+        current = _nws_current(cfg)
+    except Exception as exc:  # noqa: BLE001
+        print(f"NWS KRPJ observation failed: {exc}", flush=True)
+    if current is None:
+        current = _latest_minutely(om)
+    if current is None:
+        cur = om.get("current") or {}
+        current = {
+            "temperature_2m": cur.get("temperature_2m"),
+            "weather_code": cur.get("weather_code"),
+            "wind_speed_10m": cur.get("wind_speed_10m"),
+            "is_day": cur.get("is_day", 1),
+            "source": "Open-Meteo",
+        }
+    if current.get("wind_speed_10m") is None:
+        current["wind_speed_10m"] = (om.get("current") or {}).get("wind_speed_10m")
+    payload = {
+        "place": cfg["place"],
+        "zip": cfg["zip"],
+        "station": cfg["station"],
+        "latitude": cfg["latitude"],
+        "longitude": cfg["longitude"],
+        "updatedAt": int(now * 1000),
+        "current": current,
+        "daily": om.get("daily") or {},
+    }
+    _weather_cache["at"] = now
+    _weather_cache["data"] = payload
+    return payload
+
+
 def _google_http_json(url: str, *, token: str = "", data: bytes | None = None) -> dict[str, Any]:
     headers = {"Accept": "application/json"}
     if token:
@@ -637,6 +839,15 @@ class Handler(SimpleHTTPRequestHandler):
 
         if path == "/api/calendar":
             return self.proxy_calendar()
+        if path == "/api/weather":
+            try:
+                return send_json(self, fetch_weather())
+            except Exception as exc:  # noqa: BLE001
+                print(f"Weather fetch failed: {exc}", flush=True)
+                cached = _weather_cache.get("data")
+                if cached:
+                    return send_json(self, cached)
+                return send_json(self, {"error": "Weather unavailable"}, 502)
         if path == "/api/health":
             head = deploy.git_head()
             return send_json(
