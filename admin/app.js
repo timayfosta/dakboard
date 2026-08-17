@@ -2203,9 +2203,68 @@
     }).catch(() => {});
   }
 
+  function isKioskAdmin() {
+    const q = new URLSearchParams(location.search);
+    if (q.get("from") === "kiosk" || q.has("kiosk")) return true;
+    try {
+      return !!sessionStorage.getItem("fb-kiosk-return");
+    } catch {
+      return false;
+    }
+  }
+
+  function closeKioskAdmin() {
+    let dest = "/screens/calendar.html?kiosk=1";
+    try {
+      dest = sessionStorage.getItem("fb-kiosk-return") || dest;
+      sessionStorage.removeItem("fb-kiosk-return");
+    } catch {}
+    if (!/[?&]kiosk=/.test(dest)) {
+      dest += dest.includes("?") ? "&kiosk=1" : "?kiosk=1";
+    }
+    location.href = dest;
+  }
+
+  function wireKioskAdminClose() {
+    if (!isKioskAdmin()) return;
+    document.body.classList.add("kiosk-admin");
+    const btn = $("#kioskAdminClose");
+    if (btn) {
+      btn.classList.remove("hidden");
+      btn.addEventListener("click", closeKioskAdmin);
+    }
+    let startY = 0;
+    let startX = 0;
+    let startTarget = null;
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (e.target.closest?.(".touch-input-overlay")) return;
+        startY = e.clientY;
+        startX = e.clientX;
+        startTarget = e.target;
+      },
+      { passive: true }
+    );
+    document.addEventListener(
+      "pointerup",
+      (e) => {
+        const dy = e.clientY - startY;
+        const dx = e.clientX - startX;
+        if (Math.abs(dy) < 80 || Math.abs(dy) < Math.abs(dx)) return;
+        if (dy > 0) return;
+        const scroller = startTarget?.closest?.(".content, .list, .file-editor, textarea");
+        if (scroller && scroller.scrollTop > 4) return;
+        closeKioskAdmin();
+      },
+      { passive: true }
+    );
+  }
+
   // Boot straight into admin (no password)
   (async () => {
     window.TouchInput?.attach?.();
+    wireKioskAdminClose();
     await checkServer();
     await enterAdmin();
   })();

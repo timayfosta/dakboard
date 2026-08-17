@@ -120,6 +120,29 @@ button, input, select, textarea {
   gap: 0.75rem;
 }
 
+.top-lead {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.kiosk-admin-close {
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--ink);
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 1rem;
+  padding: 0.55rem 0.8rem;
+  min-height: 48px;
+}
+
+.kiosk-admin-close.hidden {
+  display: none;
+}
+
 .top h1 {
   font-family: var(--display);
   font-size: 1.35rem;

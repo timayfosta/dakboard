@@ -22,7 +22,7 @@
     })();
   </script>
   <link rel="stylesheet" href="fonts.css" />
-  <link rel="stylesheet" href="admin.css?v=27" />
+  <link rel="stylesheet" href="admin.css?v=28" />
   <link rel="stylesheet" href="/shared/touch-input.css?v=3" />
 </head>
 <body>
@@ -36,9 +36,12 @@
 
   <div id="appView" class="app">
     <header class="top">
-      <div>
-        <h1>Family Admin</h1>
-        <div class="sub" id="familyMeta">Loading…</div>
+      <div class="top-lead">
+        <button type="button" class="kiosk-admin-close hidden" id="kioskAdminClose">✕ Close</button>
+        <div>
+          <h1>Family Admin</h1>
+          <div class="sub" id="familyMeta">Loading…</div>
+        </div>
       </div>
       <div class="theme-switch" role="group" aria-label="Appearance">
         <button type="button" data-theme-set="day"><span class="ico" aria-hidden="true">☀</span> Day</button>
@@ -64,6 +67,6 @@
   <script src="/shared/swipe-words.js"></script>
   <script src="/shared/touch-input.js"></script>
   <script src="api.js?v=26"></script>
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>

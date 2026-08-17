@@ -202,8 +202,15 @@
   }
 
   function openAdmin() {
-    const q = mouseMode ? "?mouse=1" : "";
-    location.href = `/admin/${q}`;
+    const returnTo = `${location.pathname}${location.search}`;
+    try {
+      sessionStorage.setItem("fb-kiosk-return", returnTo);
+    } catch {}
+    const q = new URLSearchParams();
+    q.set("from", "kiosk");
+    q.set("kiosk", "1");
+    if (mouseMode) q.set("mouse", "1");
+    location.href = `/admin/?${q}`;
   }
 
   function resetPointer() {
