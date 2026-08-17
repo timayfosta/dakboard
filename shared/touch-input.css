@@ -72,6 +72,34 @@
   color: var(--ink-soft);
 }
 
+.touch-suggest {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem 0.15rem;
+  flex-shrink: 0;
+  min-height: 2.4rem;
+}
+
+.touch-suggest[hidden] {
+  display: none;
+}
+
+.touch-suggest-btn {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: clamp(0.95rem, 3.2cqi, 1.2rem);
+  padding: 0.35rem 0.4rem;
+}
+
+.touch-suggest-btn.top {
+  background: color-mix(in srgb, var(--sky, #5aa7ff) 22%, var(--surface-2));
+  border-color: var(--sky, #5aa7ff);
+}
+
 .touch-input-body {
   flex: 0 0 auto;
   display: flex;

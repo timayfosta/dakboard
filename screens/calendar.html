@@ -1104,21 +1104,32 @@
           const isGrocery = kind === "grocery";
           TouchInput.open({
             title: isGrocery ? "Add grocery" : "Add reminder",
-            placeholder: isGrocery ? "e.g. Milk, Bread…" : "e.g. Call dentist…",
+            placeholder: isGrocery ? "Swipe or type an item…" : "Swipe or type a reminder…",
+            mode: "add",
+            submitLabel: "Add",
             onSubmit: async (text) => {
+              const itemText = String(text || "").trim();
+              if (!itemText) return;
               try {
-                const res = await FamilyAPI.addListItem(kind, text);
-                syncListStateFromApi(res.state);
+                const res = await FamilyAPI.addListItem(kind, itemText);
+                if (res?.state) syncListStateFromApi(res.state);
+                else await loadLists();
                 if (res.item && window.ListUndo) {
-                  ListUndo.offer(`Added "${text}"`, async () => {
+                  ListUndo.offer(`Added "${itemText}"`, async () => {
                     const undo = await FamilyAPI.toggleListItem(kind, res.item.id, {
                       allowOnKiosk: true,
                     });
-                    syncListStateFromApi(undo.state);
+                    if (undo?.state) syncListStateFromApi(undo.state);
+                    else await loadLists();
                   });
                 }
               } catch (err) {
                 console.warn("Failed to add list item", err);
+                try {
+                  await loadLists();
+                } catch (_) {
+                  /* still offline */
+                }
               }
             },
           });

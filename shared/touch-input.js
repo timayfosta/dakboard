@@ -1,4 +1,4 @@
-/* Touchscreen QWERTY keyboard with swipe-to-type */
+/* Touchscreen QWERTY keyboard with Samsung-style swipe-to-type */
 (function () {
   const LETTER_ROWS = [
     ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
@@ -6,16 +6,19 @@
     ["z", "x", "c", "v", "b", "n", "m"],
   ];
   const NUMBER_ROW = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
-  const SWIPE_MIN_KEYS = 2;
-  const SWIPE_MIN_PX = 36;
+  const SWIPE_MIN_PX = 48;
+  const SWIPE_MIN_SAMPLES = 8;
 
   let overlay = null;
   let value = "";
   let onSubmit = null;
   let fieldEl = null;
+  let mode = "add";
   let shifted = false;
   let attached = false;
   let swipe = null;
+  let lastWord = "";
+  let suggestions = [];
 
   function wordList() {
     return window.SWIPE_WORDS || [];
@@ -28,6 +31,10 @@
     const coarse = window.matchMedia("(pointer: coarse)").matches;
     const minSide = Math.min(window.innerWidth, window.innerHeight);
     return coarse && minSide >= 700;
+  }
+
+  function isOpen() {
+    return !!overlay?.classList.contains("open");
   }
 
   function isTextBox(el) {
@@ -63,6 +70,7 @@
           <button type="button" class="touch-input-close" aria-label="Close">✕</button>
         </div>
         <div class="touch-input-preview empty" id="touchInputPreview">Type here…</div>
+        <div class="touch-suggest" id="touchSuggest" hidden></div>
         <div class="touch-input-body">
           <div class="touch-keyboard" id="touchKeyboard">
             <canvas class="touch-swipe-trail" id="touchSwipeTrail"></canvas>
@@ -70,7 +78,7 @@
         </div>
         <div class="touch-input-foot">
           <button type="button" class="cancel" id="touchInputCancel">Cancel</button>
-          <button type="button" class="submit" id="touchInputSubmit" disabled>Done</button>
+          <button type="button" class="submit" id="touchInputSubmit" disabled>Add</button>
         </div>
       </div>`;
 
@@ -78,9 +86,18 @@
 
     overlay.querySelector(".touch-input-close").addEventListener("click", close);
     overlay.querySelector("#touchInputCancel").addEventListener("click", close);
-    overlay.querySelector("#touchInputSubmit").addEventListener("click", submit);
+    overlay.querySelector("#touchInputSubmit").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      submit();
+    });
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) close();
+    });
+    overlay.querySelector("#touchSuggest").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-suggest]");
+      if (!btn) return;
+      replaceLastWord(btn.dataset.suggest);
     });
 
     buildKeyboard(overlay.querySelector("#touchKeyboard"));
@@ -141,6 +158,139 @@
     overlay.querySelector(".shift-key")?.classList.toggle("on", shifted);
   }
 
+  function keyCenters() {
+    const kb = overlay.querySelector("#touchKeyboard");
+    const kbRect = kb.getBoundingClientRect();
+    const map = {};
+    let keySize = 48;
+    kb.querySelectorAll(".touch-key[data-ch]").forEach((btn) => {
+      const ch = (btn.dataset.ch || "").toLowerCase();
+      if (!/^[a-z]$/.test(ch)) return;
+      const r = btn.getBoundingClientRect();
+      map[ch] = {
+        x: r.left - kbRect.left + r.width / 2,
+        y: r.top - kbRect.top + r.height / 2,
+      };
+      keySize = Math.max(keySize, (r.width + r.height) / 2);
+    });
+    return { map, keySize, origin: { x: kbRect.left, y: kbRect.top } };
+  }
+
+  function dist(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function pointToSegDist(p, a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    if (!len2) return dist(p, a);
+    let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  }
+
+  function pointToPolylineDist(p, line) {
+    if (!line.length) return 1e9;
+    if (line.length === 1) return dist(p, line[0]);
+    let best = 1e9;
+    for (let i = 1; i < line.length; i += 1) {
+      best = Math.min(best, pointToSegDist(p, line[i - 1], line[i]));
+    }
+    return best;
+  }
+
+  function polylineLength(line) {
+    let n = 0;
+    for (let i = 1; i < line.length; i += 1) n += dist(line[i - 1], line[i]);
+    return n;
+  }
+
+  function resample(line, count) {
+    if (line.length < 2) return line.slice();
+    const total = polylineLength(line);
+    if (total < 1) return [line[0], line[line.length - 1]];
+    const out = [line[0]];
+    const step = total / (count - 1);
+    let passed = 0;
+    let seg = 0;
+    let acc = 0;
+    for (let i = 1; i < count - 1; i += 1) {
+      const target = step * i;
+      while (seg < line.length - 1) {
+        const d = dist(line[seg], line[seg + 1]);
+        if (acc + d >= target) {
+          const t = d ? (target - acc) / d : 0;
+          out.push({
+            x: line[seg].x + (line[seg + 1].x - line[seg].x) * t,
+            y: line[seg].y + (line[seg + 1].y - line[seg].y) * t,
+          });
+          break;
+        }
+        acc += d;
+        seg += 1;
+      }
+    }
+    out.push(line[line.length - 1]);
+    return out;
+  }
+
+  function idealPath(word, centers) {
+    const pts = [];
+    for (const ch of word) {
+      const p = centers[ch];
+      if (!p) return null;
+      if (!pts.length || dist(pts[pts.length - 1], p) > 1) pts.push(p);
+    }
+    return pts.length ? pts : null;
+  }
+
+  function scoreWord(word, userPts, centers, keySize) {
+    const ideal = idealPath(word, centers);
+    if (!ideal || userPts.length < 2) return -1e9;
+    const startD = dist(userPts[0], ideal[0]) / keySize;
+    const endD = dist(userPts[userPts.length - 1], ideal[ideal.length - 1]) / keySize;
+    if (startD > 1.25 || endD > 1.35) return -1e9;
+
+    const sampledUser = resample(userPts, 20);
+    const sampledIdeal = resample(ideal, 20);
+    let userToIdeal = 0;
+    sampledUser.forEach((p) => {
+      userToIdeal += pointToPolylineDist(p, sampledIdeal);
+    });
+    userToIdeal = userToIdeal / sampledUser.length / keySize;
+
+    let lettersToUser = 0;
+    ideal.forEach((p) => {
+      lettersToUser += pointToPolylineDist(p, sampledUser);
+    });
+    lettersToUser = lettersToUser / ideal.length / keySize;
+
+    const userLen = polylineLength(userPts);
+    const idealLen = Math.max(1, polylineLength(ideal));
+    const lenPen = Math.abs(Math.log(userLen / idealLen));
+
+    return 8 - startD * 1.6 - endD * 1.7 - userToIdeal * 2.1 - lettersToUser * 1.8 - lenPen * 0.9 + Math.min(word.length, 8) * 0.04;
+  }
+
+  function rankSwipe(userPts, centers, keySize) {
+    const ranked = [];
+    for (const raw of wordList()) {
+      const word = String(raw || "").toLowerCase();
+      if (word.length < 2) continue;
+      const score = scoreWord(word, userPts, centers, keySize);
+      if (score < 1.05) continue;
+      ranked.push({ word, score });
+    }
+    ranked.sort((a, b) => b.score - a.score || b.word.length - a.word.length);
+    const seen = new Set();
+    return ranked.filter((row) => {
+      if (seen.has(row.word)) return false;
+      seen.add(row.word);
+      return true;
+    }).slice(0, 3);
+  }
+
   function keyFromPoint(x, y) {
     const el = document.elementFromPoint(x, y);
     return el?.closest?.(".touch-key") || null;
@@ -152,9 +302,8 @@
       if (!key) return;
       e.preventDefault();
       root.setPointerCapture?.(e.pointerId);
-      const rect = root.getBoundingClientRect();
+      const { origin } = keyCenters();
       swipe = {
-        keys: [],
         points: [],
         startX: e.clientX,
         startY: e.clientY,
@@ -162,8 +311,7 @@
         pointerId: e.pointerId,
         origin: key,
       };
-      addSwipeKey(key);
-      addSwipePoint(e.clientX - rect.left, e.clientY - rect.top);
+      addSwipePoint(e.clientX - origin.x, e.clientY - origin.y);
       key.classList.add("press");
     });
 
@@ -171,11 +319,11 @@
       if (!swipe || swipe.pointerId !== e.pointerId) return;
       const dx = e.clientX - swipe.startX;
       const dy = e.clientY - swipe.startY;
-      if (Math.hypot(dx, dy) > 10) swipe.moved = true;
-      const rect = root.getBoundingClientRect();
-      addSwipePoint(e.clientX - rect.left, e.clientY - rect.top);
+      if (Math.hypot(dx, dy) > 12) swipe.moved = true;
+      const { origin } = keyCenters();
+      addSwipePoint(e.clientX - origin.x, e.clientY - origin.y);
       const key = keyFromPoint(e.clientX, e.clientY);
-      if (key) addSwipeKey(key);
+      if (key?.dataset.ch) key.classList.add("swipe-on");
       drawTrail();
     });
 
@@ -184,16 +332,20 @@
       overlay.querySelectorAll(".touch-key.press, .touch-key.swipe-on").forEach((k) => {
         k.classList.remove("press", "swipe-on");
       });
-      const path = swipe.keys.filter((k) => k.dataset.ch && /^[a-z]$/i.test(k.dataset.ch));
-      const dist = Math.hypot(
+      const distPx = Math.hypot(
         (e?.clientX || swipe.startX) - swipe.startX,
         (e?.clientY || swipe.startY) - swipe.startY
       );
-      const isSwipe = swipe.moved && path.length >= SWIPE_MIN_KEYS && dist >= SWIPE_MIN_PX;
+      const isSwipe = swipe.moved && swipe.points.length >= SWIPE_MIN_SAMPLES && distPx >= SWIPE_MIN_PX;
       if (isSwipe) {
-        const word = matchSwipe(path.map((k) => k.dataset.ch.toLowerCase()));
-        if (word) appendWord(word);
+        const { map, keySize } = keyCenters();
+        const ranked = rankSwipe(swipe.points, map, keySize);
+        suggestions = ranked.map((row) => row.word);
+        if (ranked[0]) appendWord(ranked[0].word);
+        else showSuggestions([]);
       } else if (swipe.origin) {
+        suggestions = [];
+        showSuggestions([]);
         tapKey(swipe.origin);
       }
       swipe = null;
@@ -204,19 +356,11 @@
     root.addEventListener("pointercancel", endSwipe);
   }
 
-  function addSwipeKey(key) {
-    if (!swipe) return;
-    const last = swipe.keys[swipe.keys.length - 1];
-    if (last === key) return;
-    swipe.keys.push(key);
-    key.classList.add("swipe-on");
-  }
-
   function addSwipePoint(x, y) {
     if (!swipe) return;
     const pts = swipe.points;
     const last = pts[pts.length - 1];
-    if (last && Math.hypot(x - last.x, y - last.y) < 4) return;
+    if (last && Math.hypot(x - last.x, y - last.y) < 3) return;
     pts.push({ x, y });
   }
 
@@ -232,8 +376,8 @@
     }
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = "rgba(255, 122, 89, 0.85)";
-    ctx.lineWidth = 5;
+    ctx.strokeStyle = "rgba(90, 167, 255, 0.9)";
+    ctx.lineWidth = 6;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.beginPath();
@@ -250,34 +394,17 @@
     canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  function matchSwipe(keys) {
-    if (keys.length < 2) return "";
-    const first = keys[0];
-    const last = keys[keys.length - 1];
-    let best = "";
-    let bestScore = 0;
-    for (const raw of wordList()) {
-      const word = String(raw || "").toLowerCase();
-      if (word.length < 2 || word[0] !== first || word[word.length - 1] !== last) continue;
-      let ki = 0;
-      let ok = true;
-      for (const ch of word) {
-        while (ki < keys.length && keys[ki] !== ch) ki += 1;
-        if (ki >= keys.length) {
-          ok = false;
-          break;
-        }
-        ki += 1;
-      }
-      if (!ok) continue;
-      const extra = keys.length - word.length;
-      const score = 200 - extra * 3 - Math.abs(keys.length - word.length) + word.length;
-      if (score > bestScore) {
-        bestScore = score;
-        best = word;
-      }
+  function showSuggestions(words) {
+    const bar = overlay.querySelector("#touchSuggest");
+    if (!words.length) {
+      bar.hidden = true;
+      bar.innerHTML = "";
+      return;
     }
-    return best;
+    bar.hidden = false;
+    bar.innerHTML = words
+      .map((word, i) => `<button type="button" class="touch-suggest-btn${i === 0 ? " top" : ""}" data-suggest="${word}">${word}</button>`)
+      .join("");
   }
 
   function tapKey(btn) {
@@ -293,28 +420,58 @@
     }
     if (action === "space") {
       append(" ");
+      lastWord = "";
+      suggestions = [];
+      showSuggestions([]);
       return;
     }
     if (action === "clear") {
       value = "";
+      lastWord = "";
+      suggestions = [];
+      showSuggestions([]);
       updatePreview();
       return;
     }
     const ch = btn.dataset.ch;
     if (!ch) return;
     append(/^[a-z]$/i.test(ch) ? letterLabel(ch.toLowerCase()) : ch);
+    lastWord = "";
+    suggestions = [];
+    showSuggestions([]);
     if (shifted && /^[a-z]$/i.test(ch)) {
       shifted = false;
       refreshShift();
     }
   }
 
+  function formatWord(word) {
+    return shifted ? word.charAt(0).toUpperCase() + word.slice(1) : word;
+  }
+
   function appendWord(word) {
-    const next = shifted ? word.charAt(0).toUpperCase() + word.slice(1) : word;
-    if (value && !value.endsWith(" ")) value += " ";
+    const next = formatWord(word);
+    if (value && !/\s$/.test(value)) value += " ";
     value += `${next} `;
+    lastWord = next;
     shifted = false;
     refreshShift();
+    showSuggestions(suggestions);
+    updatePreview();
+  }
+
+  function replaceLastWord(word) {
+    if (!word) return;
+    const next = formatWord(word);
+    if (lastWord) {
+      const re = new RegExp(`${lastWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`);
+      if (re.test(value)) value = value.replace(re, `${next} `);
+      else value += `${next} `;
+    } else {
+      if (value && !/\s$/.test(value)) value += " ";
+      value += `${next} `;
+    }
+    lastWord = next;
     updatePreview();
   }
 
@@ -325,6 +482,7 @@
 
   function backspace() {
     value = value.slice(0, -1);
+    lastWord = "";
     updatePreview();
   }
 
@@ -332,8 +490,8 @@
     const el = overlay.querySelector("#touchInputPreview");
     const trimmed = value.trim();
     el.textContent = value || el.dataset.placeholder || "Type here…";
-    el.classList.toggle("empty", !value);
-    overlay.querySelector("#touchInputSubmit").disabled = !trimmed && !fieldEl;
+    el.classList.toggle("empty", !trimmed);
+    overlay.querySelector("#touchInputSubmit").disabled = !trimmed;
   }
 
   function close() {
@@ -342,23 +500,27 @@
     value = "";
     onSubmit = null;
     fieldEl = null;
+    mode = "add";
     shifted = false;
     swipe = null;
+    lastWord = "";
+    suggestions = [];
+    showSuggestions([]);
   }
 
   async function submit() {
     const text = value.trim();
+    if (!text) return;
     const fn = onSubmit;
     const field = fieldEl;
+    const add = mode === "add";
     close();
     if (field) {
       field.value = text;
       field.dispatchEvent(new Event("input", { bubbles: true }));
       field.dispatchEvent(new Event("change", { bubbles: true }));
-      return;
     }
-    if (!text || !fn) return;
-    await fn(text);
+    if (add && fn) await fn(text);
   }
 
   function open(opts = {}) {
@@ -366,23 +528,28 @@
     value = opts.initialValue || "";
     onSubmit = opts.onSubmit || null;
     fieldEl = opts.field || null;
+    mode = opts.mode || (fieldEl ? "field" : "add");
     shifted = false;
+    lastWord = "";
+    suggestions = [];
     overlay.querySelector("#touchInputTitle").textContent = opts.title || "Type";
     overlay.querySelector("#touchInputPreview").dataset.placeholder =
-      opts.placeholder || "Type here…";
-    overlay.querySelector("#touchInputSubmit").textContent = opts.submitLabel || (fieldEl ? "Done" : "Add");
+      opts.placeholder || "Swipe a word or tap letters…";
+    overlay.querySelector("#touchInputSubmit").textContent = opts.submitLabel || (mode === "field" ? "Done" : "Add");
     refreshShift();
+    showSuggestions([]);
     updatePreview();
     overlay.classList.add("open");
   }
 
   function openForField(el) {
-    if (!el || !isTextBox(el)) return;
+    if (!el || !isTextBox(el) || isOpen()) return;
     open({
       title: fieldTitle(el),
-      placeholder: el.placeholder || "Type here…",
+      placeholder: el.placeholder || "Swipe a word or tap letters…",
       initialValue: el.value || "",
       field: el,
+      mode: "field",
       submitLabel: "Done",
     });
   }
@@ -407,7 +574,7 @@
     document.addEventListener(
       "pointerdown",
       (e) => {
-        if (!useCustomKeyboard()) return;
+        if (!useCustomKeyboard() || isOpen()) return;
         const el = e.target.closest?.("input, textarea");
         if (!isTextBox(el)) return;
         e.preventDefault();
@@ -419,7 +586,7 @@
     document.addEventListener(
       "focusin",
       (e) => {
-        if (!useCustomKeyboard()) return;
+        if (!useCustomKeyboard() || isOpen()) return;
         const el = e.target;
         if (!isTextBox(el)) return;
         el.blur();
