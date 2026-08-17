@@ -9,7 +9,7 @@ import uuid
 from copy import deepcopy
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = ROOT / "data" / "family.json"
@@ -68,6 +68,9 @@ def default_state() -> dict[str, Any]:
                     "kidIds": [kid_id],
                     "period": period,
                     "repeat": "daily",
+                    "interval": "daily",
+                    "intervalDays": [],
+                    "intervalAnchor": "",
                     "active": True,
                 }
             )
@@ -143,55 +146,73 @@ def default_state() -> dict[str, Any]:
     }
 
 
-def load_db() -> dict[str, Any]:
-    with _lock:
-        DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-        if not DATA_PATH.exists():
-            state = default_state()
-            DATA_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
-            return deepcopy(state)
+def _load_unlocked() -> dict[str, Any]:
+    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not DATA_PATH.exists():
+        state = default_state()
+        DATA_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        return deepcopy(state)
+    try:
+        raw = DATA_PATH.read_text(encoding="utf-8")
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            raise ValueError("family.json root must be an object")
+        return data
+    except (json.JSONDecodeError, ValueError, OSError) as exc:
+        # Keep a backup and reseeds so the server can still boot on Pi
+        backup = DATA_PATH.with_suffix(f".bad-{int(time.time())}.json")
         try:
-            raw = DATA_PATH.read_text(encoding="utf-8")
-            data = json.loads(raw)
-            if not isinstance(data, dict):
-                raise ValueError("family.json root must be an object")
-            return data
-        except (json.JSONDecodeError, ValueError, OSError) as exc:
-            # Keep a backup and reseeds so the server can still boot on Pi
-            backup = DATA_PATH.with_suffix(f".bad-{int(time.time())}.json")
-            try:
-                DATA_PATH.replace(backup)
-            except OSError:
-                backup = None
-            state = default_state()
-            DATA_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
-            print(
-                f"[db] WARNING: could not read {DATA_PATH} ({exc}). "
-                f"Re-seeded defaults"
-                + (f"; backup at {backup}" if backup else "")
-                + ".",
-                flush=True,
-            )
-            return deepcopy(state)
+            DATA_PATH.replace(backup)
+        except OSError:
+            backup = None
+        state = default_state()
+        DATA_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        print(
+            f"[db] WARNING: could not read {DATA_PATH} ({exc}). "
+            f"Re-seeded defaults"
+            + (f"; backup at {backup}" if backup else "")
+            + ".",
+            flush=True,
+        )
+        return deepcopy(state)
 
 
 def bump_revision(state: dict[str, Any]) -> None:
     state.setdefault("meta", {})["revision"] = int(time.time() * 1000)
 
 
+def _save_unlocked(state: dict[str, Any]) -> dict[str, Any]:
+    bump_revision(state)
+    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = DATA_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    tmp.replace(DATA_PATH)
+    return deepcopy(state)
+
+
+def load_db() -> dict[str, Any]:
+    with _lock:
+        return _load_unlocked()
+
+
 def get_revision(state: dict[str, Any] | None = None) -> int:
-    state = state or load_db()
+    if state is None:
+        state = load_db()
     return int((state.get("meta") or {}).get("revision") or 0)
 
 
 def save_db(state: dict[str, Any]) -> dict[str, Any]:
     with _lock:
-        bump_revision(state)
-        DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = DATA_PATH.with_suffix(".tmp")
-        tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
-        tmp.replace(DATA_PATH)
-        return deepcopy(state)
+        return _save_unlocked(state)
+
+
+def mutate_db(mutator: Callable[[dict[str, Any]], Any]) -> tuple[Any, dict[str, Any]]:
+    """Load, mutate, and save under one lock so concurrent writes cannot clobber a grocery add."""
+    with _lock:
+        state = _load_unlocked()
+        result = mutator(state)
+        saved = _save_unlocked(state)
+        return result, saved
 
 
 CHORE_PERIOD_DEADLINE = {
@@ -248,6 +269,106 @@ def completion_stars(entry: Any, chore: dict[str, Any]) -> int:
 
 def today_key() -> str:
     return date.today().isoformat()
+
+
+INTERVAL_KINDS = ("daily", "everyOther", "weekdays", "weekends", "days")
+_INTERVAL_ALIASES = {
+    "every-other": "everyOther",
+    "every_other": "everyOther",
+    "everyother": "everyOther",
+    "weekday": "weekdays",
+    "weekend": "weekends",
+    "weekly": "days",
+    "specific": "days",
+    "chore": "daily",
+}
+
+
+def js_weekday(day: date) -> int:
+    """Sunday=0 … Saturday=6, matching JavaScript Date#getDay()."""
+    return (day.weekday() + 1) % 7
+
+
+def parse_day(day: Any = None) -> date:
+    if isinstance(day, datetime):
+        return day.date()
+    if isinstance(day, date):
+        return day
+    if isinstance(day, str) and len(day) >= 10:
+        try:
+            return date.fromisoformat(day[:10])
+        except ValueError:
+            pass
+    return date.today()
+
+
+def normalize_interval(
+    payload: dict[str, Any] | None = None,
+    existing: dict[str, Any] | None = None,
+) -> tuple[str, list[int], str]:
+    payload = payload or {}
+    existing = existing or {}
+    raw = str(
+        payload.get("interval")
+        or payload.get("repeat")
+        or existing.get("interval")
+        or existing.get("repeat")
+        or "daily"
+    ).strip()
+    interval = _INTERVAL_ALIASES.get(raw, raw)
+    if interval not in INTERVAL_KINDS:
+        interval = "daily"
+
+    days_src = payload.get("intervalDays")
+    if days_src is None:
+        days_src = existing.get("intervalDays") or []
+    days: list[int] = []
+    if isinstance(days_src, (list, tuple)):
+        for item in days_src:
+            try:
+                n = int(item)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= n <= 6 and n not in days:
+                days.append(n)
+        days.sort()
+
+    anchor = str(payload.get("intervalAnchor") or existing.get("intervalAnchor") or "").strip()[:10]
+    if interval == "everyOther" and not anchor:
+        anchor = today_key()
+    return interval, days, anchor
+
+
+def chore_due_on(chore: dict[str, Any], day: Any = None) -> bool:
+    when = parse_day(day)
+    interval = str(chore.get("interval") or chore.get("repeat") or "daily")
+    if interval in ("daily", "chore", ""):
+        return True
+    wd = js_weekday(when)
+    if interval == "weekdays":
+        return wd in (1, 2, 3, 4, 5)
+    if interval == "weekends":
+        return wd in (0, 6)
+    if interval in ("days", "weekly"):
+        days: list[int] = []
+        for item in chore.get("intervalDays") or []:
+            try:
+                n = int(item)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= n <= 6:
+                days.append(n)
+        if not days:
+            return True
+        return wd in days
+    if interval in ("everyOther", "every-other", "every_other"):
+        anchor_raw = str(chore.get("intervalAnchor") or "")[:10]
+        try:
+            anchor = date.fromisoformat(anchor_raw)
+        except ValueError:
+            return True
+        return (when - anchor).days % 2 == 0
+    return True
 
 
 CONSEQUENCE_TTL_MS = 24 * 60 * 60 * 1000
@@ -448,25 +569,39 @@ def merged_settings(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def public_state(state: dict[str, Any] | None = None) -> dict[str, Any]:
-    state = state or load_db()
-    if prepare_state(state):
-        save_db(state)
+    if state is None:
+        with _lock:
+            state = _load_unlocked()
+            if prepare_state(state):
+                _save_unlocked(state)
+            return _public_view(state)
+    prepare_state(state)
+    return _public_view(state)
+
+
+def _public_view(state: dict[str, Any]) -> dict[str, Any]:
     lists = state.get("lists") or {}
+    today = today_key()
+    chores = []
+    for chore in state.get("chores") or []:
+        row = dict(chore)
+        row["dueToday"] = chore_due_on(chore, today)
+        chores.append(row)
     return {
         "version": state.get("version", 1),
         "revision": get_revision(state),
         "kids": state.get("kids", []),
-        "chores": state.get("chores", []),
+        "chores": chores,
         "consequences": state.get("consequences", []),
         "consequenceHits": recent_consequence_hits(state),
         "starLog": (state.get("starLog") or [])[-1000:],
         "balances": state.get("balances", {}),
-        "completions": state.get("completions", {}).get(today_key(), {}),
+        "completions": state.get("completions", {}).get(today, {}),
         "lists": lists,
         "rewards": state.get("rewards", []),
         "redemptions": recent_redemptions(state),
         "whiteboard": state.get("whiteboard") or {"version": 1, "strokes": [], "updatedAt": 0},
         "settings": merged_settings(state),
         "screensaverPhotos": state.get("screensaverPhotos") or [],
-        "today": today_key(),
+        "today": today,
     }

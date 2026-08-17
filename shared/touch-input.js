@@ -14,6 +14,8 @@
   let onSubmit = null;
   let fieldEl = null;
   let mode = "add";
+  let stayOpen = false;
+  let submitting = false;
   let shifted = false;
   let attached = false;
   let swipe = null;
@@ -497,10 +499,13 @@
   function close() {
     if (!overlay) return;
     overlay.classList.remove("open");
+    overlay.classList.remove("fail");
     value = "";
     onSubmit = null;
     fieldEl = null;
     mode = "add";
+    stayOpen = false;
+    submitting = false;
     shifted = false;
     swipe = null;
     lastWord = "";
@@ -508,19 +513,61 @@
     showSuggestions([]);
   }
 
+  function flashFail() {
+    if (!overlay) return;
+    overlay.classList.remove("fail");
+    void overlay.offsetWidth;
+    overlay.classList.add("fail");
+    const title = overlay.querySelector("#touchInputTitle");
+    if (title && !title.dataset.orig) title.dataset.orig = title.textContent;
+    if (title) title.textContent = "Didn't save — try Add again";
+    setTimeout(() => {
+      overlay?.classList.remove("fail");
+      if (title?.dataset.orig) title.textContent = title.dataset.orig;
+    }, 1600);
+  }
+
+  function clearDraft() {
+    value = "";
+    lastWord = "";
+    suggestions = [];
+    showSuggestions([]);
+    shifted = false;
+    refreshShift();
+    updatePreview();
+  }
+
   async function submit() {
     const text = value.trim();
-    if (!text) return;
+    if (!text || submitting) return;
     const fn = onSubmit;
     const field = fieldEl;
     const add = mode === "add";
-    close();
+    const keep = stayOpen && add;
     if (field) {
       field.value = text;
       field.dispatchEvent(new Event("input", { bubbles: true }));
       field.dispatchEvent(new Event("change", { bubbles: true }));
     }
-    if (add && fn) await fn(text);
+    if (add && fn) {
+      submitting = true;
+      const btn = overlay.querySelector("#touchInputSubmit");
+      if (btn) btn.disabled = true;
+      try {
+        await fn(text);
+        if (keep && isOpen()) clearDraft();
+        else close();
+      } catch (err) {
+        console.warn("TouchInput submit failed", err);
+        flashFail();
+        updatePreview();
+      } finally {
+        submitting = false;
+        updatePreview();
+      }
+      return;
+    }
+    close();
   }
 
   function open(opts = {}) {
@@ -529,10 +576,14 @@
     onSubmit = opts.onSubmit || null;
     fieldEl = opts.field || null;
     mode = opts.mode || (fieldEl ? "field" : "add");
+    stayOpen = opts.stayOpen === true && mode === "add";
+    submitting = false;
     shifted = false;
     lastWord = "";
     suggestions = [];
+    overlay.classList.remove("fail");
     overlay.querySelector("#touchInputTitle").textContent = opts.title || "Type";
+    overlay.querySelector("#touchInputTitle").dataset.orig = opts.title || "Type";
     overlay.querySelector("#touchInputPreview").dataset.placeholder =
       opts.placeholder || "Swipe a word or tap letters…";
     overlay.querySelector("#touchInputSubmit").textContent = opts.submitLabel || (mode === "field" ? "Done" : "Add");
@@ -540,6 +591,7 @@
     showSuggestions([]);
     updatePreview();
     overlay.classList.add("open");
+    document.dispatchEvent(new CustomEvent("kiosk-interaction"));
   }
 
   function openForField(el) {

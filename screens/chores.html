@@ -923,8 +923,40 @@
 
     function choresForKid(kidId) {
       return (state.data?.chores || []).filter(
-        (c) => c.active !== false && (c.kidIds || []).includes(kidId)
+        (c) =>
+          c.active !== false &&
+          (c.kidIds || []).includes(kidId) &&
+          choreDueToday(c)
       );
+    }
+
+    function jsWeekday(dayStr) {
+      const raw = String(dayStr || state.data?.today || "").slice(0, 10);
+      const day = raw ? new Date(`${raw}T12:00:00`) : new Date();
+      if (Number.isNaN(day.getTime())) return new Date().getDay();
+      return day.getDay();
+    }
+
+    function choreDueToday(chore) {
+      if (typeof chore?.dueToday === "boolean") return chore.dueToday;
+      const interval = chore?.interval || chore?.repeat || "daily";
+      const wd = jsWeekday(state.data?.today);
+      if (interval === "weekdays") return wd >= 1 && wd <= 5;
+      if (interval === "weekends") return wd === 0 || wd === 6;
+      if (interval === "days" || interval === "weekly") {
+        const days = (chore.intervalDays || []).map(Number).filter((d) => d >= 0 && d <= 6);
+        if (!days.length) return true;
+        return days.includes(wd);
+      }
+      if (interval === "everyOther" || interval === "every-other") {
+        const anchorRaw = String(chore.intervalAnchor || state.data?.today || "").slice(0, 10);
+        const todayRaw = String(state.data?.today || "").slice(0, 10);
+        const anchor = new Date(`${anchorRaw}T12:00:00`);
+        const today = todayRaw ? new Date(`${todayRaw}T12:00:00`) : new Date();
+        if (Number.isNaN(anchor.getTime()) || Number.isNaN(today.getTime())) return true;
+        return Math.round((today - anchor) / 86400000) % 2 === 0;
+      }
+      return true;
     }
 
     function isDone(choreId, kidId) {
@@ -1006,9 +1038,30 @@
       };
     }
 
+    function choreScheduleLabel(chore) {
+      const interval = chore?.interval || chore?.repeat || "daily";
+      if (interval === "everyOther" || interval === "every-other") return "Every other day";
+      if (interval === "weekdays") return "Weekdays";
+      if (interval === "weekends") return "Weekends";
+      if (interval === "days" || interval === "weekly") {
+        const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const days = (chore.intervalDays || [])
+          .map(Number)
+          .filter((d) => d >= 0 && d <= 6)
+          .sort((a, b) => a - b);
+        if (!days.length) return "";
+        return days.map((d) => names[d]).join("/");
+      }
+      return "";
+    }
+
     function choreDescription(chore) {
-      if (chore.hint) return chore.hint;
-      return PERIOD_HINTS[chore.period || "chore"] || PERIOD_HINTS.chore;
+      const bits = [];
+      if (chore.hint) bits.push(chore.hint);
+      else bits.push(PERIOD_HINTS[chore.period || "chore"] || PERIOD_HINTS.chore);
+      const sched = choreScheduleLabel(chore);
+      if (sched) bits.push(sched);
+      return bits.join(" · ");
     }
 
     function winKey(kidId) {

@@ -1331,12 +1331,15 @@ class Handler(SimpleHTTPRequestHandler):
         existing = next((c for c in chores if c.get("id") == payload.get("id")), {})
         if "icon" in payload:
             icon = str(payload.get("icon") or "").strip()
+            if icon.lower() in ("none", "null", "undefined"):
+                icon = ""
         else:
             icon = str(existing.get("icon") or "").strip()
         if "stars" in payload and payload.get("stars") not in (None, ""):
             stars = db.clamp_int(payload.get("stars"), 1, 0, 99)
         else:
             stars = db.clamp_int(existing.get("stars"), 1, 0, 99)
+        interval, interval_days, interval_anchor = db.normalize_interval(payload, existing)
         chore = {
             "id": payload.get("id") or new_id("chore"),
             "title": (payload.get("title") or existing.get("title") or "Chore").strip(),
@@ -1346,7 +1349,10 @@ class Handler(SimpleHTTPRequestHandler):
             if payload.get("kidIds") is not None
             else (existing.get("kidIds") or []),
             "period": payload.get("period") or existing.get("period") or "chore",
-            "repeat": payload.get("repeat") or existing.get("repeat") or "daily",
+            "repeat": interval,
+            "interval": interval,
+            "intervalDays": interval_days,
+            "intervalAnchor": interval_anchor,
             "hint": (
                 payload.get("hint")
                 if payload.get("hint") is not None
@@ -1480,84 +1486,102 @@ class Handler(SimpleHTTPRequestHandler):
         send_json(self, {"balance": bal[kid_id], "state": db.public_state(state)})
 
     def list_replace(self, payload: dict):
-        state = db.load_db()
         name = payload.get("name")
         items = payload.get("items")
         if name not in ("grocery", "reminders") or not isinstance(items, list):
             return send_json(self, {"error": "Invalid list"}, 400)
-        state.setdefault("lists", {})[name] = items
-        db.save_db(state)
+
+        def mut(state: dict):
+            state.setdefault("lists", {})[name] = items
+
+        _, state = db.mutate_db(mut)
         send_json(self, {"state": db.public_state(state)})
 
     def list_add(self, payload: dict):
-        state = db.load_db()
         name = payload.get("name")
         text = (payload.get("text") or "").strip()
         if name not in ("grocery", "reminders") or not text:
             return send_json(self, {"error": "name and text required"}, 400)
-        item = {"id": new_id("item"), "text": text, "done": False}
-        state.setdefault("lists", {}).setdefault(name, []).insert(0, item)
-        db.save_db(state)
+
+        def mut(state: dict):
+            item = {"id": new_id("item"), "text": text, "done": False}
+            state.setdefault("lists", {}).setdefault(name, []).insert(0, item)
+            return item
+
+        item, state = db.mutate_db(mut)
         send_json(self, {"item": item, "state": db.public_state(state)})
 
     def list_toggle(self, payload: dict):
-        state = db.load_db()
         name = payload.get("name")
         item_id = payload.get("itemId")
         if name not in ("grocery", "reminders"):
             return send_json(self, {"error": "Invalid list"}, 400)
-        items = state.setdefault("lists", {}).setdefault(name, [])
         now = int(time.time() * 1000)
-        for item in items:
-            if item.get("id") == item_id:
+        found = {"item": None, "completed": False}
+
+        def mut(state: dict):
+            items = state.setdefault("lists", {}).setdefault(name, [])
+            for item in items:
+                if item.get("id") != item_id:
+                    continue
                 if item.get("done"):
                     item["done"] = False
                     item.pop("completedAt", None)
-                    completed = False
+                    found["completed"] = False
                 else:
                     item["done"] = True
                     item["completedAt"] = now
-                    completed = True
-                db.save_db(state)
-                return send_json(
-                    self,
-                    {
-                        "removed": False,
-                        "completed": completed,
-                        "itemId": item_id,
-                        "item": item,
-                        "state": db.public_state(state),
-                    },
-                )
-        send_json(self, {"error": "Item not found"}, 404)
+                    found["completed"] = True
+                found["item"] = item
+                return item
+            raise KeyError("missing")
+
+        try:
+            item, state = db.mutate_db(mut)
+        except KeyError:
+            return send_json(self, {"error": "Item not found"}, 404)
+        send_json(
+            self,
+            {
+                "removed": False,
+                "completed": found["completed"],
+                "itemId": item_id,
+                "item": item,
+                "state": db.public_state(state),
+            },
+        )
 
     def list_clear_completed(self, payload: dict):
-        state = db.load_db()
         name = payload.get("name")
         if name not in ("grocery", "reminders"):
             return send_json(self, {"error": "Invalid list"}, 400)
-        items = state.setdefault("lists", {}).setdefault(name, [])
-        state["lists"][name] = [i for i in items if not (isinstance(i, dict) and i.get("done"))]
-        db.save_db(state)
+
+        def mut(state: dict):
+            items = state.setdefault("lists", {}).setdefault(name, [])
+            state["lists"][name] = [i for i in items if not (isinstance(i, dict) and i.get("done"))]
+
+        _, state = db.mutate_db(mut)
         send_json(self, {"ok": True, "state": db.public_state(state)})
 
     def list_restore(self, payload: dict):
-        state = db.load_db()
         name = payload.get("name")
         item = payload.get("item")
         if name not in ("grocery", "reminders") or not isinstance(item, dict):
             return send_json(self, {"error": "Invalid list"}, 400)
         if not item.get("id"):
             return send_json(self, {"error": "item required"}, 400)
-        items = state.setdefault("lists", {}).setdefault(name, [])
-        if any(existing.get("id") == item.get("id") for existing in items):
-            return send_json(self, {"ok": True, "state": db.public_state(state)})
         index = payload.get("index")
-        if isinstance(index, int) and 0 <= index <= len(items):
-            items.insert(index, item)
-        else:
-            items.insert(0, item)
-        db.save_db(state)
+
+        def mut(state: dict):
+            items = state.setdefault("lists", {}).setdefault(name, [])
+            if any(existing.get("id") == item.get("id") for existing in items):
+                return
+            if isinstance(index, int) and 0 <= index <= len(items):
+                items.insert(index, item)
+            else:
+                items.insert(0, item)
+
+        _, state = db.mutate_db(mut)
         send_json(self, {"ok": True, "state": db.public_state(state)})
 
     def whiteboard_save(self, payload: dict):

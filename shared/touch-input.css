@@ -211,8 +211,12 @@
   color: var(--on-accent);
 }
 
+.touch-input-overlay.fail .touch-input-sheet {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--alert, #e85d5d) 70%, transparent);
+}
+
 .touch-input-foot .submit:disabled {
-  opacity: 0.45;
+  opacity: 0.55;
 }
 
 .list-add-btn {

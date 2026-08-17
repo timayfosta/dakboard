@@ -272,6 +272,18 @@
     { id: "diamond", label: "Diamond", empty: "◇", done: "◆" },
   ];
 
+  const INTERVAL_DAYS = [
+    { id: 0, label: "Sun" },
+    { id: 1, label: "Mon" },
+    { id: 2, label: "Tue" },
+    { id: 3, label: "Wed" },
+    { id: 4, label: "Thu" },
+    { id: 5, label: "Fri" },
+    { id: 6, label: "Sat" },
+  ];
+
+  const CHORE_STARS_KEY = "family-chore-last-stars";
+
   function escAttr(value) {
     return String(value ?? "")
       .replace(/&/g, "&amp;")
@@ -440,14 +452,87 @@
   }
 
   function parseStars(value, fallback = 1) {
+    if (value === null || value === undefined || value === "") return fallback;
     const n = Number(value);
     if (!Number.isFinite(n)) return fallback;
     return Math.max(0, Math.min(99, n));
   }
 
+  function lastChoreStars() {
+    try {
+      return parseStars(sessionStorage.getItem(CHORE_STARS_KEY), 1);
+    } catch {
+      return 1;
+    }
+  }
+
+  function rememberChoreStars(stars) {
+    try {
+      sessionStorage.setItem(CHORE_STARS_KEY, String(parseStars(stars, 1)));
+    } catch {}
+  }
+
   function choreLabel(chore) {
     const icon = String(chore?.icon || "").trim();
     return `${icon ? icon + " " : ""}${chore?.title || "Chore"}`;
+  }
+
+  function intervalKind(chore) {
+    const raw = chore?.interval || chore?.repeat || "daily";
+    if (["daily", "everyOther", "weekdays", "weekends", "days"].includes(raw)) return raw;
+    return "daily";
+  }
+
+  function intervalLabel(chore) {
+    const kind = intervalKind(chore);
+    if (kind === "everyOther") return "Every other day";
+    if (kind === "weekdays") return "Weekdays";
+    if (kind === "weekends") return "Weekends";
+    if (kind === "days") {
+      const days = (chore.intervalDays || []).map(Number).filter((d) => d >= 0 && d <= 6);
+      if (!days.length) return "Specific days";
+      return days
+        .sort((a, b) => a - b)
+        .map((d) => INTERVAL_DAYS[d].label)
+        .join("/");
+    }
+    return "Every day";
+  }
+
+  function intervalHint(kind) {
+    if (kind === "everyOther") return "Shows today, skips tomorrow, then repeats.";
+    if (kind === "weekdays") return "Monday through Friday.";
+    if (kind === "weekends") return "Saturday and Sunday.";
+    if (kind === "days") return "Pick the days this chore should appear.";
+    return "Shows on the chore board every day.";
+  }
+
+  function selectedIntervalDays(form) {
+    return [...form.querySelectorAll("[data-interval-day].on")].map((chip) => Number(chip.dataset.intervalDay));
+  }
+
+  function setIntervalDays(form, days) {
+    const on = new Set((days || []).map(Number));
+    form.querySelectorAll("[data-interval-day]").forEach((chip) => {
+      chip.classList.toggle("on", on.has(Number(chip.dataset.intervalDay)));
+    });
+  }
+
+  function syncIntervalUi(form) {
+    if (!form) return;
+    const kind = form.querySelector('[name="interval"]')?.value || "daily";
+    const daysField = form.querySelector("#intervalDaysField");
+    const hint = form.querySelector("#intervalHint");
+    daysField?.classList.toggle("hidden", kind !== "days");
+    if (hint) hint.textContent = intervalHint(kind);
+  }
+
+  function renderIntervalDayChips(selected) {
+    const on = new Set((selected || []).map(Number));
+    return INTERVAL_DAYS.map(
+      (day) =>
+        `<button type="button" class="chip${on.has(day.id) ? " on" : ""}" data-interval-day="${day.id}">${day.label}</button>`
+    ).join("");
   }
 
   function resetChoreForm() {
@@ -458,6 +543,12 @@
     if (idInput) idInput.value = "";
     setEmojiPicker(form, "icon", "");
     setCheckStylePicker(form, "circle");
+    const starsInput = form.querySelector('[name="stars"]');
+    if (starsInput) starsInput.value = String(lastChoreStars());
+    const intervalSel = form.querySelector('[name="interval"]');
+    if (intervalSel) intervalSel.value = "daily";
+    setIntervalDays(form, []);
+    syncIntervalUi(form);
     form.querySelectorAll("[data-kid-chip]").forEach((chip) => chip.classList.remove("on"));
     form.querySelector("[data-kid-all]")?.classList.remove("on");
     choreForm?.querySelector("[data-kid-all]")?.classList.remove("on");
@@ -481,6 +572,10 @@
     form.querySelector('[name="title"]').value = chore.title || "";
     form.querySelector('[name="stars"]').value = parseStars(chore.stars, 1);
     form.querySelector('[name="period"]').value = chore.period || "chore";
+    const intervalSel = form.querySelector('[name="interval"]');
+    if (intervalSel) intervalSel.value = intervalKind(chore);
+    setIntervalDays(form, chore.intervalDays || []);
+    syncIntervalUi(form);
     const hintInput = form.querySelector('[name="hint"]');
     if (hintInput) hintInput.value = chore.hint || "";
     setEmojiPicker(form, "icon", chore.icon || "");
@@ -610,6 +705,7 @@
 
   function renderChores(d) {
     const checkStyleLabel = (id) => CHECK_STYLES.find((s) => s.id === id)?.label || "Circle";
+    const lastStars = lastChoreStars();
     return `
       <section class="card">
         <h2>Add chore</h2>
@@ -620,7 +716,7 @@
             <label>Emoji (optional)</label>
             ${renderEmojiPicker("icon", CHORE_EMOJIS, "", { allowNone: true })}
           </div>
-          <div class="field"><label>Stars</label><input name="stars" type="number" min="0" max="99" value="1" /></div>
+          <div class="field"><label>Stars</label><input name="stars" type="number" min="0" max="99" value="${escAttr(lastStars)}" /></div>
           <div class="field"><label>Hint (optional)</label><input type="text" inputmode="text" name="hint" placeholder="Before school — pull covers neat" /></div>
           <div class="field"><label>Period</label>
             <select name="period">
@@ -629,6 +725,21 @@
               <option value="afternoon">Afternoon</option>
               <option value="evening">Evening</option>
             </select>
+          </div>
+          <div class="field">
+            <label>Shows up</label>
+            <select name="interval">
+              <option value="daily">Every day</option>
+              <option value="everyOther">Every other day</option>
+              <option value="weekdays">Weekdays (Mon–Fri)</option>
+              <option value="weekends">Weekends (Sat–Sun)</option>
+              <option value="days">Specific days</option>
+            </select>
+            <p class="field-hint" id="intervalHint">${intervalHint("daily")}</p>
+          </div>
+          <div class="field hidden" id="intervalDaysField">
+            <label>Days</label>
+            <div class="chips" id="intervalDays">${renderIntervalDayChips([])}</div>
           </div>
           <div class="field">
             <label>Checkbox style</label>
@@ -662,7 +773,7 @@
               <div class="item-head">
                 <div class="item-main">
                   <div class="title">${icon ? icon + " " : ""}${c.title}</div>
-                  <div class="muted">★${parseStars(c.stars, 1)} · ${c.period || "chore"} · ${checkStyleLabel(c.checkStyle)} · ${kids}</div>
+                  <div class="muted">★${parseStars(c.stars, 1)} · ${intervalLabel(c)} · ${c.period || "chore"} · ${checkStyleLabel(c.checkStyle)} · ${kids}</div>
                 </div>
                 <button type="button" class="btn-x" data-del-chore="${c.id}" aria-label="Remove ${c.title}">×</button>
               </div>
@@ -1554,6 +1665,12 @@
           syncAllKidChip(choreForm);
         });
       });
+      const intervalSel = choreForm.querySelector('[name="interval"]');
+      intervalSel?.addEventListener("change", () => syncIntervalUi(choreForm));
+      choreForm.querySelectorAll("[data-interval-day]").forEach((chip) => {
+        chip.addEventListener("click", () => chip.classList.toggle("on"));
+      });
+      syncIntervalUi(choreForm);
       choreForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const fd = new FormData(choreForm);
@@ -1563,17 +1680,28 @@
           toast("Assign at least one kid");
           return;
         }
+        const interval = fd.get("interval") || "daily";
+        const intervalDays = selectedIntervalDays(choreForm);
+        if (interval === "days" && !intervalDays.length) {
+          toast("Pick at least one day");
+          return;
+        }
+        const stars = parseStars(fd.get("stars"), lastChoreStars());
+        const icon = String(fd.get("icon") ?? "").trim();
         try {
+          rememberChoreStars(stars);
           await AdminAPI.saveChore(state.token, {
             id: fd.get("id") || undefined,
             title: fd.get("title"),
-            icon: fd.get("icon") || "",
-            stars: parseStars(fd.get("stars"), 1),
+            icon,
+            stars,
             period: fd.get("period"),
             hint: fd.get("hint") || "",
             checkStyle: fd.get("checkStyle") || "circle",
             kidIds,
-            repeat: "daily",
+            interval,
+            intervalDays,
+            repeat: interval,
           });
           toast(editing ? "Chore updated" : "Chore saved");
           resetChoreForm();

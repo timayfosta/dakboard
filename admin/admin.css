@@ -237,6 +237,13 @@ button, input, select, textarea {
   letter-spacing: 0.04em;
 }
 
+.field-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .field input, .field select, .field textarea {
   width: 100%;
   border: 1px solid var(--line);

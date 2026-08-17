@@ -192,6 +192,10 @@
         scheduleRotation();
         return;
       }
+      if (document.querySelector(".touch-input-overlay.open")) {
+        scheduleRotation();
+        return;
+      }
       goToNextRotation();
     }, cfgSeconds * 1000);
   }

@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="../shared/base.css" />
   <link rel="stylesheet" href="../shared/screen-chrome.css" />
-  <link rel="stylesheet" href="../shared/touch-input.css" />
+  <link rel="stylesheet" href="../shared/touch-input.css?v=4" />
   <style>
     .screen .panel {
       background: transparent;
@@ -650,7 +650,7 @@
   <script src="../shared/weather-icons.js"></script>
   <script src="../shared/screen-chrome.js"></script>
   <script src="../shared/swipe-words.js"></script>
-  <script src="../shared/touch-input.js"></script>
+  <script src="../shared/touch-input.js?v=4"></script>
   <script src="../shared/calendar-colors.js"></script>
   <script src="../shared/calendar.js"></script>
   <script src="../shared/family-api.js"></script>
@@ -661,7 +661,7 @@
   <script src="../shared/screensaver.js"></script>
   <script src="../shared/alerts.js"></script>
   <script src="../shared/screens.js"></script>
-  <script src="../shared/kiosk-nav.js"></script>
+  <script src="../shared/kiosk-nav.js?v=2"></script>
   <script>
     const CFG = window.FAMILY_CONFIG;
     let events = [];
@@ -1107,29 +1107,23 @@
             placeholder: isGrocery ? "Swipe or type an item…" : "Swipe or type a reminder…",
             mode: "add",
             submitLabel: "Add",
+            stayOpen: true,
             onSubmit: async (text) => {
               const itemText = String(text || "").trim();
               if (!itemText) return;
-              try {
-                const res = await FamilyAPI.addListItem(kind, itemText);
-                if (res?.state) syncListStateFromApi(res.state);
-                else await loadLists();
-                if (res.item && window.ListUndo) {
-                  ListUndo.offer(`Added "${itemText}"`, async () => {
-                    const undo = await FamilyAPI.toggleListItem(kind, res.item.id, {
-                      allowOnKiosk: true,
-                    });
-                    if (undo?.state) syncListStateFromApi(undo.state);
-                    else await loadLists();
+              const res = await FamilyAPI.addListItem(kind, itemText);
+              listsFetchId += 1;
+              if (res?.state) syncListStateFromApi(res.state);
+              else await loadLists();
+              if (res.item && window.ListUndo) {
+                ListUndo.offer(`Added "${itemText}"`, async () => {
+                  const undo = await FamilyAPI.toggleListItem(kind, res.item.id, {
+                    allowOnKiosk: true,
                   });
-                }
-              } catch (err) {
-                console.warn("Failed to add list item", err);
-                try {
-                  await loadLists();
-                } catch (_) {
-                  /* still offline */
-                }
+                  listsFetchId += 1;
+                  if (undo?.state) syncListStateFromApi(undo.state);
+                  else await loadLists();
+                });
               }
             },
           });
@@ -1139,6 +1133,7 @@
 
     let eventsFp = "";
     let listsFp = "";
+    let listsFetchId = 0;
 
     async function loadCalendar() {
       const result = await FamilyCalendar.loadEvents(CFG);
@@ -1160,8 +1155,10 @@
     }
 
     async function loadLists() {
+      const fetchId = ++listsFetchId;
       try {
         const data = await FamilyAPI.getState();
+        if (fetchId !== listsFetchId) return;
         agendaKids = data.kids?.length ? data.kids : CFG.kids || [];
         const nextGrocery = data.lists?.grocery || [];
         const nextReminders = data.lists?.reminders || [];
@@ -1174,6 +1171,7 @@
         renderChecklist("reminders");
         renderAgenda();
       } catch (err) {
+        if (fetchId !== listsFetchId) return;
         console.warn("Family API lists unavailable.", err);
         document.getElementById("groceryList").innerHTML =
           `<li class="empty-list">Can't reach server — run <strong>python server.py</strong></li>`;
@@ -1185,6 +1183,14 @@
     wireListAddButtons();
     wireChecklists();
     window.TouchInput?.attach?.();
+
+    window.addEventListener("family-state-update", (e) => {
+      const data = e.detail;
+      if (!data?.lists) return;
+      listsFetchId += 1;
+      agendaKids = data.kids?.length ? data.kids : agendaKids;
+      syncListStateFromApi(data);
+    });
 
     ScreenChrome.init();
     loadAlerts();
