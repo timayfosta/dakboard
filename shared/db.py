@@ -233,6 +233,13 @@ def clamp_int(value: Any, default: int = 0, lo: int = 0, hi: int = 99) -> int:
     return max(lo, min(hi, n))
 
 
+def normalize_chore_icon(value: Any) -> str:
+    icon = str(value or "").strip()
+    if icon.lower() in ("", "none", "null", "undefined", "-", "—"):
+        return ""
+    return icon
+
+
 def chore_star_value(chore: dict[str, Any], default: int = 1) -> int:
     return clamp_int(chore.get("stars"), default, 0, 99)
 

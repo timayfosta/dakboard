@@ -1326,50 +1326,55 @@ class Handler(SimpleHTTPRequestHandler):
         send_json(self, {"item": kid, "state": db.public_state(state)})
 
     def chores_upsert(self, payload: dict):
-        state = db.load_db()
-        chores = state.setdefault("chores", [])
-        existing = next((c for c in chores if c.get("id") == payload.get("id")), {})
-        if "icon" in payload:
-            icon = str(payload.get("icon") or "").strip()
-            if icon.lower() in ("none", "null", "undefined"):
-                icon = ""
-        else:
-            icon = str(existing.get("icon") or "").strip()
-        if "stars" in payload and payload.get("stars") not in (None, ""):
-            stars = db.clamp_int(payload.get("stars"), 1, 0, 99)
-        else:
-            stars = db.clamp_int(existing.get("stars"), 1, 0, 99)
-        interval, interval_days, interval_anchor = db.normalize_interval(payload, existing)
-        chore = {
-            "id": payload.get("id") or new_id("chore"),
-            "title": (payload.get("title") or existing.get("title") or "Chore").strip(),
-            "icon": icon,
-            "stars": stars,
-            "kidIds": payload.get("kidIds")
-            if payload.get("kidIds") is not None
-            else (existing.get("kidIds") or []),
-            "period": payload.get("period") or existing.get("period") or "chore",
-            "repeat": interval,
-            "interval": interval,
-            "intervalDays": interval_days,
-            "intervalAnchor": interval_anchor,
-            "hint": (
-                payload.get("hint")
-                if payload.get("hint") is not None
-                else (existing.get("hint") or "")
-            ).strip(),
-            "checkStyle": self._normalize_check_style(
-                payload.get("checkStyle"), existing.get("checkStyle", "circle")
-            ),
-            "active": payload.get("active", existing.get("active", True)),
-        }
-        for i, row in enumerate(chores):
-            if row.get("id") == chore["id"]:
-                chores[i] = {**row, **chore}
-                break
-        else:
-            chores.append(chore)
-        db.save_db(state)
+        chore_id = str(payload.get("id") or "").strip() or None
+        title = str(payload.get("title") or "").strip()
+        if not title:
+            return send_json(self, {"error": "title required"}, 400)
+
+        def mut(state: dict):
+            chores = state.setdefault("chores", [])
+            existing = next((row for row in chores if chore_id and row.get("id") == chore_id), {})
+            if "icon" in payload or payload.get("clearIcon"):
+                icon = db.normalize_chore_icon("" if payload.get("clearIcon") else payload.get("icon"))
+            else:
+                icon = db.normalize_chore_icon(existing.get("icon"))
+            if "stars" in payload:
+                stars = db.clamp_int(payload.get("stars"), 0, 0, 99)
+            else:
+                stars = db.clamp_int(existing.get("stars"), 1, 0, 99)
+            interval, interval_days, interval_anchor = db.normalize_interval(payload, existing)
+            chore = {
+                "id": existing.get("id") or chore_id or new_id("chore"),
+                "title": title,
+                "icon": icon,
+                "stars": stars,
+                "kidIds": payload.get("kidIds")
+                if payload.get("kidIds") is not None
+                else (existing.get("kidIds") or []),
+                "period": payload.get("period") or existing.get("period") or "chore",
+                "repeat": interval,
+                "interval": interval,
+                "intervalDays": interval_days,
+                "intervalAnchor": interval_anchor,
+                "hint": (
+                    payload.get("hint")
+                    if payload.get("hint") is not None
+                    else (existing.get("hint") or "")
+                ).strip(),
+                "checkStyle": self._normalize_check_style(
+                    payload.get("checkStyle"), existing.get("checkStyle", "circle")
+                ),
+                "active": payload.get("active", existing.get("active", True)),
+            }
+            for i, row in enumerate(chores):
+                if row.get("id") == chore["id"]:
+                    chores[i] = {**row, **chore}
+                    break
+            else:
+                chores.append(chore)
+            return chore
+
+        chore, state = db.mutate_db(mut)
         send_json(self, {"item": chore, "state": db.public_state(state)})
 
     def consequences_upsert(self, payload: dict):
