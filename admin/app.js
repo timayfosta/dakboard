@@ -279,10 +279,15 @@
       .replace(/</g, "&lt;");
   }
 
-  function renderEmojiPicker(fieldName, emojis, selected) {
-    const pick = selected || emojis[0] || "⭐";
+  function renderEmojiPicker(fieldName, emojis, selected, opts = {}) {
+    const allowNone = !!opts.allowNone;
+    const pick = allowNone ? (selected || "") : (selected || emojis[0] || "⭐");
+    const noneBtn = allowNone
+      ? `<button type="button" class="emoji-opt none${pick === "" ? " on" : ""}" data-emoji="">None</button>`
+      : "";
     return `
       <div class="emoji-picker" data-emoji-field="${fieldName}">
+        ${noneBtn}
         ${emojis
           .map(
             (emoji) =>
@@ -326,9 +331,9 @@
     const picker = form.querySelector(`.emoji-picker[data-emoji-field="${fieldName}"]`);
     const input = form.querySelector(`[name="${fieldName}"]`);
     if (!picker || !input) return;
-    input.value = value || input.value;
+    if (value !== undefined) input.value = value;
     picker.querySelectorAll(".emoji-opt").forEach((btn) => {
-      btn.classList.toggle("on", btn.dataset.emoji === input.value);
+      btn.classList.toggle("on", (btn.dataset.emoji || "") === (input.value || ""));
     });
   }
 
@@ -362,7 +367,7 @@
           picker.querySelectorAll(".emoji-opt").forEach((b) => b.classList.remove("on"));
           btn.classList.add("on");
           const input = picker.parentElement.querySelector(`[name="${field}"]`);
-          if (input) input.value = btn.dataset.emoji;
+          if (input) input.value = btn.dataset.emoji || "";
         });
       });
     });
@@ -434,13 +439,24 @@
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function parseStars(value, fallback = 1) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.min(99, n));
+  }
+
+  function choreLabel(chore) {
+    const icon = String(chore?.icon || "").trim();
+    return `${icon ? icon + " " : ""}${chore?.title || "Chore"}`;
+  }
+
   function resetChoreForm() {
     const form = $("#choreForm");
     if (!form) return;
     form.reset();
     const idInput = form.querySelector('[name="id"]');
     if (idInput) idInput.value = "";
-    setEmojiPicker(form, "icon", "✅");
+    setEmojiPicker(form, "icon", "");
     setCheckStylePicker(form, "circle");
     form.querySelectorAll("[data-kid-chip]").forEach((chip) => chip.classList.remove("on"));
     form.querySelector("[data-kid-all]")?.classList.remove("on");
@@ -463,11 +479,11 @@
     }
     idInput.value = chore.id;
     form.querySelector('[name="title"]').value = chore.title || "";
-    form.querySelector('[name="stars"]').value = chore.stars || 1;
+    form.querySelector('[name="stars"]').value = parseStars(chore.stars, 1);
     form.querySelector('[name="period"]').value = chore.period || "chore";
     const hintInput = form.querySelector('[name="hint"]');
     if (hintInput) hintInput.value = chore.hint || "";
-    setEmojiPicker(form, "icon", chore.icon || "✅");
+    setEmojiPicker(form, "icon", chore.icon || "");
     setCheckStylePicker(form, chore.checkStyle || "circle");
     const kidIds = new Set(chore.kidIds || []);
     form.querySelectorAll("[data-kid-chip]").forEach((chip) => {
@@ -601,10 +617,10 @@
           <input type="hidden" name="id" value="" />
           <div class="field"><label>Title</label><input type="text" inputmode="text" name="title" required placeholder="Make bed" /></div>
           <div class="field">
-            <label>Emoji</label>
-            ${renderEmojiPicker("icon", CHORE_EMOJIS, "✅")}
+            <label>Emoji (optional)</label>
+            ${renderEmojiPicker("icon", CHORE_EMOJIS, "", { allowNone: true })}
           </div>
-          <div class="field"><label>Stars</label><input name="stars" type="number" min="1" max="99" value="1" /></div>
+          <div class="field"><label>Stars</label><input name="stars" type="number" min="0" max="99" value="1" /></div>
           <div class="field"><label>Hint (optional)</label><input type="text" inputmode="text" name="hint" placeholder="Before school — pull covers neat" /></div>
           <div class="field"><label>Period</label>
             <select name="period">
@@ -641,11 +657,12 @@
           .filter((c) => c.active !== false)
           .map((c) => {
             const kids = (c.kidIds || []).map(kidName).join(", ") || "Unassigned";
+            const icon = String(c.icon || "").trim();
             return `<article class="item">
               <div class="item-head">
                 <div class="item-main">
-                  <div class="title">${c.icon || "✅"} ${c.title}</div>
-                  <div class="muted">★${c.stars || 1} · ${c.period || "chore"} · ${checkStyleLabel(c.checkStyle)} · ${kids}</div>
+                  <div class="title">${icon ? icon + " " : ""}${c.title}</div>
+                  <div class="muted">★${parseStars(c.stars, 1)} · ${c.period || "chore"} · ${checkStyleLabel(c.checkStyle)} · ${kids}</div>
                 </div>
                 <button type="button" class="btn-x" data-del-chore="${c.id}" aria-label="Remove ${c.title}">×</button>
               </div>
@@ -1512,7 +1529,7 @@
       btn.addEventListener("click", async () => {
         const id = btn.dataset.delChore;
         const chore = state.data?.chores?.find((c) => c.id === id);
-        const label = chore ? `${chore.icon || "✅"} ${chore.title}` : "this chore";
+        const label = chore ? choreLabel(chore) : "this chore";
         if (!confirm(`Remove ${label}?`)) return;
         try {
           await AdminAPI.deleteChore(state.token, id);
@@ -1550,8 +1567,8 @@
           await AdminAPI.saveChore(state.token, {
             id: fd.get("id") || undefined,
             title: fd.get("title"),
-            icon: fd.get("icon"),
-            stars: Number(fd.get("stars") || 1),
+            icon: fd.get("icon") || "",
+            stars: parseStars(fd.get("stars"), 1),
             period: fd.get("period"),
             hint: fd.get("hint") || "",
             checkStyle: fd.get("checkStyle") || "circle",

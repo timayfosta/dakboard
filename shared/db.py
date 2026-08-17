@@ -201,10 +201,25 @@ CHORE_PERIOD_DEADLINE = {
 }
 
 
+def clamp_int(value: Any, default: int = 0, lo: int = 0, hi: int = 99) -> int:
+    if value is None or value == "":
+        n = default
+    else:
+        try:
+            n = int(value)
+        except (TypeError, ValueError):
+            n = default
+    return max(lo, min(hi, n))
+
+
+def chore_star_value(chore: dict[str, Any], default: int = 1) -> int:
+    return clamp_int(chore.get("stars"), default, 0, 99)
+
+
 def chore_stars_for_now(chore: dict[str, Any], when=None) -> tuple[int, bool]:
     from datetime import datetime
 
-    base = int(chore.get("stars") or 1)
+    base = chore_star_value(chore)
     period = chore.get("period") or "chore"
     deadline = CHORE_PERIOD_DEADLINE.get(period)
     if not deadline:
@@ -213,17 +228,21 @@ def chore_stars_for_now(chore: dict[str, Any], when=None) -> tuple[int, bool]:
     now_mins = now.hour * 60 + now.minute
     dead_mins = deadline[0] * 60 + deadline[1]
     if now_mins > dead_mins:
+        if base <= 0:
+            return 0, True
         return max(1, base // 2), True
     return base, False
 
 
 def completion_stars(entry: Any, chore: dict[str, Any]) -> int:
     if entry is True:
-        return int(chore.get("stars") or 1)
+        return chore_star_value(chore)
     if isinstance(entry, dict):
-        return int(entry.get("stars") or chore.get("stars") or 1)
+        if "stars" in entry and entry.get("stars") not in (None, ""):
+            return clamp_int(entry.get("stars"), 0, 0, 99)
+        return chore_star_value(chore)
     if isinstance(entry, (int, float)):
-        return int(entry)
+        return clamp_int(entry, 0, 0, 99)
     return 0
 
 
@@ -330,7 +349,7 @@ def migrate_star_log(state: dict[str, Any]) -> bool:
                     "kidId": kid_id,
                     "type": "chore",
                     "title": chore.get("title") or "Chore",
-                    "icon": chore.get("icon") or "✅",
+                    "icon": chore.get("icon") or "",
                     "stars": stars,
                     "late": late,
                     "at": int(entry.get("at") or at) if isinstance(entry, dict) else at,

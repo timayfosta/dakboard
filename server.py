@@ -1329,11 +1329,19 @@ class Handler(SimpleHTTPRequestHandler):
         state = db.load_db()
         chores = state.setdefault("chores", [])
         existing = next((c for c in chores if c.get("id") == payload.get("id")), {})
+        if "icon" in payload:
+            icon = str(payload.get("icon") or "").strip()
+        else:
+            icon = str(existing.get("icon") or "").strip()
+        if "stars" in payload and payload.get("stars") not in (None, ""):
+            stars = db.clamp_int(payload.get("stars"), 1, 0, 99)
+        else:
+            stars = db.clamp_int(existing.get("stars"), 1, 0, 99)
         chore = {
             "id": payload.get("id") or new_id("chore"),
             "title": (payload.get("title") or existing.get("title") or "Chore").strip(),
-            "icon": payload.get("icon") or existing.get("icon") or "✅",
-            "stars": max(1, min(99, int(payload.get("stars") or existing.get("stars") or 1))),
+            "icon": icon,
+            "stars": stars,
             "kidIds": payload.get("kidIds")
             if payload.get("kidIds") is not None
             else (existing.get("kidIds") or []),
@@ -1840,7 +1848,7 @@ class Handler(SimpleHTTPRequestHandler):
                 kidId=kid_id,
                 type="chore",
                 title=chore.get("title") or "Chore",
-                icon=chore.get("icon") or "✅",
+                icon=chore.get("icon") or "",
                 stars=stars_earned,
                 late=late,
                 at=stamped,

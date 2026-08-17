@@ -352,6 +352,10 @@
     @keyframes anim-drift-r { from { transform: translate(-14px, 140px); opacity: 0.1; } to { transform: none; opacity: 1; } }
     @keyframes anim-rocket-r { from { transform: translateY(170px) scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
 
+    .chore.no-icon {
+      grid-template-columns: 1fr auto;
+    }
+
     .chore-ico {
       width: clamp(3.1rem, 8.4cqw, 4rem);
       height: clamp(3.1rem, 8.4cqw, 4rem);
@@ -1111,7 +1115,7 @@
         document.getElementById("remindBody").textContent =
           `These weren't finished on time. Completing now earns half stars ⭐`;
         document.getElementById("remindList").innerHTML = missed
-          .map((c) => `<li>${c.icon || "✅"} ${c.title}</li>`)
+          .map((c) => `<li>${c.icon ? `${c.icon} ` : ""}${c.title}</li>`)
           .join("");
         document.getElementById("reminderOverlay").classList.add("show");
         if (state.kidId !== kid.id) {
@@ -1134,14 +1138,20 @@
       return filled[style] || "✓";
     }
 
+    function choreStars(chore) {
+      const n = Number(chore?.stars);
+      return Number.isFinite(n) ? n : 1;
+    }
+
     function choreRowHtml(chore, kidId, done) {
       const style = chore.checkStyle || "circle";
+      const icon = String(chore.icon || "").trim();
       return `
-        <li class="chore${done ? " done" : ""}" data-id="${chore.id}" data-kid="${kidId}" role="button" tabindex="0" aria-pressed="${done}">
-          <div class="chore-ico"><span class="emoji">${chore.icon || "✅"}</span></div>
+        <li class="chore${done ? " done" : ""}${icon ? "" : " no-icon"}" data-id="${chore.id}" data-kid="${kidId}" role="button" tabindex="0" aria-pressed="${done}">
+          ${icon ? `<div class="chore-ico"><span class="emoji">${icon}</span></div>` : ""}
           <div class="chore-text">
             <h3>${chore.title}</h3>
-            <p><span class="stars-badge">★ ${chore.stars || 1}</span> · ${choreDescription(chore)}</p>
+            <p><span class="stars-badge">★ ${choreStars(chore)}</span> · ${choreDescription(chore)}</p>
           </div>
           <div class="check check-${style}">${checkMark(chore, done)}</div>
         </li>`;
@@ -1181,9 +1191,11 @@
         state.fingerprints.all = "";
 
         if (res.done && el) {
-          FamilyFX.starBurst(document.getElementById("fxRoot"), el);
-          const label = res.late ? `+${res.starsEarned}★ late` : `+${res.starsEarned}★`;
-          FamilyFX.floatLabel(el, label);
+          if ((res.starsEarned || 0) > 0) {
+            FamilyFX.starBurst(document.getElementById("fxRoot"), el);
+            const label = res.late ? `+${res.starsEarned}★ late` : `+${res.starsEarned}★`;
+            FamilyFX.floatLabel(el, label);
+          }
           cheer(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
         }
 
