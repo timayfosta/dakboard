@@ -1270,31 +1270,82 @@
       </div>`;
   }
 
+  function resetRewardForm() {
+    const form = $("#rewardForm");
+    if (!form) return;
+    form.reset();
+    const idInput = form.querySelector('[name="id"]');
+    if (idInput) idInput.value = "";
+    setEmojiPicker(form, "icon", "🎁");
+    const costInput = form.querySelector('[name="cost"]');
+    if (costInput) costInput.value = "10";
+    const heading = form.closest(".card")?.querySelector("h2");
+    if (heading) heading.textContent = "Add reward";
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.textContent = "Save reward";
+    $("#cancelRewardEdit")?.classList.add("hidden");
+  }
+
+  function populateRewardForm(item) {
+    const form = $("#rewardForm");
+    if (!form || !item) return;
+    let idInput = form.querySelector('[name="id"]');
+    if (!idInput) {
+      idInput = document.createElement("input");
+      idInput.type = "hidden";
+      idInput.name = "id";
+      form.prepend(idInput);
+    }
+    idInput.value = item.id;
+    form.querySelector('[name="title"]').value = item.title || "";
+    const costInput = form.querySelector('[name="cost"]');
+    if (costInput) costInput.value = String(parseStars(item.cost, 0));
+    setEmojiPicker(form, "icon", item.icon || ICON_NONE);
+    const heading = form.closest(".card")?.querySelector("h2");
+    if (heading) heading.textContent = "Edit reward";
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.textContent = "Update reward";
+    $("#cancelRewardEdit")?.classList.remove("hidden");
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function renderRewards(d) {
     return `
       <section class="card">
         <h2>Add reward</h2>
         <form id="rewardForm">
+          <input type="hidden" name="id" value="" />
           <div class="field"><label>Title</label><input type="text" inputmode="text" name="title" required placeholder="Pick dessert" /></div>
           <div class="field">
             <label>Emoji (optional)</label>
             ${renderEmojiPicker("icon", ["🎁", "🍦", "🌙", "🎲", "🎬", "🍕", "🏞️", "🎉", "📱", "⭐", "🧸", "🎮"], "🎁", { allowNone: true })}
           </div>
           <div class="field"><label>Star cost</label><input name="cost" type="number" min="0" max="99" value="10" /></div>
-          <button class="btn block" type="submit">Save reward</button>
+          <div class="form-actions">
+            <button class="btn block" type="submit">Save reward</button>
+            <button class="btn ghost block hidden" type="button" id="cancelRewardEdit">Cancel edit</button>
+          </div>
         </form>
       </section>
       <section class="list">
-        ${d.rewards
+        ${(d.rewards || [])
           .filter((r) => r.active !== false)
           .map(
             (r) => `
           <article class="item">
-            <div class="title">${r.icon ? r.icon + " " : ""}${r.title}</div>
-            <div class="muted">★ ${r.cost}</div>
+            <div class="item-head">
+              <div class="item-main">
+                <div class="title">${r.icon ? r.icon + " " : ""}${r.title}</div>
+                <div class="muted">★ ${r.cost}</div>
+              </div>
+              <button type="button" class="btn-x" data-del-reward="${r.id}" aria-label="Remove ${r.title}">×</button>
+            </div>
+            <div class="actions">
+              <button class="btn ghost compact" type="button" data-edit-reward-id="${r.id}">Edit</button>
+            </div>
           </article>`
           )
-          .join("")}
+          .join("") || `<p class="muted">No rewards yet.</p>`}
       </section>`;
   }
 
@@ -2231,15 +2282,49 @@
       rewardForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const fd = new FormData(rewardForm);
-        await AdminAPI.saveReward(state.token, {
-          title: fd.get("title"),
-          icon: pickerIconValue(rewardForm),
-          cost: parseStars(fd.get("cost"), 0),
-        });
-        toast("Reward saved");
-        await refresh();
+        const editing = !!fd.get("id");
+        try {
+          await AdminAPI.saveReward(state.token, {
+            id: fd.get("id") || undefined,
+            title: fd.get("title"),
+            icon: pickerIconValue(rewardForm),
+            cost: parseStars(fd.get("cost"), 0),
+          });
+          toast(editing ? "Reward updated" : "Reward saved");
+          resetRewardForm();
+          await refresh();
+        } catch (err) {
+          toast(apiErrorMessage(err));
+        }
       });
     }
+
+    $("#cancelRewardEdit")?.addEventListener("click", () => resetRewardForm());
+
+    $$("[data-edit-reward-id]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const item = (state.data?.rewards || []).find((r) => r.id === btn.dataset.editRewardId);
+        if (!item) return;
+        populateRewardForm(item);
+      });
+    });
+
+    $$("[data-del-reward]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.delReward;
+        const item = (state.data?.rewards || []).find((r) => r.id === id);
+        const label = item ? `${item.icon ? item.icon + " " : ""}${item.title}` : "this reward";
+        if (!confirm(`Remove ${label}?`)) return;
+        try {
+          await AdminAPI.deleteReward(state.token, id);
+          toast("Reward removed");
+          resetRewardForm();
+          await refresh();
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Remove failed");
+        }
+      });
+    });
 
     const installBtn = $("#installBtn");
     if (installBtn && state.deferredPrompt) {
