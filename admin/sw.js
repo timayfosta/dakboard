@@ -1,4 +1,4 @@
-const CACHE = "family-admin-v17";
+const CACHE = "family-admin-v19";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());

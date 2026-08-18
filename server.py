@@ -1021,6 +1021,10 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.stars_adjust(payload)
+        if path == "/api/family/bonus":
+            if not require_admin(self):
+                return
+            return self.bonus_give(payload)
         if path == "/api/family/lists/replace":
             if not require_admin(self):
                 return
@@ -1113,6 +1117,9 @@ class Handler(SimpleHTTPRequestHandler):
                     cons["kidIds"] = [x for x in kid_ids if x != kid_id]
             state["consequenceHits"] = [
                 hit for hit in (state.get("consequenceHits") or []) if hit.get("kidId") != kid_id
+            ]
+            state["bonusHits"] = [
+                hit for hit in (state.get("bonusHits") or []) if hit.get("kidId") != kid_id
             ]
             state["starLog"] = [row for row in (state.get("starLog") or []) if row.get("kidId") != kid_id]
             for day_bucket in state.get("completions", {}).values():
@@ -1310,7 +1317,7 @@ class Handler(SimpleHTTPRequestHandler):
         kid = {
             "id": payload.get("id") or new_id("kid"),
             "name": (payload.get("name") or "Kid").strip(),
-            "emoji": payload.get("emoji") or "⭐",
+            "emoji": db.normalize_chore_icon(payload.get("emoji")),
             "color": payload.get("color") or "#5aa7ff",
             "active": payload.get("active", True),
         }
@@ -1342,16 +1349,31 @@ class Handler(SimpleHTTPRequestHandler):
                 stars = db.clamp_int(payload.get("stars"), 0, 0, 99)
             else:
                 stars = db.clamp_int(existing.get("stars"), 1, 0, 99)
+            if "lateStars" in payload:
+                late_raw = payload.get("lateStars")
+                late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, 0, 99)
+            else:
+                late_raw = existing.get("lateStars")
+                late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, 0, 99)
             interval, interval_days, interval_anchor = db.normalize_interval(payload, existing)
             chore = {
                 "id": existing.get("id") or chore_id or new_id("chore"),
                 "title": title,
                 "icon": icon,
                 "stars": stars,
+                "lateStars": late_stars,
                 "kidIds": payload.get("kidIds")
                 if payload.get("kidIds") is not None
                 else (existing.get("kidIds") or []),
                 "period": payload.get("period") or existing.get("period") or "chore",
+                "dueTime": db.parse_due_time(
+                    payload.get("dueTime") if "dueTime" in payload else existing.get("dueTime")
+                )
+                or (
+                    ""
+                    if "dueTime" in payload
+                    else db.chore_due_time(existing)
+                ),
                 "repeat": interval,
                 "interval": interval,
                 "intervalDays": interval_days,
@@ -1381,19 +1403,39 @@ class Handler(SimpleHTTPRequestHandler):
         state = db.load_db()
         rows = state.setdefault("consequences", [])
         existing = next((row for row in rows if row.get("id") == payload.get("id")), {})
+        if "tone" in payload or "kind" in payload:
+            kind = db.extra_kind(payload)
+        elif existing:
+            kind = db.extra_kind(existing)
+        else:
+            kind = "good"
+        title = (
+            payload.get("hint")
+            or payload.get("reason")
+            or payload.get("title")
+            or existing.get("hint")
+            or existing.get("reason")
+            or existing.get("title")
+            or "Extra"
+        ).strip()
         item = {
-            "id": payload.get("id") or new_id("cons"),
-            "title": (payload.get("title") or existing.get("title") or "Consequence").strip(),
-            "icon": payload.get("icon") or existing.get("icon") or "⚠️",
-            "stars": max(1, min(99, int(payload.get("stars") or existing.get("stars") or 1))),
+            "id": payload.get("id") or new_id("extra"),
+            "title": title,
+            "icon": db.normalize_chore_icon(
+                payload.get("icon") if "icon" in payload else existing.get("icon")
+            ),
+            "stars": db.clamp_int(
+                payload.get("stars") if "stars" in payload else existing.get("stars"),
+                0,
+                0,
+                99,
+            ),
+            "kind": kind,
+            "tone": kind,
             "kidIds": payload.get("kidIds")
             if payload.get("kidIds") is not None
             else (existing.get("kidIds") or []),
-            "hint": (
-                payload.get("hint")
-                if payload.get("hint") is not None
-                else (existing.get("hint") or "")
-            ).strip(),
+            "hint": title,
             "active": payload.get("active", existing.get("active", True)),
         }
         for i, row in enumerate(rows):
@@ -1406,57 +1448,97 @@ class Handler(SimpleHTTPRequestHandler):
         send_json(self, {"item": item, "state": db.public_state(state)})
 
     def consequence_apply(self, payload: dict):
-        state = db.load_db()
-        cons_id = payload.get("id") or payload.get("consequenceId")
-        item = next((row for row in state.get("consequences", []) if row.get("id") == cons_id), None)
-        if not item:
-            return send_json(self, {"error": "Consequence not found"}, 404)
-        kid_ids = payload.get("kidIds") if payload.get("kidIds") is not None else (item.get("kidIds") or [])
-        kid_ids = [kid for kid in kid_ids if kid]
-        if not kid_ids:
-            return send_json(self, {"error": "Assign at least one kid"}, 400)
-        stars = max(1, min(99, int(item.get("stars") or 1)))
-        stamped = db.now_ms()
-        day = db.today_key()
-        bal = state.setdefault("balances", {})
-        hits = state.setdefault("consequenceHits", [])
-        applied = []
-        for kid_id in kid_ids:
-            bal[kid_id] = max(0, int(bal.get(kid_id) or 0) - stars)
-            hit = {
-                "id": new_id("hit"),
-                "consequenceId": item["id"],
-                "kidId": kid_id,
-                "title": item.get("title") or "Consequence",
-                "icon": item.get("icon") or "⚠️",
-                "stars": stars,
-                "hint": item.get("hint") or "",
-                "at": stamped,
-            }
-            hits.append(hit)
-            db.append_star_log(
-                state,
-                kidId=kid_id,
-                type="consequence",
-                title=item.get("title") or "Consequence",
-                icon=item.get("icon") or "⚠️",
-                stars=-stars,
-                at=stamped,
-                day=day,
-                ref=f"cons:{item['id']}:{hit['id']}",
-            )
-            applied.append(hit)
-        state["consequenceHits"] = db.recent_consequence_hits(state)
-        db.save_db(state)
-        send_json(self, {"ok": True, "applied": applied, "state": db.public_state(state)})
+        cons_id = payload.get("id") or payload.get("consequenceId") or payload.get("extraId")
+
+        def mut(state: dict):
+            item = next((row for row in state.get("consequences", []) if row.get("id") == cons_id), None)
+            if not item:
+                return {"error": "Extra not found", "status": 404}
+            kid_ids = payload.get("kidIds") if payload.get("kidIds") is not None else (item.get("kidIds") or [])
+            kid_ids = [kid for kid in kid_ids if kid]
+            if not kid_ids:
+                return {"error": "Assign at least one kid", "status": 400}
+            if payload.get("tone") or payload.get("kind"):
+                kind = db.extra_kind(payload)
+            else:
+                kind = db.extra_kind(item)
+            stars = db.clamp_int(item.get("stars"), 0, 0, 99)
+            title = item.get("title") or "Extra"
+            icon = db.normalize_chore_icon(item.get("icon"))
+            hint = item.get("hint") or ""
+            reason = hint or title
+            stamped = db.now_ms()
+            day = db.today_key()
+            bal = state.setdefault("balances", {})
+            good_hits = state.setdefault("bonusHits", [])
+            bad_hits = state.setdefault("consequenceHits", [])
+            applied = []
+            for kid_id in kid_ids:
+                if kind == "good":
+                    bal[kid_id] = int(bal.get(kid_id) or 0) + stars
+                    hit = {
+                        "id": new_id("bonus"),
+                        "extraId": item["id"],
+                        "kidId": kid_id,
+                        "title": reason,
+                        "reason": reason,
+                        "icon": icon,
+                        "stars": stars,
+                        "hint": reason,
+                        "kind": "good",
+                        "at": stamped,
+                    }
+                    good_hits.append(hit)
+                    log_type = "bonus"
+                    log_stars = stars
+                    ref = f"bonus:{hit['id']}"
+                else:
+                    bal[kid_id] = max(0, int(bal.get(kid_id) or 0) - stars)
+                    hit = {
+                        "id": new_id("hit"),
+                        "consequenceId": item["id"],
+                        "extraId": item["id"],
+                        "kidId": kid_id,
+                        "title": reason,
+                        "reason": reason,
+                        "icon": icon,
+                        "stars": stars,
+                        "hint": reason,
+                        "kind": "bad",
+                        "at": stamped,
+                    }
+                    bad_hits.append(hit)
+                    log_type = "consequence"
+                    log_stars = -stars
+                    ref = f"cons:{item['id']}:{hit['id']}"
+                db.append_star_log(
+                    state,
+                    kidId=kid_id,
+                    type=log_type,
+                    title=reason,
+                    icon=icon,
+                    stars=log_stars,
+                    at=stamped,
+                    day=day,
+                    ref=ref,
+                )
+                applied.append(hit)
+            state["bonusHits"] = db.recent_bonus_hits(state)
+            state["consequenceHits"] = db.recent_consequence_hits(state)
+            return {"applied": applied}
+
+        result, state = db.mutate_db(mut)
+        if result.get("error"):
+            return send_json(self, {"error": result["error"]}, result.get("status") or 400)
+        send_json(self, {"ok": True, "applied": result.get("applied") or [], "state": db.public_state(state)})
 
     def rewards_upsert(self, payload: dict):
         state = db.load_db()
         reward = {
             "id": payload.get("id") or new_id("reward"),
             "title": (payload.get("title") or "Reward").strip(),
-            "icon": payload.get("icon") or "🎁",
-            "cost": int(payload.get("cost") or 10),
+            "icon": db.normalize_chore_icon(payload.get("icon")),
+            "cost": db.clamp_int(payload.get("cost"), 0, 0, 99),
             "active": payload.get("active", True),
         }
         rewards = state.setdefault("rewards", [])
@@ -1489,6 +1571,56 @@ class Handler(SimpleHTTPRequestHandler):
             )
         db.save_db(state)
         send_json(self, {"balance": bal[kid_id], "state": db.public_state(state)})
+
+    def bonus_give(self, payload: dict):
+        kid_ids = payload.get("kidIds") if payload.get("kidIds") is not None else []
+        if payload.get("kidId") and payload.get("kidId") not in kid_ids:
+            kid_ids = [payload.get("kidId"), *kid_ids]
+        kid_ids = [kid for kid in kid_ids if kid]
+        reason = str(payload.get("reason") or payload.get("title") or "").strip()
+        stars = db.clamp_int(payload.get("stars"), 0, 0, 99)
+        icon = db.normalize_chore_icon(payload.get("icon"))
+        if not kid_ids:
+            return send_json(self, {"error": "Pick at least one kid"}, 400)
+        if not reason:
+            return send_json(self, {"error": "Add a reason"}, 400)
+
+        def mut(state: dict):
+            stamped = db.now_ms()
+            day = db.today_key()
+            bal = state.setdefault("balances", {})
+            hits = state.setdefault("bonusHits", [])
+            applied = []
+            for kid_id in kid_ids:
+                bal[kid_id] = int(bal.get(kid_id) or 0) + stars
+                hit = {
+                    "id": new_id("bonus"),
+                    "kidId": kid_id,
+                    "title": reason,
+                    "reason": reason,
+                    "icon": icon,
+                    "stars": stars,
+                    "kind": "good",
+                    "at": stamped,
+                }
+                hits.append(hit)
+                db.append_star_log(
+                    state,
+                    kidId=kid_id,
+                    type="bonus",
+                    title=reason,
+                    icon=icon,
+                    stars=stars,
+                    at=stamped,
+                    day=day,
+                    ref=f"bonus:{hit['id']}",
+                )
+                applied.append(hit)
+            state["bonusHits"] = db.recent_bonus_hits(state)
+            return applied
+
+        applied, state = db.mutate_db(mut)
+        send_json(self, {"ok": True, "applied": applied, "state": db.public_state(state)})
 
     def list_replace(self, payload: dict):
         name = payload.get("name")

@@ -23,11 +23,16 @@ const API = {
   saveChore: (token, item) => API.request("/api/family/chores", { method: "POST", token, body: item }),
   saveConsequence: (token, item) =>
     API.request("/api/family/consequences", { method: "POST", token, body: item }),
-  applyConsequence: (token, id, kidIds) =>
-    API.request("/api/family/consequences/apply", { method: "POST", token, body: { id, kidIds } }),
+  applyConsequence: (token, id, kidIds, tone) =>
+    API.request("/api/family/consequences/apply", {
+      method: "POST",
+      token,
+      body: { id, kidIds, tone, kind: tone },
+    }),
   saveReward: (token, item) => API.request("/api/family/rewards", { method: "POST", token, body: item }),
   adjustStars: (token, kidId, delta) =>
     API.request("/api/family/stars", { method: "POST", token, body: { kidId, delta } }),
+  giveBonus: (token, item) => API.request("/api/family/bonus", { method: "POST", token, body: item }),
   replaceList: (token, name, items) =>
     API.request("/api/family/lists/replace", { method: "POST", token, body: { name, items } }),
   addListItem: (name, text) =>

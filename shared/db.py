@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 import uuid
@@ -67,6 +68,7 @@ def default_state() -> dict[str, Any]:
                     "hint": hint,
                     "kidIds": [kid_id],
                     "period": period,
+                    "dueTime": {"morning": "12:00", "afternoon": "17:00", "evening": "21:00"}.get(period, ""),
                     "repeat": "daily",
                     "interval": "daily",
                     "intervalDays": [],
@@ -110,6 +112,7 @@ def default_state() -> dict[str, Any]:
         "redemptions": [],
         "consequences": [],
         "consequenceHits": [],
+        "bonusHits": [],
         "starLog": [],
         "whiteboard": {"version": 1, "strokes": [], "updatedAt": 0},
         "screensaverPhotos": [],
@@ -220,6 +223,58 @@ CHORE_PERIOD_DEADLINE = {
     "afternoon": (17, 0),
     "evening": (21, 0),
 }
+PERIOD_TO_TIME = {
+    "morning": "12:00",
+    "afternoon": "17:00",
+    "evening": "21:00",
+}
+
+
+def parse_due_time(value: Any) -> str:
+    """Return HH:MM (24h) or empty if there is no deadline."""
+    text = str(value or "").strip().lower()
+    if not text or text in ("chore", "anytime", "none", "n/a"):
+        return ""
+    match = re.match(r"^(\d{1,2}):(\d{2})\s*(am|pm)?$", text)
+    if not match:
+        return ""
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    ampm = match.group(3) or ""
+    if minute > 59:
+        return ""
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    elif ampm == "am" and hour == 12:
+        hour = 0
+    if hour > 23:
+        return ""
+    return f"{hour:02d}:{minute:02d}"
+
+
+def chore_due_time(chore: dict[str, Any]) -> str:
+    parsed = parse_due_time(chore.get("dueTime"))
+    if parsed:
+        return parsed
+    return PERIOD_TO_TIME.get(str(chore.get("period") or ""), "")
+
+
+def due_time_minutes(value: Any) -> int | None:
+    parsed = chore_due_time(value) if isinstance(value, dict) else parse_due_time(value)
+    if not parsed:
+        return None
+    hour, minute = [int(part) for part in parsed.split(":")]
+    return hour * 60 + minute
+
+
+def format_due_time(value: Any) -> str:
+    parsed = chore_due_time(value) if isinstance(value, dict) else parse_due_time(value)
+    if not parsed:
+        return ""
+    hour, minute = [int(part) for part in parsed.split(":")]
+    suffix = "AM" if hour < 12 else "PM"
+    hour12 = hour % 12 or 12
+    return f"{hour12}:{minute:02d} {suffix}"
 
 
 def clamp_int(value: Any, default: int = 0, lo: int = 0, hi: int = 99) -> int:
@@ -244,21 +299,26 @@ def chore_star_value(chore: dict[str, Any], default: int = 1) -> int:
     return clamp_int(chore.get("stars"), default, 0, 99)
 
 
-def chore_stars_for_now(chore: dict[str, Any], when=None) -> tuple[int, bool]:
-    from datetime import datetime
-
+def late_star_value(chore: dict[str, Any]) -> int:
+    """Stars earned after the due time. Blank lateStars keeps the old half-price default."""
     base = chore_star_value(chore)
-    period = chore.get("period") or "chore"
-    deadline = CHORE_PERIOD_DEADLINE.get(period)
-    if not deadline:
+    raw = chore.get("lateStars") if isinstance(chore, dict) else None
+    if raw in (None, ""):
+        if base <= 0:
+            return 0
+        return max(1, base // 2)
+    return clamp_int(raw, 0, 0, 99)
+
+
+def chore_stars_for_now(chore: dict[str, Any], when=None) -> tuple[int, bool]:
+    base = chore_star_value(chore)
+    dead_mins = due_time_minutes(chore)
+    if dead_mins is None:
         return base, False
     now = when or datetime.now()
     now_mins = now.hour * 60 + now.minute
-    dead_mins = deadline[0] * 60 + deadline[1]
     if now_mins > dead_mins:
-        if base <= 0:
-            return 0, True
-        return max(1, base // 2), True
+        return late_star_value(chore), True
     return base, False
 
 
@@ -424,9 +484,23 @@ def remove_star_log(state: dict[str, Any], *, ref: str, kid_id: str, day: str) -
     ]
 
 
+def extra_kind(item: dict[str, Any] | None, default: str = "bad") -> str:
+    raw = str((item or {}).get("tone") or (item or {}).get("kind") or "").strip().lower()
+    if raw in ("good", "bonus", "positive", "reward"):
+        return "good"
+    if raw in ("bad", "consequence", "negative", "penalty"):
+        return "bad"
+    return "good" if default == "good" else "bad"
+
+
 def recent_consequence_hits(state: dict[str, Any]) -> list[dict[str, Any]]:
     cutoff = now_ms() - CONSEQUENCE_TTL_MS
     return [hit for hit in (state.get("consequenceHits") or []) if int(hit.get("at") or 0) >= cutoff]
+
+
+def recent_bonus_hits(state: dict[str, Any]) -> list[dict[str, Any]]:
+    cutoff = now_ms() - CONSEQUENCE_TTL_MS
+    return [hit for hit in (state.get("bonusHits") or []) if int(hit.get("at") or 0) >= cutoff]
 
 
 def recent_redemptions(state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -517,6 +591,9 @@ def prepare_state(state: dict[str, Any]) -> bool:
     if "consequenceHits" not in state:
         state["consequenceHits"] = []
         dirty = True
+    if "bonusHits" not in state:
+        state["bonusHits"] = []
+        dirty = True
     if migrate_star_log(state):
         dirty = True
     if rollover_completions(state):
@@ -593,6 +670,9 @@ def _public_view(state: dict[str, Any]) -> dict[str, Any]:
     for chore in state.get("chores") or []:
         row = dict(chore)
         row["dueToday"] = chore_due_on(chore, today)
+        row["dueTime"] = chore_due_time(chore)
+        if row.get("lateStars") in (None, ""):
+            row.pop("lateStars", None)
         chores.append(row)
     return {
         "version": state.get("version", 1),
@@ -601,6 +681,7 @@ def _public_view(state: dict[str, Any]) -> dict[str, Any]:
         "chores": chores,
         "consequences": state.get("consequences", []),
         "consequenceHits": recent_consequence_hits(state),
+        "bonusHits": recent_bonus_hits(state),
         "starLog": (state.get("starLog") or [])[-1000:],
         "balances": state.get("balances", {}),
         "completions": state.get("completions", {}).get(today, {}),

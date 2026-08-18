@@ -491,7 +491,7 @@
             return `
               <div class="pick-card">
                 <button class="pick${active ? " active" : ""}" data-kid="${kid.id}" style="--active:${kid.color}">
-                  <div class="bal"><span class="emoji">${kid.emoji || "⭐"}</span> ★ ${state.data.balances[kid.id] || 0}</div>
+                  <div class="bal">${kid.emoji ? `<span class="emoji">${kid.emoji}</span> ` : ""}★ ${state.data.balances[kid.id] || 0}</div>
                   <div class="name">${kid.name}</div>
                 </button>
                 <button type="button" class="receipt-btn${state.receiptKidId === kid.id ? " open" : ""}" data-receipt="${kid.id}">🧾 Receipt</button>
@@ -515,7 +515,7 @@
         const btn = root.querySelector(`[data-kid="${kid.id}"]`);
         if (!btn) return;
         btn.classList.toggle("active", kid.id === state.kidId);
-        btn.querySelector(".bal").innerHTML = `<span class="emoji">${kid.emoji || "⭐"}</span> ★ ${state.data.balances[kid.id] || 0}`;
+        btn.querySelector(".bal").innerHTML = `${kid.emoji ? `<span class="emoji">${kid.emoji}</span> ` : ""}★ ${state.data.balances[kid.id] || 0}`;
         const receiptBtn = root.querySelector(`[data-receipt="${kid.id}"]`);
         receiptBtn?.classList.toggle("open", state.receiptKidId === kid.id);
       });
@@ -546,7 +546,7 @@
           if (!btn) return;
           const can = bal >= r.cost;
           btn.classList.toggle("locked", !can);
-          btn.querySelector(".icon").innerHTML = `<span class="emoji">${r.icon || "🎁"}</span>`;
+          btn.querySelector(".icon").innerHTML = r.icon ? `<span class="emoji">${r.icon}</span>` : "";
           btn.querySelector(".title").textContent = r.title;
           btn.querySelector(".cost").textContent = `★ ${r.cost}`;
         });
@@ -560,7 +560,7 @@
           return `
             <button class="reward${can ? "" : " locked"}" data-reward="${r.id}">
               <div class="reward-top">
-                <div class="icon"><span class="emoji">${r.icon || "🎁"}</span></div>
+                <div class="icon">${r.icon ? `<span class="emoji">${r.icon}</span>` : ""}</div>
                 <div class="cost">★ ${r.cost}</div>
               </div>
               <div class="title">${r.title}</div>
@@ -642,10 +642,10 @@
         body.innerHTML = rows
           .map((row) => {
             const stars = Number(row.stars || 0);
-            const late = row.late ? " · LATE (half stars)" : "";
+            const late = row.late ? " · LATE" : "";
             const kind =
-              row.type === "consequence"
-                ? "Consequence"
+              row.type === "consequence" || row.type === "bonus"
+                ? "Extra"
                 : row.type === "redeem"
                   ? "Reward"
                   : row.type === "adjust"
@@ -654,7 +654,7 @@
             const tone =
               row.type === "consequence"
                 ? "consequence"
-                : row.type === "chore" || !row.type
+                : row.type === "chore" || row.type === "bonus" || !row.type
                   ? "chore"
                   : stars >= 0
                     ? "good"

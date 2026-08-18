@@ -281,6 +281,32 @@
       color: var(--alert);
     }
 
+    .chore.bonus {
+      cursor: default;
+      border-color: color-mix(in srgb, var(--mint) 60%, transparent);
+      background: color-mix(in srgb, var(--mint) 16%, var(--surface-2));
+      opacity: 1;
+    }
+
+    .chore.bonus .chore-text h3 {
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .chore.bonus .check {
+      background: var(--mint);
+      border-color: var(--mint);
+      color: #fff;
+    }
+
+    .chore.bonus .stars-badge {
+      color: var(--mint);
+    }
+
+    .chore.late {
+      border-color: color-mix(in srgb, var(--gold-ink) 45%, transparent);
+    }
+
     .chore.is-leaving,
     .chore.is-returning {
       pointer-events: none;
@@ -865,18 +891,7 @@
   <script>
     const CHEERS = ["Nice!", "Star power!", "Crushed it!", "Legend!", "Boom!", "Quest done!"];
 
-    const PERIOD_HINTS = {
-      morning: "🌅 Morning — before lunch",
-      afternoon: "☀️ Afternoon task",
-      evening: "🌙 Evening — before bed",
-      chore: "✨ Anytime today",
-    };
-
-    const REMIND_AFTER = {
-      afternoon: { period: "morning", label: "morning chores" },
-      evening: { period: "afternoon", label: "afternoon chores" },
-      night: { period: "evening", label: "evening chores" },
-    };
+    const PERIOD_DUE = { morning: "12:00", afternoon: "17:00", evening: "21:00" };
 
     const DONE_ANIMS = [
       "anim-sink",
@@ -988,15 +1003,42 @@
       return (state.data?.consequenceHits || []).filter((hit) => hit.kidId === kidId);
     }
 
+    function bonusHitsForKid(kidId) {
+      return (state.data?.bonusHits || []).filter((hit) => hit.kidId === kidId);
+    }
+
+    function extraHitReason(hit) {
+      return hit.reason || hit.hint || hit.title || "Extra";
+    }
+
+    function extraHitIcon(hit) {
+      const raw = String(hit?.icon || "").trim();
+      return !raw || raw.toLowerCase() === "none" ? "" : raw;
+    }
+
     function consequenceRowHtml(hit) {
+      const icon = extraHitIcon(hit);
       return `
-        <li class="chore consequence" data-hit="${hit.id}" aria-label="Consequence">
-          <div class="chore-ico"><span class="emoji">${hit.icon || "⚠️"}</span></div>
+        <li class="chore consequence${icon ? "" : " no-icon"}" data-hit="${hit.id}" aria-label="Extra">
+          ${icon ? `<div class="chore-ico"><span class="emoji">${icon}</span></div>` : ""}
           <div class="chore-text">
-            <h3>${hit.title}</h3>
-            <p><span class="stars-badge">★ ${hit.stars || 1}</span> · ${hit.hint || "Consequence"}</p>
+            <h3>${extraHitReason(hit)}</h3>
+            <p><span class="stars-badge">★ ${Number(hit.stars) || 0}</span> · Extra</p>
           </div>
           <div class="check check-circle">×</div>
+        </li>`;
+    }
+
+    function bonusRowHtml(hit) {
+      const icon = extraHitIcon(hit);
+      return `
+        <li class="chore bonus${icon ? "" : " no-icon"}" data-hit="${hit.id}" aria-label="Extra">
+          ${icon ? `<div class="chore-ico"><span class="emoji">${icon}</span></div>` : ""}
+          <div class="chore-text">
+            <h3>${extraHitReason(hit)}</h3>
+            <p><span class="stars-badge">★ ${Number(hit.stars) || 0}</span> · Extra</p>
+          </div>
+          <div class="check check-circle">★</div>
         </li>`;
     }
 
@@ -1061,12 +1103,68 @@
       return "";
     }
 
-    function choreDescription(chore) {
+    function choreDueTimeValue(chore) {
+      const raw = String(chore?.dueTime || "").trim();
+      const match = raw.match(/^(\d{1,2}):(\d{2})/);
+      if (match) {
+        const hour = Math.max(0, Math.min(23, Number(match[1])));
+        const minute = Math.max(0, Math.min(59, Number(match[2])));
+        return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      }
+      return PERIOD_DUE[chore?.period] || "";
+    }
+
+    function formatDueTimeLabel(chore) {
+      const raw = choreDueTimeValue(chore);
+      if (!raw) return "Anytime today";
+      const [hour, minute] = raw.split(":").map(Number);
+      const suffix = hour < 12 ? "AM" : "PM";
+      const hour12 = hour % 12 || 12;
+      return `By ${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+    }
+
+    function dueTimeMinutes(chore) {
+      const raw = choreDueTimeValue(chore);
+      if (!raw) return null;
+      const [hour, minute] = raw.split(":").map(Number);
+      return hour * 60 + minute;
+    }
+
+    function isPastDue(chore) {
+      const mins = dueTimeMinutes(chore);
+      if (mins == null) return false;
+      const now = new Date();
+      return now.getHours() * 60 + now.getMinutes() > mins;
+    }
+
+    function defaultLateStars(stars) {
+      const base = Number.isFinite(Number(stars)) ? Number(stars) : 1;
+      if (base <= 0) return 0;
+      return Math.max(1, Math.floor(base / 2));
+    }
+
+    function lateStarValue(chore) {
+      if (chore?.lateStars === 0 || chore?.lateStars === "0") return 0;
+      if (chore?.lateStars === undefined || chore?.lateStars === null || chore?.lateStars === "") {
+        return defaultLateStars(choreStars(chore));
+      }
+      const n = Number(chore.lateStars);
+      return Number.isFinite(n) ? Math.max(0, Math.min(99, n)) : defaultLateStars(choreStars(chore));
+    }
+
+    function choreStarsNow(chore, done) {
+      const base = choreStars(chore);
+      if (done || !isPastDue(chore)) return base;
+      return lateStarValue(chore);
+    }
+
+    function choreDescription(chore, done) {
       const bits = [];
       if (chore.hint) bits.push(chore.hint);
-      else bits.push(PERIOD_HINTS[chore.period || "chore"] || PERIOD_HINTS.chore);
+      bits.push(formatDueTimeLabel(chore));
       const sched = choreScheduleLabel(chore);
       if (sched) bits.push(sched);
+      if (!done && isPastDue(chore)) bits.push(`LATE — ★${lateStarValue(chore)}`);
       return bits.join(" · ");
     }
 
@@ -1074,16 +1172,8 @@
       return `fb-chore-win:${state.data?.today}:${kidId}`;
     }
 
-    function remindKey(kidId, period) {
-      return `fb-chore-remind:${state.data?.today}:${kidId}:${period}`;
-    }
-
-    function daySegment() {
-      const m = new Date().getHours() * 60 + new Date().getMinutes();
-      if (m >= 21 * 60) return "night";
-      if (m >= 17 * 60) return "evening";
-      if (m >= 12 * 60) return "afternoon";
-      return "morning";
+    function remindKey(kidId, choreId) {
+      return `fb-chore-remind:${state.data?.today}:${kidId}:${choreId}`;
     }
 
     function cheer(msg) {
@@ -1134,7 +1224,7 @@
       const balance = state.data.balances[kid.id] || 0;
       titleEl.textContent = kid.name;
       starsEl.hidden = false;
-      starsEl.innerHTML = `<span class="emoji">${kid.emoji || "⭐"}</span> ★ ${balance}`;
+      starsEl.innerHTML = `${kid.emoji ? `<span class="emoji">${kid.emoji}</span> ` : ""}★ ${balance}`;
       const { done, total, remaining } = progress(kid.id);
       labelEl.textContent =
         total === 0
@@ -1158,23 +1248,18 @@
 
     function checkReminders() {
       if (!state.data || state.viewAll) return;
-      const seg = daySegment();
-      const cfg = REMIND_AFTER[seg];
-      if (!cfg) return;
 
       for (const kid of activeKids()) {
-        if (localStorage.getItem(remindKey(kid.id, cfg.period))) continue;
-        const missed = choresForKid(kid.id).filter(
-          (c) => (c.period || "chore") === cfg.period && !isDone(c.id, kid.id)
-        );
-        if (!missed.length) continue;
+        const overdue = choresForKid(kid.id).filter((c) => !isDone(c.id, kid.id) && isPastDue(c));
+        const fresh = overdue.filter((c) => !localStorage.getItem(remindKey(kid.id, c.id)));
+        if (!fresh.length) continue;
 
-        localStorage.setItem(remindKey(kid.id, cfg.period), "1");
-        document.getElementById("remindTitle").textContent = `${kid.emoji} ${kid.name} — ${cfg.label}`;
+        fresh.forEach((c) => localStorage.setItem(remindKey(kid.id, c.id), "1"));
+        document.getElementById("remindTitle").textContent = `${kid.emoji} ${kid.name} — past due`;
         document.getElementById("remindBody").textContent =
-          `These weren't finished on time. Completing now earns half stars ⭐`;
-        document.getElementById("remindList").innerHTML = missed
-          .map((c) => `<li>${c.icon ? `${c.icon} ` : ""}${c.title}</li>`)
+          `These weren't finished on time. Completing now earns the late star amount.`;
+        document.getElementById("remindList").innerHTML = overdue
+          .map((c) => `<li>${c.icon ? `${c.icon} ` : ""}${c.title} · ${formatDueTimeLabel(c)} · ★${lateStarValue(c)}</li>`)
           .join("");
         document.getElementById("reminderOverlay").classList.add("show");
         if (state.kidId !== kid.id) {
@@ -1204,16 +1289,17 @@
 
     function choreRowHtml(chore, kidId, done) {
       const style = chore.checkStyle || "circle";
+      const late = !done && isPastDue(chore);
       const icon = (() => {
         const raw = String(chore.icon || "").trim();
         return !raw || raw.toLowerCase() === "none" ? "" : raw;
       })();
       return `
-        <li class="chore${done ? " done" : ""}${icon ? "" : " no-icon"}" data-id="${chore.id}" data-kid="${kidId}" role="button" tabindex="0" aria-pressed="${done}">
+        <li class="chore${done ? " done" : ""}${late ? " late" : ""}${icon ? "" : " no-icon"}" data-id="${chore.id}" data-kid="${kidId}" role="button" tabindex="0" aria-pressed="${done}">
           ${icon ? `<div class="chore-ico"><span class="emoji">${icon}</span></div>` : ""}
           <div class="chore-text">
             <h3>${chore.title}</h3>
-            <p><span class="stars-badge">★ ${choreStars(chore)}</span> · ${choreDescription(chore)}</p>
+            <p><span class="stars-badge">★ ${choreStarsNow(chore, done)}</span> · ${choreDescription(chore, done)}</p>
           </div>
           <div class="check check-${style}">${checkMark(chore, done)}</div>
         </li>`;
@@ -1246,6 +1332,7 @@
           balances: state.data.balances,
           completions: state.data.completions,
           consequenceHits: state.data.consequenceHits,
+          bonusHits: state.data.bonusHits,
           today: state.data.today,
         });
         state.fingerprints.kids = "";
@@ -1313,17 +1400,20 @@
 
       const { todo, done } = splitChores(kid.id);
       const hits = consequenceHitsForKid(kid.id);
+      const bonuses = bonusHitsForKid(kid.id);
       const fp = fingerprint([
-        ...todo.map((c) => c.id),
+        ...todo.map((c) => [c.id, isPastDue(c)]),
         ...done.map((c) => c.id),
         ...hits.map((h) => h.id),
+        ...bonuses.map((h) => h.id),
       ]);
       if (!force && fp === state.fingerprints.chores) return;
       state.fingerprints.chores = fp;
 
-      if (todo.length || hits.length) {
+      if (todo.length || hits.length || bonuses.length) {
         activeList.innerHTML = [
           ...todo.map((c) => choreRowHtml(c, kid.id, false)),
+          ...bonuses.map((hit) => bonusRowHtml(hit)),
           ...hits.map((hit) => consequenceRowHtml(hit)),
         ].join("");
       } else {
@@ -1333,7 +1423,7 @@
       doneZone.hidden = !done.length;
       doneList.innerHTML = done.map((c) => choreRowHtml(c, kid.id, true)).join("");
 
-      activeList.querySelectorAll(".chore:not(.consequence)").forEach(bindChore);
+      activeList.querySelectorAll(".chore:not(.consequence):not(.bonus)").forEach(bindChore);
       doneList.querySelectorAll(".chore").forEach(bindChore);
     }
 
@@ -1344,7 +1434,8 @@
         kids.map((k) => {
           const { todo } = splitChores(k.id);
           const hits = consequenceHitsForKid(k.id);
-          return [k.id, ...todo.map((c) => c.id), ...hits.map((h) => h.id)];
+          const bonuses = bonusHitsForKid(k.id);
+          return [k.id, ...todo.map((c) => [c.id, isPastDue(c)]), ...hits.map((h) => h.id), ...bonuses.map((h) => h.id)];
         })
       );
       if (!force && fp === state.fingerprints.all) return;
@@ -1354,14 +1445,16 @@
         .map((kid) => {
           const { todo } = splitChores(kid.id);
           const hits = consequenceHitsForKid(kid.id);
+          const bonuses = bonusHitsForKid(kid.id);
           const rows = [
             ...todo.map((c) => choreRowHtml(c, kid.id, false)),
+            ...bonuses.map((hit) => bonusRowHtml(hit)),
             ...hits.map((hit) => consequenceRowHtml(hit)),
           ];
           return `
             <div class="kid-panel" style="--kid:${kid.color}">
               <div class="kid-panel-head">
-                <span class="stars"><span class="emoji">${kid.emoji || "⭐"}</span> ★ ${state.data.balances[kid.id] || 0}</span>
+                <span class="stars">${kid.emoji ? `<span class="emoji">${kid.emoji}</span> ` : ""}★ ${state.data.balances[kid.id] || 0}</span>
                 <span class="kid-panel-name">${kid.name}</span>
               </div>
               <ul class="kid-panel-list">
@@ -1371,7 +1464,7 @@
         })
         .join("");
 
-      grid.querySelectorAll(".chore:not(.consequence)").forEach(bindChore);
+      grid.querySelectorAll(".chore:not(.consequence):not(.bonus)").forEach(bindChore);
     }
 
     function fitProfileChips(root) {
@@ -1435,7 +1528,7 @@
           const active = !state.viewAll && kid.id === state.kidId;
           return `
             <button class="profile${active ? " active" : ""}" data-kid="${kid.id}" style="--active:${kid.color}" role="tab" aria-selected="${active}">
-              <div class="name-stars"><span class="emoji">${kid.emoji || "⭐"}</span> ★ ${state.data.balances[kid.id] || 0}</div>
+              <div class="name-stars">${kid.emoji ? `<span class="emoji">${kid.emoji}</span> ` : ""}★ ${state.data.balances[kid.id] || 0}</div>
               <div class="name">${kid.name}</div>
               <div class="meta">${done}/${total} done</div>
               <div class="bar"><span style="width:${Math.round(pct * 100)}%"></span></div>
@@ -1486,6 +1579,7 @@
           balances: data.balances,
           completions: data.completions,
           consequenceHits: data.consequenceHits,
+          bonusHits: data.bonusHits,
           today: data.today,
         });
         if (!forceRender && nextFp === state.fingerprints.data) return;

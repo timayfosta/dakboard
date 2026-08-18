@@ -253,9 +253,10 @@
     "🧽", "💡", "🔑", "🏠", "🍎", "🥛",
   ];
 
-  const CONSEQUENCE_EMOJIS = [
+  const EXTRA_EMOJIS = [
+    "⭐", "🌟", "🎉", "👏", "💪", "🏆", "✨", "🌈", "🫶", "🌼",
     "⚠️", "😠", "🚫", "📵", "🧹", "📉", "🧊", "⏰", "📣", "💥",
-    "👎", "🧯", "🪨", "🌧️", "😤", "🛑", "📌", "🔒", "📵", "🧹",
+    "👎", "🧯", "🪨", "🌧️", "😤", "🛑", "📌", "🔒",
   ];
 
   const KID_COLORS = [
@@ -294,7 +295,7 @@
   }
 
   function renderEmojiPicker(fieldName, emojis, selected, opts = {}) {
-    const allowNone = !!opts.allowNone;
+    const allowNone = opts.allowNone !== false;
     const pick = allowNone
       ? !selected || selected === ICON_NONE
         ? ICON_NONE
@@ -451,7 +452,7 @@
     }
     idInput.value = kid.id;
     form.querySelector('[name="name"]').value = kid.name || "";
-    setEmojiPicker(form, "emoji", kid.emoji || KID_EMOJIS[0]);
+    setEmojiPicker(form, "emoji", kid.emoji || ICON_NONE);
     setColorPicker(form, kid.color || KID_COLORS[0]);
     const heading = form.closest(".card")?.querySelector("h2");
     if (heading) heading.textContent = "Edit kid";
@@ -498,6 +499,147 @@
     try {
       sessionStorage.setItem(CHORE_STARS_KEY, String(parseStars(stars, 1)));
     } catch {}
+  }
+
+  function choreDueTimeValue(chore) {
+    const raw = String(chore?.dueTime || "").trim();
+    const match = raw.match(/^(\d{1,2}):(\d{2})/);
+    if (match) {
+      const hour = Math.max(0, Math.min(23, Number(match[1])));
+      const minute = Math.max(0, Math.min(59, Number(match[2])));
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    }
+    return { morning: "12:00", afternoon: "17:00", evening: "21:00" }[chore?.period] || "";
+  }
+
+  function formatDueTime(chore) {
+    const raw = choreDueTimeValue(chore);
+    if (!raw) return "Anytime";
+    const [hour, minute] = raw.split(":").map(Number);
+    const suffix = hour < 12 ? "AM" : "PM";
+    const hour12 = hour % 12 || 12;
+    return `By ${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+  }
+
+  function defaultLateStars(stars) {
+    const base = parseStars(stars, 1);
+    if (base <= 0) return 0;
+    return Math.max(1, Math.floor(base / 2));
+  }
+
+  function lateStarValue(chore) {
+    if (chore?.lateStars === 0 || chore?.lateStars === "0") return 0;
+    if (chore?.lateStars === undefined || chore?.lateStars === null || chore?.lateStars === "") {
+      return defaultLateStars(chore?.stars);
+    }
+    return parseStars(chore.lateStars, defaultLateStars(chore?.stars));
+  }
+
+  function lateStarsLabel(chore) {
+    if (!choreDueTimeValue(chore)) return "";
+    if (chore?.lateStars === 0 || chore?.lateStars === "0") return "late ★0";
+    if (chore?.lateStars === undefined || chore?.lateStars === null || chore?.lateStars === "") {
+      return "late half";
+    }
+    return `late ★${parseStars(chore.lateStars, 0)}`;
+  }
+
+  function readLateStarsField(form) {
+    const input = form.querySelector('[name="lateStars"]');
+    if (!input) return "";
+    const raw = String(input.value ?? "").trim();
+    if (raw === "") return "";
+    return parseStars(raw, 0);
+  }
+
+  function parseDueParts(hhmm) {
+    const raw = String(hhmm || "").trim();
+    const match = raw.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return { hour12: null, minute: null, ampm: "AM" };
+    const hour = Math.max(0, Math.min(23, Number(match[1])));
+    const minute = Math.max(0, Math.min(59, Number(match[2])));
+    return {
+      hour12: hour % 12 || 12,
+      minute,
+      ampm: hour < 12 ? "AM" : "PM",
+    };
+  }
+
+  function dueTimeFromParts(hour12, minute, ampm) {
+    if (hour12 == null || minute == null || hour12 === "" || minute === "") return "";
+    let hour = Number(hour12) % 12;
+    if (ampm === "PM") hour += 12;
+    return `${String(hour).padStart(2, "0")}:${String(Number(minute)).padStart(2, "0")}`;
+  }
+
+  function setDueTimePicker(form, hhmm) {
+    if (!form) return;
+    const parts = parseDueParts(hhmm);
+    const hourEl = form.querySelector("[data-due-hour]");
+    const minEl = form.querySelector("[data-due-minute]");
+    const ampmEl = form.querySelector("[data-due-ampm]");
+    if (hourEl) {
+      hourEl.dataset.value = parts.hour12 == null ? "" : String(parts.hour12);
+      hourEl.textContent = parts.hour12 == null ? "--" : String(parts.hour12);
+    }
+    if (minEl) {
+      minEl.dataset.value = parts.minute == null ? "" : String(parts.minute);
+      minEl.textContent = parts.minute == null ? "--" : String(parts.minute).padStart(2, "0");
+    }
+    if (ampmEl) ampmEl.value = parts.ampm;
+    const hidden = form.querySelector('[name="dueTime"]');
+    if (hidden) hidden.value = hhmm || "";
+    syncDueTimeUi(form);
+  }
+
+  function bumpDueTime(form, part, dir) {
+    const hourEl = form.querySelector("[data-due-hour]");
+    const minEl = form.querySelector("[data-due-minute]");
+    if (!hourEl || !minEl) return;
+    let hour = hourEl.dataset.value === "" ? null : Number(hourEl.dataset.value);
+    let minute = minEl.dataset.value === "" ? null : Number(minEl.dataset.value);
+    if (hour == null || minute == null) {
+      hour = 8;
+      minute = 0;
+    } else if (part === "hour") {
+      hour += dir;
+      if (hour > 12) hour = 1;
+      if (hour < 1) hour = 12;
+    } else {
+      minute += dir * 5;
+      if (minute >= 60) minute = 0;
+      if (minute < 0) minute = 55;
+    }
+    const ampm = form.querySelector("[data-due-ampm]")?.value || "AM";
+    setDueTimePicker(form, dueTimeFromParts(hour, minute, ampm));
+  }
+
+  function holdRepeat(btn, fn) {
+    let delay;
+    let repeat;
+    const start = (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      e.preventDefault();
+      fn();
+      delay = setTimeout(() => {
+        repeat = setInterval(fn, 90);
+      }, 380);
+    };
+    const stop = () => {
+      clearTimeout(delay);
+      clearInterval(repeat);
+    };
+    btn.addEventListener("pointerdown", start);
+    btn.addEventListener("pointerup", stop);
+    btn.addEventListener("pointerleave", stop);
+    btn.addEventListener("pointercancel", stop);
+  }
+
+  function syncDueTimeUi(form) {
+    if (!form) return;
+    const due = String(form.querySelector('[name="dueTime"]')?.value || "").trim();
+    form.querySelector("#lateStarsField")?.classList.toggle("hidden", !due);
+    form.querySelector("[data-due-clear]")?.classList.toggle("hidden", !due);
   }
 
   function choreLabel(chore) {
@@ -573,6 +715,10 @@
     setCheckStylePicker(form, "circle");
     const starsInput = form.querySelector('[name="stars"]');
     if (starsInput) starsInput.value = String(lastChoreStars());
+    setDueTimePicker(form, "");
+    const lateInput = form.querySelector('[name="lateStars"]');
+    if (lateInput) lateInput.value = "";
+    syncDueTimeUi(form);
     const intervalSel = form.querySelector('[name="interval"]');
     if (intervalSel) intervalSel.value = "daily";
     setIntervalDays(form, []);
@@ -599,7 +745,17 @@
     idInput.value = chore.id;
     form.querySelector('[name="title"]').value = chore.title || "";
     form.querySelector('[name="stars"]').value = String(parseStars(chore.stars, 1));
-    form.querySelector('[name="period"]').value = chore.period || "chore";
+    setDueTimePicker(form, choreDueTimeValue(chore));
+    const lateInput = form.querySelector('[name="lateStars"]');
+    if (lateInput) {
+      lateInput.value =
+        chore.lateStars === 0 || chore.lateStars === "0"
+          ? "0"
+          : chore.lateStars === undefined || chore.lateStars === null || chore.lateStars === ""
+            ? ""
+            : String(parseStars(chore.lateStars, 0));
+    }
+    syncDueTimeUi(form);
     const intervalSel = form.querySelector('[name="interval"]');
     if (intervalSel) intervalSel.value = intervalKind(chore);
     setIntervalDays(form, chore.intervalDays || []);
@@ -629,7 +785,7 @@
   }
 
   function normalizeTab(tab) {
-    if (tab === "cons") return "consequences";
+    if (tab === "cons" || tab === "consequences") return "extras";
     return tab || "lists";
   }
 
@@ -649,7 +805,7 @@
       const views = {
         kids: renderKids,
         chores: renderChores,
-        consequences: renderConsequences,
+        extras: renderExtras,
         lists: renderLists,
         rewards: renderRewards,
         more: renderMore,
@@ -674,8 +830,8 @@
           <input type="hidden" name="id" value="" />
           <div class="field"><label>Name</label><input type="text" inputmode="text" name="name" required placeholder="Maya" /></div>
           <div class="field">
-            <label>Emoji</label>
-            ${renderEmojiPicker("emoji", KID_EMOJIS, "🐻")}
+            <label>Emoji (optional)</label>
+            ${renderEmojiPicker("emoji", KID_EMOJIS, "🐻", { allowNone: true })}
           </div>
           <div class="field">
             <label>Color</label>
@@ -694,7 +850,7 @@
           <article class="item" data-kid="${k.id}">
             <div class="item-head">
               <div class="item-main">
-                <div class="title">${k.emoji} ${k.name}</div>
+                <div class="title">${k.emoji ? k.emoji + " " : ""}${k.name}</div>
                 <div class="muted">★ ${d.balances[k.id] || 0} · <span class="kid-color-dot" style="background:${k.color || "#5aa7ff"}"></span></div>
               </div>
               <button type="button" class="btn-x" data-del-kid="${k.id}" aria-label="Remove ${k.name}">×</button>
@@ -746,13 +902,38 @@
           </div>
           <div class="field"><label>Stars</label><input name="stars" type="number" min="0" max="99" value="${escAttr(lastStars)}" /></div>
           <div class="field"><label>Hint (optional)</label><input type="text" inputmode="text" name="hint" placeholder="Before school — pull covers neat" /></div>
-          <div class="field"><label>Period</label>
-            <select name="period">
-              <option value="chore">Anytime today</option>
-              <option value="morning">Morning</option>
-              <option value="afternoon">Afternoon</option>
-              <option value="evening">Evening</option>
-            </select>
+          <div class="field">
+            <label>Due by</label>
+            <input type="hidden" name="dueTime" value="" />
+            <div class="time-picker" id="dueTimePicker">
+              <div class="time-step">
+                <button type="button" class="time-arrow" data-due-bump="hour" data-dir="1" aria-label="Hour up">▲</button>
+                <div class="time-val" data-due-hour data-value="">--</div>
+                <span class="time-cap">Hour</span>
+                <button type="button" class="time-arrow" data-due-bump="hour" data-dir="-1" aria-label="Hour down">▼</button>
+              </div>
+              <div class="time-colon" aria-hidden="true">:</div>
+              <div class="time-step">
+                <button type="button" class="time-arrow" data-due-bump="minute" data-dir="1" aria-label="Minute up">▲</button>
+                <div class="time-val" data-due-minute data-value="">--</div>
+                <span class="time-cap">Min</span>
+                <button type="button" class="time-arrow" data-due-bump="minute" data-dir="-1" aria-label="Minute down">▼</button>
+              </div>
+              <div class="time-ampm">
+                <span class="time-cap">AM / PM</span>
+                <select data-due-ampm aria-label="AM or PM">
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
+            </div>
+            <button type="button" class="btn ghost compact time-clear hidden" data-due-clear>Anytime</button>
+            <p class="field-hint">Use the arrows and AM/PM. Anytime means no deadline. After the time, finishing earns the late star amount.</p>
+          </div>
+          <div class="field hidden" id="lateStarsField">
+            <label>Late stars</label>
+            <input name="lateStars" type="number" min="0" max="99" placeholder="Half" />
+            <p class="field-hint">Stars earned after the due time. Leave blank for half of the regular stars.</p>
           </div>
           <div class="field">
             <label>Shows up</label>
@@ -801,7 +982,7 @@
               <div class="item-head">
                 <div class="item-main">
                   <div class="title">${icon ? icon + " " : ""}${c.title}</div>
-                  <div class="muted">★${parseStars(c.stars, 1)} · ${intervalLabel(c)} · ${c.period || "chore"} · ${checkStyleLabel(c.checkStyle)} · ${kids}</div>
+                  <div class="muted">★${parseStars(c.stars, 1)}${lateStarsLabel(c) ? ` · ${lateStarsLabel(c)}` : ""} · ${intervalLabel(c)} · ${formatDueTime(c)} · ${checkStyleLabel(c.checkStyle)} · ${kids}</div>
                 </div>
                 <button type="button" class="btn-x" data-del-chore="${c.id}" aria-label="Remove ${c.title}">×</button>
               </div>
@@ -814,23 +995,78 @@
       </section>`;
   }
 
-  function resetConsequenceForm() {
-    const form = $("#consForm");
+  function extraReason(item) {
+    return String(item?.hint || item?.reason || item?.title || "Extra").trim();
+  }
+
+  function extraKind(item) {
+    const raw = String(item?.tone || item?.kind || "").toLowerCase();
+    if (raw === "good" || raw === "bonus" || raw === "positive" || raw === "reward") return "good";
+    if (raw === "bad" || raw === "consequence" || raw === "negative" || raw === "penalty") return "bad";
+    return "bad";
+  }
+
+  function selectedExtraTone(form) {
+    return form?.querySelector("[data-extra-kind].on")?.dataset.extraKind === "bad" ? "bad" : "good";
+  }
+
+  async function applyExtraToKids(item, kidIds, tone) {
+    const stars = parseStars(item?.stars, 0);
+    const reason = extraReason(item);
+    if (tone === "good") {
+      await AdminAPI.giveBonus(state.token, {
+        kidIds,
+        stars,
+        reason,
+        title: reason,
+        hint: reason,
+        icon: normalizePickerIcon(item?.icon),
+      });
+      return;
+    }
+    await AdminAPI.applyConsequence(state.token, item.id, kidIds, "bad");
+  }
+
+  function extraKindHint(kind) {
+    return kind === "good"
+      ? "Adds stars. Shows green on the chore board for 24 hours."
+      : "Takes stars. Shows red on the chore board for 24 hours.";
+  }
+
+  function syncExtraKindUi(form, kind, { editing = false } = {}) {
+    if (!form) return;
+    const next = kind === "good" ? "good" : "bad";
+    form.querySelectorAll('[name="tone"], [name="kind"]').forEach((input) => {
+      input.value = next;
+    });
+    form.querySelectorAll("[data-extra-kind]").forEach((chip) => {
+      chip.classList.toggle("on", chip.dataset.extraKind === next);
+    });
+    const starsLabel = form.querySelector("#extraStarsLabel");
+    if (starsLabel) starsLabel.textContent = next === "good" ? "Stars to add" : "Stars to deduct";
+    const hint = form.querySelector("#extraKindHint");
+    if (hint) hint.textContent = extraKindHint(next);
+    const heading = form.closest(".card")?.querySelector("h2");
+    if (heading) heading.textContent = editing ? "Edit extra" : "Add extra";
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.textContent = editing ? "Update extra" : "Give extra";
+  }
+
+  function resetExtraForm() {
+    const form = $("#extraForm");
     if (!form) return;
     form.reset();
     const idInput = form.querySelector('[name="id"]');
     if (idInput) idInput.value = "";
-    setEmojiPicker(form, "icon", "⚠️");
+    setEmojiPicker(form, "icon", ICON_NONE);
     form.querySelectorAll("[data-kid-chip]").forEach((chip) => chip.classList.remove("on"));
     form.querySelector("[data-kid-all]")?.classList.remove("on");
-    const heading = form.closest(".card")?.querySelector("h2");
-    if (heading) heading.textContent = "Add consequence";
-    form.querySelector('button[type="submit"]').textContent = "Save consequence";
-    $("#cancelConsEdit")?.classList.add("hidden");
+    syncExtraKindUi(form, "good");
+    $("#cancelExtraEdit")?.classList.add("hidden");
   }
 
-  function populateConsequenceForm(item) {
-    const form = $("#consForm");
+  function populateExtraForm(item) {
+    const form = $("#extraForm");
     if (!form || !item) return;
     let idInput = form.querySelector('[name="id"]');
     if (!idInput) {
@@ -840,39 +1076,49 @@
       form.prepend(idInput);
     }
     idInput.value = item.id;
-    form.querySelector('[name="title"]').value = item.title || "";
-    form.querySelector('[name="stars"]').value = item.stars || 1;
+    form.querySelector('[name="stars"]').value = String(parseStars(item.stars, 0));
     const hintInput = form.querySelector('[name="hint"]');
-    if (hintInput) hintInput.value = item.hint || "";
-    setEmojiPicker(form, "icon", item.icon || "⚠️");
+    if (hintInput) hintInput.value = extraReason(item);
+    setEmojiPicker(form, "icon", item.icon || ICON_NONE);
     const kidIds = new Set(item.kidIds || []);
     form.querySelectorAll("[data-kid-chip]").forEach((chip) => {
       chip.classList.toggle("on", kidIds.has(chip.dataset.kidChip));
     });
     syncAllKidChip(form);
-    const heading = form.closest(".card")?.querySelector("h2");
-    if (heading) heading.textContent = "Edit consequence";
-    form.querySelector('button[type="submit"]').textContent = "Update consequence";
-    $("#cancelConsEdit")?.classList.remove("hidden");
+    syncExtraKindUi(form, extraKind(item), { editing: true });
+    $("#cancelExtraEdit")?.classList.remove("hidden");
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function renderConsequences(d) {
+  function renderExtras(d) {
+    const recent = [
+      ...(d.bonusHits || []).map((hit) => ({ ...hit, kind: "good" })),
+      ...(d.consequenceHits || []).map((hit) => ({ ...hit, kind: "bad" })),
+    ].sort((a, b) => (b.at || 0) - (a.at || 0));
     return `
       <section class="card">
-        <h2>Add consequence</h2>
-        <p class="muted">Give this to assigned kids to deduct stars. The deduction stays; it only shows on their chore list for 24 hours.</p>
-        <form id="consForm">
+        <h2>Add extra</h2>
+        <p class="muted">Good extras add stars and show green on the chore board. Bad extras take stars and show red. Either one stays on the board for 24 hours.</p>
+        <form id="extraForm">
           <input type="hidden" name="id" value="" />
-          <div class="field"><label>Title</label><input type="text" inputmode="text" name="title" required placeholder="Screen time lost" /></div>
+          <input type="hidden" name="tone" value="good" />
+          <input type="hidden" name="kind" value="good" />
           <div class="field">
-            <label>Emoji</label>
-            ${renderEmojiPicker("icon", CONSEQUENCE_EMOJIS, "⚠️")}
+            <label>Type</label>
+            <div class="chips">
+              <button type="button" class="chip extra-kind-good on" data-extra-kind="good">Good</button>
+              <button type="button" class="chip extra-kind-bad" data-extra-kind="bad">Bad</button>
+            </div>
+            <p class="field-hint" id="extraKindHint">${extraKindHint("good")}</p>
           </div>
-          <div class="field"><label>Stars to deduct</label><input name="stars" type="number" min="1" max="99" value="1" /></div>
-          <div class="field"><label>Hint (optional)</label><input type="text" inputmode="text" name="hint" placeholder="Why this was given" /></div>
+          <div class="field">
+            <label>Emoji (optional)</label>
+            ${renderEmojiPicker("icon", EXTRA_EMOJIS, ICON_NONE, { allowNone: true })}
+          </div>
+          <div class="field"><label id="extraStarsLabel">Stars to add</label><input name="stars" type="number" min="0" max="99" value="0" /></div>
+          <div class="field"><label>Reason</label><input type="text" inputmode="text" name="hint" required placeholder="Helped with dinner without being asked" /></div>
           <div class="field"><label>Assign to</label>
-            <div class="chips" id="consKids">
+            <div class="chips" id="extraKids">
               <button type="button" class="chip chip-all" data-kid-all>All kids</button>
               ${(d.kids || [])
                 .filter((k) => k.active !== false)
@@ -884,8 +1130,8 @@
             </div>
           </div>
           <div class="form-actions">
-            <button class="btn block" type="submit">Save consequence</button>
-            <button class="btn ghost block hidden" type="button" id="cancelConsEdit">Cancel edit</button>
+            <button class="btn block" type="submit">Give extra</button>
+            <button class="btn ghost block hidden" type="button" id="cancelExtraEdit">Cancel edit</button>
           </div>
         </form>
       </section>
@@ -894,22 +1140,44 @@
           .filter((c) => c.active !== false)
           .map((c) => {
             const kids = (c.kidIds || []).map(kidName).join(", ") || "Unassigned";
+            const good = extraKind(c) === "good";
+            const reason = extraReason(c);
             return `<article class="item">
               <div class="item-head">
                 <div class="item-main">
-                  <div class="title">${c.icon || "⚠️"} ${c.title}</div>
-                  <div class="muted">−★${c.stars || 1} · ${kids}</div>
+                  <div class="title">${c.icon ? c.icon + " " : ""}${reason}</div>
+                  <div class="muted">${good ? "Good" : "Bad"} · ${good ? "+" : "−"}★${parseStars(c.stars, 0)} · ${kids}</div>
                 </div>
-                <button type="button" class="btn-x" data-del-cons="${c.id}" aria-label="Remove ${c.title}">×</button>
+                <button type="button" class="btn-x" data-del-extra="${c.id}" aria-label="Remove ${reason}">×</button>
               </div>
               <div class="actions">
-                <button class="btn secondary compact" type="button" data-apply-cons="${c.id}">Give now</button>
-                <button class="btn ghost compact" type="button" data-edit-cons-id="${c.id}">Edit</button>
+                <button class="btn secondary compact" type="button" data-apply-extra="${c.id}" data-apply-tone="${good ? "good" : "bad"}">Give now</button>
+                <button class="btn ghost compact" type="button" data-edit-extra-id="${c.id}">Edit</button>
               </div>
             </article>`;
           })
-          .join("") || `<p class="muted">No consequences yet.</p>`}
-      </section>`;
+          .join("") || `<p class="muted">No extras yet.</p>`}
+      </section>
+      ${
+        recent.length
+          ? `<section class="list">
+        <p class="muted">On the board now</p>
+        ${recent
+          .map((hit) => {
+            const good = extraKind(hit) === "good";
+            return `<article class="item">
+              <div class="item-head">
+                <div class="item-main">
+                  <div class="title">${hit.icon ? hit.icon + " " : ""}${extraReason(hit)}</div>
+                  <div class="muted">${good ? "Good" : "Bad"} · ${good ? "+" : "−"}★${parseStars(hit.stars, 0)} · ${kidName(hit.kidId)}</div>
+                </div>
+              </div>
+            </article>`;
+          })
+          .join("")}
+      </section>`
+          : ""
+      }`;
   }
 
   function formatCompletedAt(ms) {
@@ -1008,8 +1276,11 @@
         <h2>Add reward</h2>
         <form id="rewardForm">
           <div class="field"><label>Title</label><input type="text" inputmode="text" name="title" required placeholder="Pick dessert" /></div>
-          <div class="field"><label>Emoji</label><input type="text" inputmode="text" name="icon" value="🎁" maxlength="4" /></div>
-          <div class="field"><label>Star cost</label><input name="cost" type="number" min="1" value="10" /></div>
+          <div class="field">
+            <label>Emoji (optional)</label>
+            ${renderEmojiPicker("icon", ["🎁", "🍦", "🌙", "🎲", "🎬", "🍕", "🏞️", "🎉", "📱", "⭐", "🧸", "🎮"], "🎁", { allowNone: true })}
+          </div>
+          <div class="field"><label>Star cost</label><input name="cost" type="number" min="0" max="99" value="10" /></div>
           <button class="btn block" type="submit">Save reward</button>
         </form>
       </section>
@@ -1019,7 +1290,7 @@
           .map(
             (r) => `
           <article class="item">
-            <div class="title">${r.icon || "🎁"} ${r.title}</div>
+            <div class="title">${r.icon ? r.icon + " " : ""}${r.title}</div>
             <div class="muted">★ ${r.cost}</div>
           </article>`
           )
@@ -1618,7 +1889,7 @@
           await AdminAPI.saveKid(state.token, {
             id: fd.get("id") || undefined,
             name: fd.get("name"),
-            emoji: fd.get("emoji"),
+            emoji: pickerIconValue(kidForm, "emoji"),
             color: fd.get("color"),
           });
           toast(editing ? "Kid updated" : "Kid saved");
@@ -1694,7 +1965,22 @@
         });
       });
       const intervalSel = choreForm.querySelector('[name="interval"]');
+      choreForm.querySelectorAll("[data-due-bump]").forEach((btn) => {
+        holdRepeat(btn, () => bumpDueTime(choreForm, btn.dataset.dueBump, Number(btn.dataset.dir) || 1));
+      });
+      choreForm.querySelector("[data-due-ampm]")?.addEventListener("change", () => {
+        const hour = choreForm.querySelector("[data-due-hour]")?.dataset.value;
+        const minute = choreForm.querySelector("[data-due-minute]")?.dataset.value;
+        const ampm = choreForm.querySelector("[data-due-ampm]")?.value || "AM";
+        if (hour === "" || minute === "") {
+          setDueTimePicker(choreForm, dueTimeFromParts(8, 0, ampm));
+          return;
+        }
+        setDueTimePicker(choreForm, dueTimeFromParts(hour, minute, ampm));
+      });
+      choreForm.querySelector("[data-due-clear]")?.addEventListener("click", () => setDueTimePicker(choreForm, ""));
       intervalSel?.addEventListener("change", () => syncIntervalUi(choreForm));
+      syncDueTimeUi(choreForm);
       choreForm.querySelectorAll("[data-interval-day]").forEach((chip) => {
         chip.addEventListener("click", () => chip.classList.toggle("on"));
       });
@@ -1724,7 +2010,9 @@
             icon,
             clearIcon: !icon,
             stars,
-            period: fd.get("period"),
+            period: "chore",
+            dueTime: fd.get("dueTime") || "",
+            lateStars: fd.get("dueTime") ? readLateStarsField(choreForm) : "",
             hint: fd.get("hint") || "",
             checkStyle: fd.get("checkStyle") || "circle",
             kidIds,
@@ -1752,39 +2040,66 @@
       });
     });
 
-    const consForm = $("#consForm");
-    if (consForm) {
-      const allKidBtn = consForm.querySelector("[data-kid-all]");
+    const extraForm = $("#extraForm");
+    if (extraForm) {
+      const allKidBtn = extraForm.querySelector("[data-kid-all]");
       allKidBtn?.addEventListener("click", () => {
         const turnOn = !allKidBtn.classList.contains("on");
-        setAllKidChips(consForm, turnOn);
+        setAllKidChips(extraForm, turnOn);
       });
-      consForm.querySelectorAll("[data-kid-chip]").forEach((chip) => {
+      extraForm.querySelectorAll("[data-kid-chip]").forEach((chip) => {
         chip.addEventListener("click", () => {
           chip.classList.toggle("on");
-          syncAllKidChip(consForm);
+          syncAllKidChip(extraForm);
         });
       });
-      consForm.addEventListener("submit", async (e) => {
+      extraForm.querySelectorAll("[data-extra-kind]").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          const editing = !!extraForm.querySelector('[name="id"]')?.value;
+          syncExtraKindUi(extraForm, chip.dataset.extraKind, { editing });
+        });
+      });
+      extraForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const fd = new FormData(consForm);
+        const fd = new FormData(extraForm);
         const editing = !!fd.get("id");
-        const kidIds = selectedKidIds(consForm);
+        const kidIds = selectedKidIds(extraForm);
+        const tone = selectedExtraTone(extraForm);
         if (!kidIds.length) {
           toast("Assign at least one kid");
           return;
         }
         try {
-          await AdminAPI.saveConsequence(state.token, {
+          const reason = String(fd.get("hint") || "").trim();
+          if (!reason) {
+            toast("Add a reason");
+            return;
+          }
+          const saved = await AdminAPI.saveConsequence(state.token, {
             id: fd.get("id") || undefined,
-            title: fd.get("title"),
-            icon: fd.get("icon"),
-            stars: Number(fd.get("stars") || 1),
-            hint: fd.get("hint") || "",
+            title: reason,
+            icon: pickerIconValue(extraForm),
+            stars: parseStars(fd.get("stars"), 0),
+            hint: reason,
+            kind: tone,
+            tone,
             kidIds,
           });
-          toast(editing ? "Consequence updated" : "Consequence saved");
-          resetConsequenceForm();
+          await applyExtraToKids(
+            {
+              ...(saved.item || {}),
+              id: saved.item?.id || fd.get("id"),
+              title: reason,
+              hint: reason,
+              reason,
+              icon: pickerIconValue(extraForm),
+              stars: parseStars(fd.get("stars"), 0),
+            },
+            kidIds,
+            tone
+          );
+          toast(tone === "good" ? "Stars added" : "Stars taken");
+          resetExtraForm();
           await refresh();
         } catch (err) {
           toast(apiErrorMessage(err));
@@ -1792,25 +2107,25 @@
       });
     }
 
-    $("#cancelConsEdit")?.addEventListener("click", () => resetConsequenceForm());
+    $("#cancelExtraEdit")?.addEventListener("click", () => resetExtraForm());
 
-    $$("[data-edit-cons-id]").forEach((btn) => {
+    $$("[data-edit-extra-id]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const item = (state.data?.consequences || []).find((c) => c.id === btn.dataset.editConsId);
+        const item = (state.data?.consequences || []).find((c) => c.id === btn.dataset.editExtraId);
         if (!item) return;
-        populateConsequenceForm(item);
+        populateExtraForm(item);
       });
     });
 
-    $$("[data-del-cons]").forEach((btn) => {
+    $$("[data-del-extra]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        const id = btn.dataset.delCons;
+        const id = btn.dataset.delExtra;
         const item = (state.data?.consequences || []).find((c) => c.id === id);
-        const label = item ? `${item.icon || "⚠️"} ${item.title}` : "this consequence";
-        if (!confirm(`Remove ${label}? Past star deductions stay.`)) return;
+        const label = item ? `${item.icon ? item.icon + " " : ""}${extraReason(item)}` : "this extra";
+        if (!confirm(`Remove ${label}? Stars already given or taken stay.`)) return;
         try {
           await AdminAPI.deleteConsequence(state.token, id);
-          toast("Consequence removed");
+          toast("Extra removed");
           await refresh();
         } catch (err) {
           toast(apiErrorMessage(err) || "Remove failed");
@@ -1818,9 +2133,9 @@
       });
     });
 
-    $$("[data-apply-cons]").forEach((btn) => {
+    $$("[data-apply-extra]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        const id = btn.dataset.applyCons;
+        const id = btn.dataset.applyExtra;
         const item = (state.data?.consequences || []).find((c) => c.id === id);
         if (!item) return;
         const kidIds = (item.kidIds || []).length
@@ -1831,10 +2146,13 @@
           return;
         }
         const names = kidIds.map(kidName).join(", ");
-        if (!confirm(`Give ${item.icon || "⚠️"} ${item.title} (−★${item.stars || 1}) to ${names}?`)) return;
+        const tone = btn.dataset.applyTone || extraKind(item);
+        const good = tone === "good";
+        const sign = good ? "+" : "−";
+        if (!confirm(`Give ${item.icon ? item.icon + " " : ""}${extraReason(item)} (${sign}★${parseStars(item.stars, 0)}) to ${names}?`)) return;
         try {
-          await AdminAPI.applyConsequence(state.token, id, kidIds);
-          toast("Consequence given");
+          await applyExtraToKids(item, kidIds, good ? "good" : "bad");
+          toast(good ? "Stars added" : "Stars taken");
           await refresh();
         } catch (err) {
           toast(apiErrorMessage(err) || "Could not apply");
@@ -1915,8 +2233,8 @@
         const fd = new FormData(rewardForm);
         await AdminAPI.saveReward(state.token, {
           title: fd.get("title"),
-          icon: fd.get("icon"),
-          cost: Number(fd.get("cost") || 10),
+          icon: pickerIconValue(rewardForm),
+          cost: parseStars(fd.get("cost"), 0),
         });
         toast("Reward saved");
         await refresh();
@@ -2372,7 +2690,7 @@
         }
       });
     }).catch(() => {});
-    navigator.serviceWorker.register("sw.js?v=17", { scope: "./" }).then((reg) => {
+    navigator.serviceWorker.register("sw.js?v=19", { scope: "./" }).then((reg) => {
       reg.update();
     }).catch(() => {});
   }
