@@ -9,11 +9,14 @@ Type=simple
 User=pi
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/pi/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=FAMILY_BOARD_SKIP_SERVER=1
 WorkingDirectory=/home/pi/family-board-src
 ExecStart=/home/pi/family-board-src/scripts/pi/start-kiosk.sh
-Restart=on-failure
-RestartSec=12
+KillMode=control-group
+TimeoutStopSec=10
+Restart=always
+RestartSec=5
 TimeoutStartSec=300
 
 [Install]

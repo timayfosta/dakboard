@@ -106,13 +106,46 @@ fi
 
 mkdir -p "$PROFILE_DIR"
 
-# --app + fullscreen, not --kiosk: Chromium kiosk mode blocks Alt+F4.
+# Leftover Chromium after a pull/restart keeps SingletonLock, so the next
+# launch often opens a normal window instead of kiosk.
+cleanup_old_chromium() {
+  pkill -f "user-data-dir=${PROFILE_DIR}" >/dev/null 2>&1 || true
+  pkill -f "FamilyBoardKiosk" >/dev/null 2>&1 || true
+  sleep 0.8
+  rm -f \
+    "$PROFILE_DIR/SingletonLock" \
+    "$PROFILE_DIR/SingletonSocket" \
+    "$PROFILE_DIR/SingletonCookie"
+}
+cleanup_old_chromium
+
+# Systemd does not inherit the desktop session. On Pi OS Wayland (labwc),
+# Chromium with only DISPLAY=:0 becomes an XWayland window with chrome.
+UID_NUM="$(id -u)"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/${UID_NUM}}"
+OZONE_ARGS=(--ozone-platform=x11)
+if [[ -S "${XDG_RUNTIME_DIR}/wayland-0" ]]; then
+  export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+  OZONE_ARGS=(--ozone-platform=wayland)
+elif [[ -S "${XDG_RUNTIME_DIR}/wayland-1" ]]; then
+  export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+  OZONE_ARGS=(--ozone-platform=wayland)
+fi
+
+# --kiosk is what actually stays fullscreen. --app alone often comes back
+# as a decorated window after Chromium restores the last window size.
+KIOSK_ARGS=(--app="$URL" --start-fullscreen --window-position=0,0)
+if [[ "${MOUSE}" == "1" || "${MOUSE}" == "true" ]]; then
+  KIOSK_ARGS+=(--start-maximized)
+else
+  KIOSK_ARGS+=(--kiosk)
+fi
+
 exec "$BROWSER" \
   --user-data-dir="$PROFILE_DIR" \
   --class=FamilyBoardKiosk \
-  --app="$URL" \
-  --start-fullscreen \
-  --window-position=0,0 \
+  "${OZONE_ARGS[@]}" \
+  "${KIOSK_ARGS[@]}" \
   --noerrdialogs \
   --disable-infobars \
   --disable-session-crashed-bubble \

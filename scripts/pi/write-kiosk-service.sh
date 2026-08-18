@@ -5,6 +5,7 @@ set -euo pipefail
 TARGET_USER="${1:?usage: write-kiosk-service.sh <user> <app_dir> <home_dir>}"
 APP_DIR="${2:?}"
 HOME_DIR="${3:?}"
+USER_ID="$(id -u "${TARGET_USER}" 2>/dev/null || echo 1000)"
 
 cat > /etc/systemd/system/family-board-kiosk.service <<EOF
 [Unit]
@@ -18,11 +19,14 @@ Type=simple
 User=${TARGET_USER}
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=${HOME_DIR}/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/user/${USER_ID}
 Environment=FAMILY_BOARD_SKIP_SERVER=1
 WorkingDirectory=${APP_DIR}
 ExecStart=${APP_DIR}/scripts/pi/start-kiosk.sh
-Restart=on-failure
-RestartSec=12
+KillMode=control-group
+TimeoutStopSec=10
+Restart=always
+RestartSec=5
 TimeoutStartSec=300
 
 [Install]
