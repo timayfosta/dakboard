@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 import subprocess
 import sys
 import threading
@@ -13,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 _lock = threading.Lock()
 _running = False
 _last_result: dict[str, Any] | None = None
+_git_head_cache: tuple[float, dict[str, Any]] | None = None
+_GIT_HEAD_TTL_S = 4.0
 
 
 def is_git_repo() -> bool:
@@ -23,33 +26,65 @@ def is_busy() -> bool:
     return _running
 
 
-def git_head() -> dict[str, Any]:
+def git_head(*, fresh: bool = False) -> dict[str, Any]:
+    global _git_head_cache
+    now = time.monotonic()
+    if not fresh:
+        cached = _git_head_cache
+        if cached and now - cached[0] < _GIT_HEAD_TTL_S:
+            return cached[1]
     if not is_git_repo():
         return {"ok": False}
     try:
-        sha = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        branch = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        return {
+        sha = _run_git(["git", "rev-parse", "--short", "HEAD"], timeout=4)
+        branch = _run_git(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=4)
+        dirty = _run_git(["git", "status", "--porcelain"], timeout=4)
+        subject = _run_git(["git", "log", "-1", "--format=%s"], timeout=4)
+        result = {
             "ok": sha.returncode == 0,
             "sha": (sha.stdout or "").strip(),
             "branch": (branch.stdout or "").strip(),
+            "dirty": bool((dirty.stdout or "").strip()),
+            "subject": (subject.stdout or "").strip(),
         }
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return {"ok": False}
+    _git_head_cache = (now, result)
+    return result
+
+
+def _is_raspberry_pi() -> bool:
+    model = Path("/proc/device-tree/model")
+    if not model.is_file():
+        return False
+    try:
+        return "raspberry" in model.read_text(errors="ignore").lower()
+    except OSError:
+        return False
+
+
+def server_identity() -> dict[str, Any]:
+    """Which machine is serving /api — laptop test vs live Pi."""
+    hostname = socket.gethostname() or ""
+    if sys.platform == "win32":
+        role = "laptop"
+        label = "Laptop"
+        hint = "Local test. Push to GitHub, then pull on the Pi to update the TV and website."
+    elif _is_raspberry_pi() or ((boot_status().get("api") or {}).get("active") == "active"):
+        role = "pi"
+        label = "Raspberry Pi"
+        hint = "Live board. The TV and website use this server."
+    else:
+        role = "other"
+        label = hostname or "Unknown host"
+        hint = "Check the hostname and git SHA before treating this as the live board."
+    return {
+        "role": role,
+        "label": label,
+        "hostname": hostname,
+        "platform": sys.platform,
+        "hint": hint,
+    }
 
 
 def _run_git(args: list[str], *, timeout: int = 120) -> subprocess.CompletedProcess[str]:
@@ -124,7 +159,7 @@ def _git_sync_python() -> dict[str, Any]:
         return {"ok": False, "error": "Not a git repository — use git clone on the Pi, not rsync-only install"}
 
     dirty = (_run_git(["git", "status", "--porcelain"], timeout=20).stdout or "").strip()
-    before = git_head()
+    before = git_head(fresh=True)
 
     _abort_git_operations()
 
@@ -154,7 +189,7 @@ def _git_sync_python() -> dict[str, Any]:
             "syncMethod": "reset-hard",
         }
 
-    head = git_head()
+    head = git_head(fresh=True)
     return {
         "ok": True,
         "stdout": out or f"Synced to {upstream}",

@@ -2,33 +2,28 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "shared"))
+import portkill  # noqa: E402
+
 PORT = 8765
 SERVER = ROOT / "server.py"
-
-
-def kill_port(port: int) -> None:
-    if sys.platform == "win32":
-        ps = (
-            f"$p = Get-NetTCPConnection -LocalPort {port} -State Listen "
-            f"-ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; "
-            f"foreach ($id in $p) {{ if ($id -gt 0) {{ Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }} }}"
-        )
-        subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=False)
-    else:
-        subprocess.run(["fuser", "-k", f"{port}/tcp"], check=False, capture_output=True)
 
 
 def main() -> None:
     delayed = "--delayed" in sys.argv
     if delayed:
         time.sleep(1.0)
-    kill_port(PORT)
+    print(f"Starting Family Board on port {PORT}…", flush=True)
+    killed = portkill.kill_port(PORT)
+    if killed:
+        print(f"Stopped old server (pid {', '.join(map(str, killed))})…", flush=True)
+    else:
+        print(f"Port {PORT} is free", flush=True)
     time.sleep(0.4)
     os.chdir(ROOT)
     os.execv(sys.executable, [sys.executable, str(SERVER)])

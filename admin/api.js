@@ -57,6 +57,8 @@ const API = {
     API.request(`/api/screensaver/photos/${id}`, { method: "DELETE", token }),
   restartServer: (token) =>
     API.request("/api/admin/restart", { method: "POST", token, body: {} }),
+  stopServer: (token) =>
+    API.request("/api/admin/stop", { method: "POST", token, body: {} }),
   deploy: (token) => API.request("/api/admin/deploy", { method: "POST", token, body: {} }),
   deployStatus: (token) => API.request("/api/admin/deploy/status", { token }),
   rebootPi: (token) => API.request("/api/admin/reboot", { method: "POST", token, body: {} }),

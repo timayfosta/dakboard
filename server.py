@@ -13,6 +13,7 @@ import hmac
 import ipaddress
 import json
 import mimetypes
+import os
 import re
 import secrets
 import subprocess
@@ -34,6 +35,7 @@ sys.path.insert(0, str(ROOT / "shared"))
 try:
     import db  # noqa: E402
     import deploy  # noqa: E402
+    import portkill  # noqa: E402
     import screensaver_albums  # noqa: E402
 except ImportError as exc:
     print(
@@ -47,6 +49,7 @@ except ImportError as exc:
     raise SystemExit(1) from exc
 
 PORT = 8765
+HTTP_SERVER = None
 CHECK_STYLES = frozenset({"circle", "square", "star", "heart", "diamond"})
 API_VERSION = 3
 BOOT_ID = uuid.uuid4().hex
@@ -707,6 +710,53 @@ def schedule_server_restart(delay_s: float = 0.8) -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 
+def client_is_loopback(handler: SimpleHTTPRequestHandler) -> bool:
+    host = handler.client_address[0] if handler.client_address else ""
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return host in {"127.0.0.1", "::1", "localhost"}
+
+
+def request_host_is_localhost(handler: SimpleHTTPRequestHandler) -> bool:
+    raw = (handler.headers.get("Host") or "").strip().lower()
+    if raw.startswith("["):
+        name = raw.split("]", 1)[0].strip("[]")
+    else:
+        name = raw.rsplit(":", 1)[0] if raw.count(":") == 1 else raw.split(":")[0]
+    return name in {"localhost", "127.0.0.1", "::1"}
+
+
+def allow_laptop_stop(handler: SimpleHTTPRequestHandler) -> bool:
+    """Stop is laptop localhost only — never the Pi / public site."""
+    if deploy.server_identity().get("role") == "pi":
+        return False
+    return client_is_loopback(handler) and request_host_is_localhost(handler)
+
+
+def schedule_server_stop() -> None:
+    """Shut down this process and anything else on port 8765. Does not restart."""
+
+    def _stop() -> None:
+        time.sleep(0.3)
+        server = HTTP_SERVER
+        if server is not None:
+            try:
+                server.shutdown()
+            except Exception:
+                pass
+        try:
+            killed = portkill.kill_port(PORT)
+            if killed:
+                print(f"Stopped listeners on {PORT}: {killed}", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Stop cleanup: {exc}", flush=True)
+        print("Family Board stopped.", flush=True)
+        os._exit(0)
+
+    threading.Thread(target=_stop, daemon=True).start()
+
+
 def require_admin(handler: SimpleHTTPRequestHandler) -> bool:
     # Home Family Board: admin is open (no password gate).
     # Still accept/refresh a bearer token if the client sends one.
@@ -850,6 +900,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return send_json(self, {"error": "Weather unavailable"}, 502)
         if path == "/api/health":
             head = deploy.git_head()
+            identity = deploy.server_identity()
             return send_json(
                 self,
                 {
@@ -860,12 +911,15 @@ class Handler(SimpleHTTPRequestHandler):
                     "git": {
                         "sha": head.get("sha") or "",
                         "branch": head.get("branch") or "",
+                        "dirty": bool(head.get("dirty")),
+                        "subject": head.get("subject") or "",
                     },
+                    "identity": identity,
                     "deploy": {
                         "gitRepo": deploy.is_git_repo(),
                         "webhookConfigured": bool(load_secrets().get("deployWebhookSecret")),
                         "last": deploy.get_last_result(),
-                        "boot": deploy.boot_status(),
+                        "boot": {} if sys.platform == "win32" else deploy.boot_status(),
                     },
                     "features": ["settings", "screensaver", "whiteboard", "nightMode", "kioskTheme", "rotation", "liveReload"],
                 },
@@ -1043,6 +1097,11 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.admin_restart()
+
+        if path == "/api/admin/stop":
+            if not require_admin(self):
+                return
+            return self.admin_stop()
 
         if path == "/api/admin/deploy":
             if not require_admin(self):
@@ -2076,6 +2135,16 @@ class Handler(SimpleHTTPRequestHandler):
         schedule_server_restart()
         send_json(self, {"ok": True, "restarting": True})
 
+    def admin_stop(self):
+        if not allow_laptop_stop(self):
+            return send_json(
+                self,
+                {"error": "Stop is only available on the laptop at localhost:8765"},
+                403,
+            )
+        schedule_server_stop()
+        send_json(self, {"ok": True, "stopping": True})
+
     def admin_deploy(self):
         result = deploy.deploy_async(schedule_server_restart, restart=True)
         status = 200 if result.get("ok") else 409
@@ -2142,7 +2211,10 @@ class Handler(SimpleHTTPRequestHandler):
         send_json(self, {**result, "branch": pushed}, 202 if result.get("ok") else 409)
 
     def log_message(self, fmt, *args):
-        print("[%s] %s" % (self.log_date_time_string(), fmt % args))
+        msg = fmt % args if args else str(fmt)
+        if "/api/health" in msg or "/api/family/revision" in msg:
+            return
+        print("[%s] %s" % (self.log_date_time_string(), msg), flush=True)
 
 
 if __name__ == "__main__":
@@ -2170,6 +2242,7 @@ if __name__ == "__main__":
 
     try:
         server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+        HTTP_SERVER = server
     except OSError as exc:
         if getattr(exc, "errno", None) in (errno.EADDRINUSE, 98, 10048):
             print(

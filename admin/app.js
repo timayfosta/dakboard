@@ -34,6 +34,8 @@
     filesToken: sessionStorage.getItem(FILES_TOKEN_KEY) || "",
     filesUnlocked: false,
     filesUnlockError: "",
+    health: null,
+    stopWait: false,
   };
   let listPollTimer = null;
 
@@ -179,6 +181,7 @@
   async function checkServer() {
     try {
       const health = await AdminAPI.health();
+      state.health = health;
       const ok = health?.ok && Number(health.version) >= REQUIRED_API_VERSION;
       state.serverOk = ok;
       state.serverHint = ok
@@ -186,10 +189,53 @@
         : "Server needs restart. Stop the old python window, then run: npm start";
       return ok;
     } catch {
+      state.health = null;
       state.serverOk = false;
       state.serverHint = "Can't reach server. Run: npm start";
       return false;
     }
+  }
+
+  function isLocalhostLaptopAdmin() {
+    const host = location.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1") return false;
+    return !identityBits().isPi;
+  }
+
+  function identityBits(health = state.health) {
+    const id = health?.identity || {};
+    const git = health?.git || {};
+    return {
+      role: id.role || "",
+      label: id.label || "Server",
+      hostname: id.hostname || "",
+      hint: id.hint || "",
+      sha: git.sha || "",
+      branch: git.branch || "",
+      dirty: !!git.dirty,
+      subject: git.subject || "",
+      isLaptop: id.role === "laptop",
+      isPi: id.role === "pi",
+    };
+  }
+
+  function identityNoticeHtml(health = state.health) {
+    if (!health?.ok) {
+      return `<div class="identity-banner other">Can't tell which server this is yet.</div>`;
+    }
+    const bits = identityBits(health);
+    const tone = bits.role === "laptop" ? "laptop" : bits.role === "pi" ? "pi" : "other";
+    const title = bits.isLaptop ? "Laptop test" : bits.isPi ? "Live Raspberry Pi" : bits.label;
+    const sha = bits.sha || "no git SHA";
+    const dirty = bits.dirty ? " · uncommitted edits" : "";
+    const branch = bits.branch ? ` @ ${bits.branch}` : "";
+    const subject = bits.subject ? `<br/>${escapeHtml(bits.subject)}` : "";
+    return `<div class="identity-banner ${tone}">
+      <strong>${escapeHtml(title)}</strong>
+      ${escapeHtml(bits.hostname)} · <code>${escapeHtml(sha)}${escapeHtml(branch)}${escapeHtml(dirty)}</code>
+      · ${escapeHtml(location.host)}<br/>
+      ${escapeHtml(bits.hint)}${subject}
+    </div>`;
   }
 
   function renderServerBanner() {
@@ -1799,15 +1845,21 @@
       </section>
       <section class="card">
         <h2>Server</h2>
-        <p class="muted">
-          Pull updates also turns on auto-start: API, kiosk, and Cloudflare tunnel
-          after every power cycle. Use the LAN admin URL if the public site shows 1033.
-        </p>
+        <div id="identityNotice">${identityNoticeHtml()}</div>
         <p class="muted" id="deployMeta">Checking deploy status…</p>
-        <button class="btn block" type="button" id="deployServerBtn">Pull updates &amp; restart now</button>
-        <button class="btn secondary block" type="button" id="startTunnelBtn">Start Cloudflare tunnel</button>
+        <button class="btn block" type="button" id="deployServerBtn">${identityBits().isLaptop ? "Pull onto this laptop &amp; restart" : "Pull updates &amp; restart now"}</button>
+        ${
+          identityBits().isLaptop
+            ? `<button class="btn secondary block" type="button" id="restartServerBtn">Restart laptop server</button>`
+            : `<button class="btn secondary block" type="button" id="startTunnelBtn">Start Cloudflare tunnel</button>
         <button class="btn secondary block" type="button" id="restartServerBtn">Restart only</button>
-        <button class="btn danger block" type="button" id="rebootPiBtn" style="margin-top:0.55rem">Reboot Raspberry Pi</button>
+        <button class="btn danger block" type="button" id="rebootPiBtn" style="margin-top:0.55rem">Reboot Raspberry Pi</button>`
+        }
+        ${
+          isLocalhostLaptopAdmin()
+            ? `<button class="btn danger block" type="button" id="stopServerBtn" style="margin-top:0.55rem">Stop laptop server</button>`
+            : ""
+        }
         <p class="muted restart-status hidden" id="restartStatus"></p>
       </section>
       <section class="card">
@@ -1826,10 +1878,12 @@
     if (!el) return;
     try {
       const health = await AdminAPI.health();
+      state.health = health;
+      const notice = $("#identityNotice");
+      if (notice) notice.innerHTML = identityNoticeHtml(health);
       const git = health?.git || {};
       const d = health?.deploy || {};
       const bits = [];
-      if (git.sha) bits.push(`code ${git.sha}${git.branch ? ` @ ${git.branch}` : ""}`);
       bits.push(d.gitRepo ? "git repo ready" : "not a git repo — auto-pull won't work");
       bits.push(d.webhookConfigured ? "webhook secret set" : "no webhook secret yet");
       const last = d.last;
@@ -1893,7 +1947,9 @@
     const start = Date.now();
     const maxMs = 45000;
     while (Date.now() - start < maxMs) {
+      if (state.stopWait) return false;
       await new Promise((r) => setTimeout(r, 1200));
+      if (state.stopWait) return false;
       try {
         const health = await AdminAPI.health();
         if (health?.ok && Number(health.version) >= REQUIRED_API_VERSION) {
@@ -2601,7 +2657,9 @@
       deployBtn.addEventListener("click", async () => {
         if (
           !confirm(
-            "Pull the latest code from git and restart the server?\n\nRequires a git clone on this machine (not rsync-only)."
+            identityBits().isLaptop
+              ? "This pulls GitHub onto THIS LAPTOP and discards uncommitted files.\n\nIt does NOT update the TV or website. Continue?"
+              : "Pull the latest code from GitHub onto this Raspberry Pi and restart?\n\nThis updates the TV and website."
           )
         ) {
           return;
@@ -2689,6 +2747,7 @@
         ) {
           return;
         }
+        state.stopWait = false;
         const statusEl = $("#restartStatus");
         restartBtn.disabled = true;
         if (statusEl) {
@@ -2701,6 +2760,41 @@
           /* connection drop is expected */
         }
         await waitForServerRestart(statusEl, restartBtn);
+      });
+    }
+
+    const stopBtn = $("#stopServerBtn");
+    if (stopBtn) {
+      stopBtn.addEventListener("click", async () => {
+        if (
+          !confirm(
+            "Stop the laptop Family Board server?\n\nThis does not affect the Pi or TV. Start it again later with npm start."
+          )
+        ) {
+          return;
+        }
+        state.stopWait = true;
+        try {
+          sessionStorage.setItem("family-board-stopped", "1");
+        } catch {}
+        window.dispatchEvent(new Event("family-board-stop"));
+        const statusEl = $("#restartStatus");
+        stopBtn.disabled = true;
+        $("#restartServerBtn")?.setAttribute("disabled", "true");
+        $("#deployServerBtn")?.setAttribute("disabled", "true");
+        if (statusEl) {
+          statusEl.classList.remove("hidden");
+          statusEl.textContent = "Stopping laptop server…";
+        }
+        try {
+          await AdminAPI.stopServer(state.token);
+        } catch {
+          /* connection drop is expected once the process exits */
+        }
+        if (statusEl) {
+          statusEl.textContent = "Laptop server stopped. Close this tab. Start again with npm start.";
+        }
+        toast("Laptop server stopped");
       });
     }
 

@@ -978,6 +978,56 @@ button, input, select, textarea {
   line-height: 1.35;
 }
 
+.identity-banner {
+  margin: 0 0 0.7rem;
+  padding: 0.55rem 0.7rem 0.6rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.identity-banner strong {
+  display: block;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.15rem;
+}
+
+.identity-banner code {
+  font-size: 0.78rem;
+}
+
+.identity-banner.laptop {
+  background: #5a3d08;
+  border-color: #c98a2a;
+  color: #ffe7b8;
+}
+
+[data-theme="day"] .identity-banner.laptop {
+  background: #fff3d6;
+  border-color: #e0a84a;
+  color: #6a4308;
+}
+
+.identity-banner.pi {
+  background: #0f3d2e;
+  border-color: #2fa36e;
+  color: #c8f5df;
+}
+
+[data-theme="day"] .identity-banner.pi {
+  background: #e5f7ee;
+  border-color: #2fa36e;
+  color: #0d4a32;
+}
+
+.identity-banner.other {
+  background: var(--panel2);
+  color: var(--ink);
+}
+
 @media (min-width: 641px) {
   .nav {
     left: 50%;
