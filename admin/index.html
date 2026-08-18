@@ -22,7 +22,7 @@
     })();
   </script>
   <link rel="stylesheet" href="fonts.css" />
-  <link rel="stylesheet" href="admin.css?v=35" />
+  <link rel="stylesheet" href="admin.css?v=37" />
   <link rel="stylesheet" href="/shared/touch-input.css?v=4" />
 </head>
 <body>
@@ -60,13 +60,27 @@
   </div>
 
   <div class="toast" id="toast"></div>
+  <div class="receipt-overlay" id="receiptOverlay" hidden>
+    <article class="receipt-sheet" role="dialog" aria-modal="true" aria-labelledby="receiptWho">
+      <button type="button" class="receipt-close" id="receiptClose" aria-label="Close receipt">×</button>
+      <header class="receipt-head">
+        <div class="shop-name">Star receipt</div>
+        <div class="who" id="receiptWho"></div>
+      </header>
+      <div class="receipt-body" id="receiptBody"></div>
+      <footer class="receipt-total">
+        <span>Balance</span>
+        <span id="receiptTotal">★ 0</span>
+      </footer>
+    </article>
+  </div>
 
   <script src="/shared/list-undo.js"></script>
   <script src="/shared/screens.js"></script>
   <script src="/shared/live-reload.js"></script>
   <script src="/shared/swipe-words.js"></script>
   <script src="/shared/touch-input.js?v=4"></script>
-  <script src="api.js?v=29"></script>
-  <script src="app.js?v=44"></script>
+  <script src="api.js?v=30"></script>
+  <script src="app.js?v=47"></script>
 </body>
 </html>

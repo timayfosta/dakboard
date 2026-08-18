@@ -48,6 +48,9 @@ const API = {
   deleteKid: (token, id) => API.request(`/api/family/kids/${id}`, { method: "DELETE", token }),
   deleteChore: (token, id) => API.request(`/api/family/chores/${id}`, { method: "DELETE", token }),
   deleteConsequence: (token, id) => API.request(`/api/family/consequences/${id}`, { method: "DELETE", token }),
+  deleteStarLog: (token, id) => API.request(`/api/family/star-log/${id}`, { method: "DELETE", token }),
+  deleteExtraHit: (token, id) => API.request(`/api/family/extra-hits/${id}`, { method: "DELETE", token }),
+  clearExtraHits: (token) => API.request("/api/family/extra-hits/clear", { method: "POST", token, body: {} }),
   deleteReward: (token, id) => API.request(`/api/family/rewards/${id}`, { method: "DELETE", token }),
   saveSettings: (token, settings) =>
     API.request("/api/family/settings", { method: "POST", token, body: settings }),

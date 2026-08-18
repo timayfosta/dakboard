@@ -484,6 +484,30 @@ def remove_star_log(state: dict[str, Any], *, ref: str, kid_id: str, day: str) -
     ]
 
 
+def undo_star_log_entry(state: dict[str, Any], log_id: str) -> dict[str, Any]:
+    """Remove one receipt line. Star balances stay the same."""
+    log = state.get("starLog") or []
+    row = next((item for item in log if item.get("id") == log_id), None)
+    if not row:
+        return {"error": "Receipt line not found", "status": 404}
+    state["starLog"] = [item for item in log if item.get("id") != log_id]
+    return {"ok": True, "removed": row}
+
+
+def clear_extra_hits(state: dict[str, Any], hit_id: str | None = None) -> int:
+    """Take extras off the chore board. Does not change star balances."""
+    removed = 0
+    for key in ("bonusHits", "consequenceHits"):
+        rows = state.get(key) or []
+        if hit_id:
+            kept = [hit for hit in rows if hit.get("id") != hit_id]
+        else:
+            kept = []
+        removed += len(rows) - len(kept)
+        state[key] = kept
+    return removed
+
+
 def extra_kind(item: dict[str, Any] | None, default: str = "bad") -> str:
     raw = str((item or {}).get("tone") or (item or {}).get("kind") or "").strip().lower()
     if raw in ("good", "bonus", "positive", "reward"):

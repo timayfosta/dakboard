@@ -1063,6 +1063,10 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.consequence_apply(payload)
+        if path == "/api/family/extra-hits/clear":
+            if not require_admin(self):
+                return
+            return self.extra_hits_clear(payload)
         if path == "/api/family/consequences":
             if not require_admin(self):
                 return
@@ -1203,6 +1207,29 @@ class Handler(SimpleHTTPRequestHandler):
             cons_id = path.split("/")[-1]
             state["consequences"] = [c for c in state.get("consequences", []) if c.get("id") != cons_id]
             db.save_db(state)
+            return send_json(self, {"ok": True, "state": db.public_state(state)})
+        if path.startswith("/api/family/star-log/"):
+            log_id = path.split("/")[-1]
+
+            def undo(st: dict):
+                return db.undo_star_log_entry(st, log_id)
+
+            result, state = db.mutate_db(undo)
+            if result.get("error"):
+                return send_json(self, {"error": result["error"]}, result.get("status") or 400)
+            return send_json(self, {"ok": True, "removed": result.get("removed"), "state": db.public_state(state)})
+        if path.startswith("/api/family/extra-hits/"):
+            hit_id = path.split("/")[-1]
+
+            def clear_one(st: dict):
+                removed = db.clear_extra_hits(st, hit_id)
+                if not removed:
+                    return {"error": "Extra not found on the board", "status": 404}
+                return {"ok": True, "removed": removed}
+
+            result, state = db.mutate_db(clear_one)
+            if result.get("error"):
+                return send_json(self, {"error": result["error"]}, result.get("status") or 400)
             return send_json(self, {"ok": True, "state": db.public_state(state)})
         if path.startswith("/api/family/rewards/"):
             reward_id = path.split("/")[-1]
@@ -1590,6 +1617,16 @@ class Handler(SimpleHTTPRequestHandler):
         if result.get("error"):
             return send_json(self, {"error": result["error"]}, result.get("status") or 400)
         send_json(self, {"ok": True, "applied": result.get("applied") or [], "state": db.public_state(state)})
+
+    def extra_hits_clear(self, payload: dict):
+        hit_id = str(payload.get("id") or payload.get("hitId") or "").strip() or None
+
+        def mut(state: dict):
+            removed = db.clear_extra_hits(state, hit_id)
+            return {"removed": removed}
+
+        result, state = db.mutate_db(mut)
+        send_json(self, {"ok": True, "removed": result.get("removed") or 0, "state": db.public_state(state)})
 
     def rewards_upsert(self, payload: dict):
         state = db.load_db()

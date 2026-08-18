@@ -36,6 +36,15 @@
     filesUnlockError: "",
     health: null,
     stopWait: false,
+    receiptKidId: "",
+    moreFolds: (() => {
+      try {
+        const raw = JSON.parse(sessionStorage.getItem("family-admin-more-folds") || "{}");
+        return raw && typeof raw === "object" ? raw : {};
+      } catch {
+        return {};
+      }
+    })(),
   };
   let listPollTimer = null;
 
@@ -828,6 +837,7 @@
     renderServerBanner();
     $("#familyMeta").textContent = `${d.kids.filter((k) => k.active !== false).length} kids · ${d.today}`;
     renderTab();
+    if (state.receiptKidId) fillReceipt(state.receiptKidId);
   }
 
   function normalizeTab(tab) {
@@ -868,6 +878,99 @@
     }
   }
 
+  function receiptDate(ms) {
+    const d = new Date(ms);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  }
+
+  function receiptKindLabel(row) {
+    if (row.type === "consequence" || row.type === "bonus") return "Extra";
+    if (row.type === "redeem") return "Reward";
+    if (row.type === "adjust") return "Adjustment";
+    return "Chore";
+  }
+
+  function receiptTone(row) {
+    const stars = Number(row.stars || 0);
+    if (row.type === "consequence") return "bad";
+    if (row.type === "chore" || row.type === "bonus" || !row.type) return "good";
+    return stars >= 0 ? "good" : "bad";
+  }
+
+  function fillReceipt(kidId) {
+    const overlay = $("#receiptOverlay");
+    const body = $("#receiptBody");
+    const who = $("#receiptWho");
+    const total = $("#receiptTotal");
+    if (!overlay || !body || !who || !total) return false;
+    const kid = (state.data?.kids || []).find((k) => k.id === kidId);
+    if (!kid) {
+      closeReceipt();
+      return false;
+    }
+    const rows = (state.data?.starLog || [])
+      .filter((row) => row.kidId === kidId)
+      .slice()
+      .sort((a, b) => (a.at || 0) - (b.at || 0));
+    who.textContent = `${kid.emoji || ""} ${kid.name}`;
+    if (!rows.length) {
+      body.innerHTML = `<p class="muted" style="text-align:center;margin:0.75rem 0">No activity yet</p>`;
+    } else {
+      body.innerHTML = rows
+        .map((row) => {
+          const stars = Number(row.stars || 0);
+          const late = row.late ? " · LATE" : "";
+          const sign = stars > 0 ? "+" : "";
+          return `
+            <div class="receipt-line ${receiptTone(row)}">
+              <div class="receipt-line-main">
+                <span>${escapeHtml(row.icon || "")} ${escapeHtml(row.title || "")}</span>
+                <span class="amt">${sign}★${stars}</span>
+                <span class="meta">${escapeHtml(receiptDate(row.at))} · ${escapeHtml(receiptKindLabel(row))}${late}</span>
+              </div>
+              <button type="button" class="btn-x" data-del-log="${escapeHtml(row.id)}" aria-label="Remove line">×</button>
+            </div>`;
+        })
+        .join("");
+    }
+    total.textContent = `★ ${state.data?.balances?.[kid.id] || 0}`;
+    overlay.classList.add("show");
+    overlay.hidden = false;
+    body.querySelectorAll("[data-del-log]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.delLog;
+        if (!confirm("Remove this line from the receipt? Star total stays the same.")) return;
+        try {
+          await AdminAPI.deleteStarLog(state.token, id);
+          toast("Line removed");
+          await refresh();
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Couldn't remove that line");
+        }
+      });
+    });
+    return true;
+  }
+
+  function openReceipt(kidId) {
+    if (!kidId) return;
+    if (state.receiptKidId === kidId && $("#receiptOverlay")?.classList.contains("show")) {
+      closeReceipt();
+      return;
+    }
+    state.receiptKidId = kidId;
+    fillReceipt(kidId);
+  }
+
+  function closeReceipt() {
+    state.receiptKidId = "";
+    const overlay = $("#receiptOverlay");
+    if (!overlay) return;
+    overlay.classList.remove("show");
+    overlay.hidden = true;
+  }
+
   function renderKids(d) {
     return `
       <section class="card">
@@ -904,6 +1007,7 @@
             <div class="actions">
               <button class="btn secondary compact" data-stars="${k.id}" data-delta="1">+1★</button>
               <button class="btn secondary compact" data-stars="${k.id}" data-delta="-1">−1★</button>
+              <button class="btn ghost compact" type="button" data-receipt-kid="${k.id}">Receipt</button>
               <button class="btn ghost compact" type="button" data-edit-kid-id="${k.id}">Edit</button>
             </div>
           </article>`
@@ -1207,7 +1311,10 @@
       ${
         recent.length
           ? `<section class="list">
-        <p class="muted">On the board now</p>
+        <div class="item-head" style="margin-bottom:0.35rem">
+          <p class="muted" style="margin:0">On the board now</p>
+          <button type="button" class="btn ghost compact" data-clear-extra-hits>Clear all</button>
+        </div>
         ${recent
           .map((hit) => {
             const good = extraKind(hit) === "good";
@@ -1217,6 +1324,7 @@
                   <div class="title">${hit.icon ? hit.icon + " " : ""}${extraReason(hit)}</div>
                   <div class="muted">${good ? "Good" : "Bad"} · ${good ? "+" : "−"}★${parseStars(hit.stars, 0)} · ${kidName(hit.kidId)}</div>
                 </div>
+                <button type="button" class="btn-x" data-clear-extra-hit="${hit.id}" aria-label="Clear ${extraReason(hit)} from the board">×</button>
               </div>
             </article>`;
           })
@@ -1588,6 +1696,19 @@
     await loadBrowse(state.browsePath);
   }
 
+  const MORE_FOLD_KEY = "family-admin-more-folds";
+
+  function moreFold(id, title, body) {
+    const open = state.moreFolds?.[id] ? " open" : "";
+    return `
+      <section class="card more-fold">
+        <details data-more-fold="${id}"${open}>
+          <summary><h2>${title}</h2></summary>
+          <div class="more-fold-body">${body}</div>
+        </details>
+      </section>`;
+  }
+
   function renderMore(d) {
     const nm = {
       enabled: false,
@@ -1626,10 +1747,10 @@
         </span>
       </label>`;
     return `
-      <section class="card">
-        <div class="row night-head">
-          <h2>Appearance</h2>
-        </div>
+      ${moreFold(
+        "appearance",
+        "Appearance",
+        `
         <div class="theme-block">
           <div>
             <strong>Admin</strong>
@@ -1649,17 +1770,17 @@
             <button type="button" data-kiosk-theme-set="day"><span class="ico" aria-hidden="true">☀</span> Day</button>
             <button type="button" data-kiosk-theme-set="night"><span class="ico" aria-hidden="true">☾</span> Night</button>
           </div>
-        </div>
-      </section>
-      <section class="card ss-card">
+        </div>`
+      )}
+      ${moreFold(
+        "screensaver",
+        "Photo screensaver",
+        `
         <form id="screensaverForm">
-          <div class="row night-head">
-            <h2>Photo screensaver</h2>
-            <label class="night-toggle">
-              <input type="checkbox" name="enabled" ${ss.enabled ? "checked" : ""} />
-              <span>On</span>
-            </label>
-          </div>
+          <label class="night-toggle">
+            <input type="checkbox" name="enabled" ${ss.enabled ? "checked" : ""} />
+            <span>On</span>
+          </label>
           <p class="muted night-hint">Set idle minutes (1+), or enable schedule. Tap TV to dismiss.</p>
           <div class="ss-grid">
             <label>
@@ -1748,17 +1869,17 @@
             Upload photo
             <input type="file" id="photoUploadInput" accept="image/*" hidden />
           </label>
-        </div>
-      </section>
-      <section class="card night-card">
+        </div>`
+      )}
+      ${moreFold(
+        "night",
+        "TV night dim",
+        `
         <form id="nightModeForm">
-          <div class="row night-head">
-            <h2>TV night dim</h2>
-            <label class="night-toggle">
-              <input type="checkbox" name="enabled" ${nm.enabled ? "checked" : ""} />
-              <span>On</span>
-            </label>
-          </div>
+          <label class="night-toggle">
+            <input type="checkbox" name="enabled" ${nm.enabled ? "checked" : ""} />
+            <span>On</span>
+          </label>
           <p class="muted night-hint">Dims the TV overnight. Set dim and wake times, then Save.</p>
           ${nm.enabled ? `<p class="muted night-status">Active · dim ${nm.dimTime} · wake ${nm.brightTime} · ${nm.brightness ?? 15}% bright</p>` : ""}
           <div class="night-times">
@@ -1790,20 +1911,59 @@
             <span class="muted night-brightness-hint">How bright the TV stays overnight (lower = darker).</span>
           </label>
           <button class="btn block" type="submit">Save</button>
-        </form>
-      </section>
-      <section class="card rotation-card">
+        </form>`
+      )}
+      ${moreFold(
+        "rotation",
+        "Screen rotation",
+        `
         <form id="rotationForm">
-          <h2>Screen rotation</h2>
           <p class="muted">Uncheck a screen to skip it in auto-rotation. Nav buttons stay on all screens.</p>
           <div class="rotation-rows">
             ${renderRotationRows(rot)}
           </div>
           <button class="btn block" type="submit">Save rotation</button>
-        </form>
-      </section>
-      <section class="install-banner card" id="installCard">
-        <h2>Install on your phone</h2>
+        </form>`
+      )}
+      ${moreFold(
+        "links",
+        "Display links",
+        `
+        <p class="muted">Open these on the Pi / TV kiosk. Use mouse links on non-touch monitors.</p>
+        <div class="actions link-grid">
+          <a class="btn secondary" href="/screens/calendar.html?kiosk=1">Kiosk</a>
+          <a class="btn secondary" href="/screens/calendar.html?kiosk=1&mouse=1">Kiosk + mouse</a>
+          <a class="btn secondary" href="/screens/chores.html?kiosk=1">Chores</a>
+          <a class="btn secondary" href="/screens/rewards.html?kiosk=1">Rewards</a>
+        </div>`
+      )}
+      ${moreFold(
+        "session",
+        "Session",
+        `<button class="btn danger block" id="logoutBtn">Reload admin</button>`
+      )}
+      ${moreFold(
+        "setup",
+        "Setup",
+        `
+        <h3 class="more-subhead">Server</h3>
+        <div id="identityNotice">${identityNoticeHtml()}</div>
+        <p class="muted" id="deployMeta">Checking deploy status…</p>
+        <button class="btn block" type="button" id="deployServerBtn">${identityBits().isLaptop ? "Pull onto this laptop &amp; restart" : "Pull updates &amp; restart now"}</button>
+        ${
+          identityBits().isLaptop
+            ? `<button class="btn secondary block" type="button" id="restartServerBtn">Restart laptop server</button>`
+            : `<button class="btn secondary block" type="button" id="startTunnelBtn">Start Cloudflare tunnel</button>
+        <button class="btn secondary block" type="button" id="restartServerBtn">Restart only</button>
+        <button class="btn danger block" type="button" id="rebootPiBtn" style="margin-top:0.55rem">Reboot Raspberry Pi</button>`
+        }
+        ${
+          isLocalhostLaptopAdmin()
+            ? `<button class="btn danger block" type="button" id="stopServerBtn" style="margin-top:0.55rem">Stop laptop server</button>`
+            : ""
+        }
+        <p class="muted restart-status hidden" id="restartStatus"></p>
+        <h3 class="more-subhead">Install on your phone</h3>
         <p class="muted" style="margin-bottom:0.65rem">
           iPhone: Share → Add to Home Screen.<br/>
           Android: Browser menu → Install app / Add to Home screen.
@@ -1811,9 +1971,7 @@
         <button class="btn secondary" id="installBtn" ${state.deferredPrompt ? "" : "disabled"}>
           ${state.deferredPrompt ? "Install Family Admin" : "Use browser menu to install"}
         </button>
-      </section>
-      <section class="card">
-        <h2>family-board-src</h2>
+        <h3 class="more-subhead">family-board-src</h3>
         ${
           state.filesUnlocked
             ? `
@@ -1831,46 +1989,8 @@
           ${state.filesUnlockError ? `<p class="muted">${escapeHtml(state.filesUnlockError)}</p>` : ""}
           <button type="submit" class="btn block">Unlock files</button>
         </form>`
-        }
-      </section>
-      <section class="card">
-        <h2>Display links</h2>
-        <p class="muted">Open these on the Pi / TV kiosk. Use mouse links on non-touch monitors.</p>
-        <div class="actions link-grid">
-          <a class="btn secondary" href="/screens/calendar.html?kiosk=1">Kiosk</a>
-          <a class="btn secondary" href="/screens/calendar.html?kiosk=1&mouse=1">Kiosk + mouse</a>
-          <a class="btn secondary" href="/screens/chores.html?kiosk=1">Chores</a>
-          <a class="btn secondary" href="/screens/rewards.html?kiosk=1">Rewards</a>
-        </div>
-      </section>
-      <section class="card">
-        <h2>Server</h2>
-        <div id="identityNotice">${identityNoticeHtml()}</div>
-        <p class="muted" id="deployMeta">Checking deploy status…</p>
-        <button class="btn block" type="button" id="deployServerBtn">${identityBits().isLaptop ? "Pull onto this laptop &amp; restart" : "Pull updates &amp; restart now"}</button>
-        ${
-          identityBits().isLaptop
-            ? `<button class="btn secondary block" type="button" id="restartServerBtn">Restart laptop server</button>`
-            : `<button class="btn secondary block" type="button" id="startTunnelBtn">Start Cloudflare tunnel</button>
-        <button class="btn secondary block" type="button" id="restartServerBtn">Restart only</button>
-        <button class="btn danger block" type="button" id="rebootPiBtn" style="margin-top:0.55rem">Reboot Raspberry Pi</button>`
-        }
-        ${
-          isLocalhostLaptopAdmin()
-            ? `<button class="btn danger block" type="button" id="stopServerBtn" style="margin-top:0.55rem">Stop laptop server</button>`
-            : ""
-        }
-        <p class="muted restart-status hidden" id="restartStatus"></p>
-      </section>
-      <section class="card">
-        <h2>Kiosk</h2>
-        <a class="btn secondary block" href="/screens/calendar.html?kiosk=1">Back to kiosk</a>
-        <a class="btn ghost block" href="/screens/calendar.html?kiosk=1&mouse=1" style="margin-top:0.45rem">Back to kiosk (mouse)</a>
-      </section>
-      <section class="card">
-        <h2>Session</h2>
-        <button class="btn danger block" id="logoutBtn">Reload admin</button>
-      </section>`;
+        }`
+      )}`;
   }
 
   async function fillDeployMeta() {
@@ -2025,6 +2145,10 @@
         populateKidForm(kid);
         $("#cancelKidEdit")?.classList.remove("hidden");
       });
+    });
+
+    $$("[data-receipt-kid]").forEach((btn) => {
+      btn.addEventListener("click", () => openReceipt(btn.dataset.receiptKid));
     });
 
     $$("[data-del-kid]").forEach((btn) => {
@@ -2238,6 +2362,34 @@
           toast(apiErrorMessage(err) || "Remove failed");
         }
       });
+    });
+
+    $$("[data-clear-extra-hit]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const hit = [...(state.data?.bonusHits || []), ...(state.data?.consequenceHits || [])].find(
+          (row) => row.id === btn.dataset.clearExtraHit
+        );
+        const reason = extraReason(hit || {});
+        if (!confirm(`Clear "${reason || "this extra"}" from the chore board? Stars stay the same.`)) return;
+        try {
+          await AdminAPI.deleteExtraHit(state.token, btn.dataset.clearExtraHit);
+          toast("Cleared from the board");
+          await refresh();
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Couldn't clear that extra");
+        }
+      });
+    });
+
+    $("[data-clear-extra-hits]")?.addEventListener("click", async () => {
+      if (!confirm("Clear all extras from the chore board? Stars already given or taken stay.")) return;
+      try {
+        await AdminAPI.clearExtraHits(state.token);
+        toast("Board extras cleared");
+        await refresh();
+      } catch (err) {
+        toast(apiErrorMessage(err) || "Couldn't clear extras");
+      }
     });
 
     $$("[data-apply-extra]").forEach((btn) => {
@@ -2585,6 +2737,15 @@
 
     const deployBtn = $("#deployServerBtn");
     fillDeployMeta();
+    $$("details[data-more-fold]").forEach((el) => {
+      el.addEventListener("toggle", () => {
+        if (!state.moreFolds) state.moreFolds = {};
+        state.moreFolds[el.dataset.moreFold] = el.open;
+        try {
+          sessionStorage.setItem(MORE_FOLD_KEY, JSON.stringify(state.moreFolds));
+        } catch {}
+      });
+    });
     if (state.filesToken) loadAdminFiles();
 
     $("#filesUnlockForm")?.addEventListener("submit", async (e) => {
@@ -2839,6 +3000,11 @@
 
   window.addEventListener("admin-unauthorized", () => {
     logoutSession("Session expired — log in again");
+  });
+
+  $("#receiptClose")?.addEventListener("click", closeReceipt);
+  $("#receiptOverlay")?.addEventListener("click", (e) => {
+    if (e.target.id === "receiptOverlay") closeReceipt();
   });
 
   $("#retryAdminBtn")?.addEventListener("click", () => enterAdmin());

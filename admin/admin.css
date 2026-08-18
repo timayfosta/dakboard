@@ -655,11 +655,57 @@ button, input, select, textarea {
   z-index: 35;
 }
 
-.install-banner {
-  background: var(--install-grad);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.85rem;
+.more-fold details {
+  margin: 0;
+}
+
+.more-fold summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 44px;
+}
+
+.more-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.more-fold summary h2 {
+  margin: 0;
+}
+
+.more-fold summary::after {
+  content: "▸";
+  color: var(--muted);
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.more-fold details[open] > summary::after {
+  content: "▾";
+}
+
+.more-fold-body {
+  padding-top: 0.55rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.more-subhead {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  margin: 0.85rem 0 0.15rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.more-subhead:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .actions {
@@ -1318,4 +1364,108 @@ button.item {
 .file-crumb {
   margin-bottom: 0.55rem;
   word-break: break-word;
+}
+
+.receipt-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.75rem;
+  padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 12px);
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.receipt-overlay.show {
+  display: flex;
+}
+
+.receipt-sheet {
+  width: min(420px, 100%);
+  max-height: min(78dvh, 640px);
+  overflow: auto;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0.9rem 0.9rem 1rem;
+  position: relative;
+}
+
+.receipt-close {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--ink);
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.receipt-head {
+  padding-right: 2.2rem;
+  margin-bottom: 0.65rem;
+}
+
+.receipt-head .shop-name {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.receipt-head .who {
+  font-family: var(--display);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.receipt-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.5rem 0;
+  border-top: 1px dashed var(--line);
+}
+
+.receipt-line-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.5rem;
+}
+
+.receipt-line-main .meta {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.receipt-line.good .amt {
+  color: #2fa36e;
+  font-weight: 800;
+}
+
+.receipt-line.bad .amt {
+  color: var(--danger-text, #e35d5d);
+  font-weight: 800;
+}
+
+.receipt-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 2px solid var(--line);
+  font-weight: 800;
 }
