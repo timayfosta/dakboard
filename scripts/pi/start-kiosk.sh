@@ -22,7 +22,7 @@ KIOSK_Q="kiosk=1"
 if [[ "${MOUSE}" == "1" || "${MOUSE}" == "true" ]]; then
   KIOSK_Q="${KIOSK_Q}&mouse=1"
 fi
-URL="${FAMILY_BOARD_URL:-http://127.0.0.1:${PORT}/screens/calendar.html?${KIOSK_Q}}"
+URL="${FAMILY_BOARD_URL:-http://127.0.0.1:${PORT}/screens/kiosk.html?${KIOSK_Q}}"
 
 export DISPLAY="${DISPLAY:-:0}"
 export XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"

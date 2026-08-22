@@ -1948,8 +1948,8 @@
         `
         <p class="muted">Open these on the Pi / TV kiosk. Use mouse links on non-touch monitors.</p>
         <div class="actions link-grid">
-          <a class="btn secondary" href="/screens/calendar.html?kiosk=1">Kiosk</a>
-          <a class="btn secondary" href="/screens/calendar.html?kiosk=1&mouse=1">Kiosk + mouse</a>
+          <a class="btn secondary" href="/screens/kiosk.html?kiosk=1">Kiosk</a>
+          <a class="btn secondary" href="/screens/kiosk.html?kiosk=1&mouse=1">Kiosk + mouse</a>
           <a class="btn secondary" href="/screens/chores.html?kiosk=1">Chores</a>
           <a class="btn secondary" href="/screens/rewards.html?kiosk=1">Rewards</a>
         </div>`
@@ -3068,7 +3068,7 @@
   }
 
   function closeKioskAdmin() {
-    let dest = "/screens/calendar.html?kiosk=1";
+    let dest = "/screens/kiosk.html?kiosk=1";
     try {
       dest = sessionStorage.getItem("fb-kiosk-return") || dest;
       sessionStorage.removeItem("fb-kiosk-return");

@@ -69,7 +69,17 @@
     return mins >= start || mins < end;
   }
 
+  function inHiddenKioskFrame() {
+    if (!new URLSearchParams(location.search).has("frame")) return false;
+    try {
+      return !window.frameElement?.classList.contains("on");
+    } catch {
+      return document.visibilityState !== "visible";
+    }
+  }
+
   function shouldShow(now) {
+    if (inHiddenKioskFrame()) return false;
     if (!config.enabled) return false;
     if (now.getTime() < dismissedUntil) return false;
     if (!photos.length) return false;
@@ -278,9 +288,17 @@
     document.addEventListener("kiosk-interaction", bumpInteraction);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
+        lastInteraction = Date.now();
         refreshSettings();
         apply();
       }
+    });
+    window.addEventListener("message", (e) => {
+      if (e.origin !== location.origin) return;
+      if (e.data?.type !== "fb-kiosk-shown") return;
+      lastInteraction = Date.now();
+      refreshSettings();
+      apply();
     });
   }
 

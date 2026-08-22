@@ -3,6 +3,7 @@
 (function () {
   const params = new URLSearchParams(location.search);
   if (!params.has("kiosk")) return;
+  const inFrame = params.has("frame") && window.parent !== window;
 
   window.addEventListener(
     "keydown",
@@ -150,6 +151,10 @@
   function goToId(id) {
     const target = allScreens.find((s) => s.id === id);
     if (!target || target.id === currentScreen.id) return;
+    if (inFrame) {
+      parent.postMessage({ type: "fb-kiosk-go", id: target.id }, location.origin);
+      return;
+    }
     const q = mouseMode ? "&mouse=1" : "";
     location.href = `${target.path}?kiosk=1${q}`;
   }
@@ -178,6 +183,7 @@
   }
 
   function scheduleRotation() {
+    if (inFrame) return;
     clearTimeout(rotateTimer);
     const queue = rotationQueue();
     if (queue.length < 2) return;
@@ -202,10 +208,18 @@
 
   function bumpPause() {
     pauseUntil = Date.now() + pauseMs;
+    if (inFrame) {
+      parent.postMessage({ type: "fb-kiosk-pause" }, location.origin);
+      return;
+    }
     scheduleRotation();
   }
 
   function openAdmin() {
+    if (inFrame) {
+      parent.postMessage({ type: "fb-kiosk-admin" }, location.origin);
+      return;
+    }
     const returnTo = `${location.pathname}${location.search}`;
     try {
       sessionStorage.setItem("fb-kiosk-return", returnTo);
@@ -255,6 +269,10 @@
   function applyRotationSettings() {
     pauseMs = Math.max(0, Number(rotationSettings?.pauseOnTouchSeconds ?? 120) * 1000);
     renderNav();
+    if (inFrame) {
+      parent.postMessage({ type: "fb-kiosk-rotation", rotation: rotationSettings }, location.origin);
+      return;
+    }
     scheduleRotation();
   }
 
@@ -429,7 +447,19 @@
     applyRotationSettings();
   });
 
+  function prefetchOtherScreens() {
+    if (inFrame || !document.head) return;
+    allScreens.forEach((s) => {
+      if (s.id === currentScreen.id) return;
+      const link = document.createElement("link");
+      link.rel = "prefetch";
+      link.href = `${s.path}?kiosk=1`;
+      document.head.appendChild(link);
+    });
+  }
+
   rotationSettings = defaultRotationSettings();
   applyRotationSettings();
   loadRotationSettings();
+  setTimeout(prefetchOtherScreens, 800);
 })();

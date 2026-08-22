@@ -3,7 +3,22 @@
   const POLL_MS = 2000;
   let lastRevision = -1;
 
+  function isActiveDisplay() {
+    if (document.visibilityState !== "visible") return false;
+    if (new URLSearchParams(location.search).has("frame")) {
+      try {
+        if (window.frameElement && !window.frameElement.classList.contains("on")) {
+          return false;
+        }
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
   async function sync() {
+    if (!isActiveDisplay()) return;
     try {
       const res = await fetch("/api/family/revision", { cache: "no-store" });
       if (!res.ok) return;
@@ -39,6 +54,10 @@
     setInterval(sync, POLL_MS);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") sync();
+    });
+    window.addEventListener("message", (e) => {
+      if (e.origin !== location.origin) return;
+      if (e.data?.type === "fb-kiosk-shown") sync();
     });
   }
 

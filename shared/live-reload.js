@@ -69,6 +69,7 @@
   function start() {
     if (timer) return;
     if (halted()) return;
+    if (new URLSearchParams(location.search).has("frame")) return;
     const kiosk =
       document.body.classList.contains("kiosk") ||
       new URLSearchParams(location.search).has("kiosk");

@@ -846,14 +846,19 @@ class Handler(SimpleHTTPRequestHandler):
             self.path = f"/admin{path}{query}"
 
     def end_headers(self):
-        if self.path.startswith("/api/"):
+        path = urllib.parse.urlparse(self.path).path
+        if path.startswith("/api/"):
             self.send_header("Cache-Control", "no-store")
-        elif (
-            self.path.startswith("/admin/")
-            or self.path.startswith("/phone/")
-            or self.path.startswith("/screens/")
-            or self.path.startswith("/shared/")
+        elif path.endswith(
+            (".woff2", ".woff", ".ttf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico")
         ):
+            self.send_header("Cache-Control", "public, max-age=604800")
+        elif path.startswith("/shared/") or path.startswith("/screens/"):
+            if path.endswith(".html"):
+                self.send_header("Cache-Control", "no-cache")
+            else:
+                self.send_header("Cache-Control", "public, max-age=300")
+        elif path.startswith("/admin/") or path.startswith("/phone/"):
             self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 

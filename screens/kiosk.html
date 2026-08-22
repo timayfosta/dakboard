@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="night">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Family Board</title>
+  <script src="../shared/config.js"></script>
+  <script src="../shared/kiosk-theme.js"></script>
+  <link rel="stylesheet" href="../shared/fonts.css" />
+  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="preload" href="../shared/fonts/Baloo2-800.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="../shared/fonts/Nunito-700.woff2" as="font" type="font/woff2" crossorigin />
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg0, #0a0a0c);
+    }
+
+    #kioskShell {
+      position: fixed;
+      inset: 0;
+    }
+
+    #kioskShell iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: transparent;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    #kioskShell iframe.on {
+      visibility: visible;
+      pointer-events: auto;
+    }
+  </style>
+</head>
+<body class="kiosk">
+  <div id="kioskShell"></div>
+  <script src="../shared/family-api.js"></script>
+  <script src="../shared/screens.js"></script>
+  <script src="../shared/live-reload.js"></script>
+  <script src="../shared/kiosk-shell.js"></script>
+</body>
+</html>

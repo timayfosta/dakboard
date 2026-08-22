@@ -6,6 +6,7 @@
   gap: 0.45rem 0.5rem;
   flex-shrink: 0;
   min-height: 0;
+  overflow: visible;
   container-type: inline-size;
   --hero-size: clamp(5.6rem, 23cqi, 9.2rem);
 }
@@ -24,7 +25,8 @@
   justify-content: center;
   padding: 0.35rem 0.45rem 0.3rem;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
+  z-index: 2;
   container-type: inline-size;
 }
 
@@ -45,11 +47,16 @@
   line-height: 1;
   margin-top: 0.2rem;
   white-space: nowrap;
+  width: max-content;
+  position: relative;
+  z-index: 3;
 }
 
 .weather-strip {
   min-width: 0;
   width: 100%;
+  position: relative;
+  z-index: 1;
   overflow: hidden;
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
