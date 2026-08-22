@@ -474,14 +474,7 @@ button, input, select, textarea {
 }
 
 .emoji-opt.none {
-  width: auto;
-  min-width: 3.4rem;
-  padding: 0 0.55rem;
-  font-family: inherit;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  filter: none;
 }
 
 .emoji-opt.on {

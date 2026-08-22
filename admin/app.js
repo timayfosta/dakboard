@@ -372,7 +372,7 @@
         : selected
       : selected || emojis[0] || "⭐";
     const noneBtn = allowNone
-      ? `<button type="button" class="emoji-opt none${pick === ICON_NONE ? " on" : ""}" data-emoji="${ICON_NONE}">None</button>`
+      ? `<button type="button" class="emoji-opt none${pick === ICON_NONE ? " on" : ""}" data-emoji="${ICON_NONE}" aria-label="None">🚫</button>`
       : "";
     const sizeClass = opts.size === "lg" ? " emoji-picker-lg" : "";
     return `
