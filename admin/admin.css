@@ -491,6 +491,17 @@ button, input, select, textarea {
   filter: saturate(0.92) brightness(0.96);
 }
 
+.emoji-picker-lg {
+  gap: 0.4rem;
+}
+
+.emoji-picker-lg .emoji-opt {
+  width: 3.05rem;
+  height: 3.05rem;
+  font-size: 1.55rem;
+  border-radius: 12px;
+}
+
 .color-picker {
   display: flex;
   flex-wrap: wrap;

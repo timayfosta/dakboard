@@ -303,9 +303,24 @@
   ];
 
   const CHORE_EMOJIS = [
-    "✅", "🛏️", "🍽️", "🧸", "📚", "🗑️", "🐾", "🌱", "👕", "👟", "📖", "🍴",
-    "🧹", "🪥", "🚿", "🧺", "🪴", "📦", "🧼", "🚗", "🍳", "🎒", "🧴", "🛁",
-    "🧽", "💡", "🔑", "🏠", "🍎", "🥛",
+    // sleep / morning
+    "🛏️", "🛌", "😴", "☀️", "🌙", "⏰",
+    // clothes
+    "👕", "👚", "👗", "👖", "🩳", "🧦", "👟", "👞", "🧥", "🧢", "🧤", "🧣", "👜",
+    // bathroom
+    "🪥", "🦷", "🚿", "🛁", "🧻", "🚽", "🧼", "🧴", "💇",
+    // meals
+    "🍽️", "🍴", "🥄", "🥣", "🥛", "🧃", "🍎", "🍌", "🍇", "🥕", "🍞", "🧀", "🥪", "🍪", "🍳", "🍕",
+    // tidy / clean
+    "🧹", "🧽", "🧺", "🪣", "🗑️", "🧸", "🧩", "🚗", "🪀", "🎈", "🎲",
+    // school / bags
+    "🎒", "🚌", "📚", "✏️", "🖍️", "🎨",
+    // pets / plants / outside
+    "🐶", "🐱", "🐾", "🦴", "🐟", "🐦", "🌱", "🪴", "🌸", "🌳", "🚲",
+    // play / practice
+    "⚽", "🏀", "🎹", "🎵",
+    // home helpers
+    "🚪", "💡", "🪑", "🍼",
   ];
 
   const EXTRA_EMOJIS = [
@@ -359,8 +374,9 @@
     const noneBtn = allowNone
       ? `<button type="button" class="emoji-opt none${pick === ICON_NONE ? " on" : ""}" data-emoji="${ICON_NONE}">None</button>`
       : "";
+    const sizeClass = opts.size === "lg" ? " emoji-picker-lg" : "";
     return `
-      <div class="emoji-picker" data-emoji-field="${fieldName}">
+      <div class="emoji-picker${sizeClass}" data-emoji-field="${fieldName}">
         ${noneBtn}
         ${emojis
           .map(
@@ -1047,8 +1063,9 @@
           <input type="hidden" name="id" value="" />
           <div class="field"><label>Title</label><input type="text" inputmode="text" name="title" required placeholder="Make bed" /></div>
           <div class="field">
-            <label>Emoji (optional)</label>
-            ${renderEmojiPicker("icon", CHORE_EMOJIS, ICON_NONE, { allowNone: true })}
+            <label>Picture</label>
+            ${renderEmojiPicker("icon", CHORE_EMOJIS, ICON_NONE, { allowNone: true, size: "lg" })}
+            <p class="field-hint">Kids who cannot read tap the picture. Pick something they will recognize.</p>
           </div>
           <div class="field"><label>Stars</label><input name="stars" type="number" min="0" max="99" value="${escAttr(lastStars)}" /></div>
           <div class="field"><label>Hint (optional)</label><input type="text" inputmode="text" name="hint" placeholder="Before school — pull covers neat" /></div>
