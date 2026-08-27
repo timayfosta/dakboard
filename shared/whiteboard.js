@@ -404,6 +404,7 @@
 
   async function pollRemote() {
     if (drawing || !window.FamilyAPI?.getWhiteboard) return;
+    if (window.DisplayActive && !window.DisplayActive.isActive()) return;
     try {
       const data = await FamilyAPI.getWhiteboard();
       const remoteAt = data.updatedAt || 0;
@@ -648,6 +649,10 @@
     pollTimer = setInterval(pollRemote, 4000);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") pollRemote();
+    });
+    window.addEventListener("message", (e) => {
+      if (e.origin !== location.origin) return;
+      if (e.data?.type === "fb-kiosk-shown") pollRemote();
     });
     document.addEventListener("kiosk-theme-change", applyThemeColors);
     applyThemeColors();

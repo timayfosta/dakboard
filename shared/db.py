@@ -15,6 +15,8 @@ from typing import Any, Callable
 ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = ROOT / "data" / "family.json"
 _lock = threading.Lock()
+_cache_state: dict[str, Any] | None = None
+_cache_mtime: float = 0.0
 
 
 def _id(prefix: str = "id") -> str:
@@ -150,17 +152,25 @@ def default_state() -> dict[str, Any]:
 
 
 def _load_unlocked() -> dict[str, Any]:
+    global _cache_state, _cache_mtime
     DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
     if not DATA_PATH.exists():
         state = default_state()
         DATA_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        _cache_state = deepcopy(state)
+        _cache_mtime = DATA_PATH.stat().st_mtime
         return deepcopy(state)
     try:
+        mtime = DATA_PATH.stat().st_mtime
+        if _cache_state is not None and mtime == _cache_mtime:
+            return deepcopy(_cache_state)
         raw = DATA_PATH.read_text(encoding="utf-8")
         data = json.loads(raw)
         if not isinstance(data, dict):
             raise ValueError("family.json root must be an object")
-        return data
+        _cache_state = data
+        _cache_mtime = mtime
+        return deepcopy(data)
     except (json.JSONDecodeError, ValueError, OSError) as exc:
         # Keep a backup and reseeds so the server can still boot on Pi
         backup = DATA_PATH.with_suffix(f".bad-{int(time.time())}.json")
@@ -185,11 +195,14 @@ def bump_revision(state: dict[str, Any]) -> None:
 
 
 def _save_unlocked(state: dict[str, Any]) -> dict[str, Any]:
+    global _cache_state, _cache_mtime
     bump_revision(state)
     DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = DATA_PATH.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
     tmp.replace(DATA_PATH)
+    _cache_state = deepcopy(state)
+    _cache_mtime = DATA_PATH.stat().st_mtime
     return deepcopy(state)
 
 
@@ -676,18 +689,18 @@ def merged_settings(state: dict[str, Any]) -> dict[str, Any]:
     return settings
 
 
-def public_state(state: dict[str, Any] | None = None) -> dict[str, Any]:
+def public_state(state: dict[str, Any] | None = None, scope: str | None = None) -> dict[str, Any]:
     if state is None:
         with _lock:
             state = _load_unlocked()
             if prepare_state(state):
                 _save_unlocked(state)
-            return _public_view(state)
+            return _public_view(state, scope)
     prepare_state(state)
-    return _public_view(state)
+    return _public_view(state, scope)
 
 
-def _public_view(state: dict[str, Any]) -> dict[str, Any]:
+def _public_view(state: dict[str, Any], scope: str | None = None) -> dict[str, Any]:
     lists = state.get("lists") or {}
     today = today_key()
     chores = []
@@ -698,7 +711,7 @@ def _public_view(state: dict[str, Any]) -> dict[str, Any]:
         if row.get("lateStars") in (None, ""):
             row.pop("lateStars", None)
         chores.append(row)
-    return {
+    view = {
         "version": state.get("version", 1),
         "revision": get_revision(state),
         "kids": state.get("kids", []),
@@ -717,3 +730,40 @@ def _public_view(state: dict[str, Any]) -> dict[str, Any]:
         "screensaverPhotos": state.get("screensaverPhotos") or [],
         "today": today,
     }
+    if scope == "chores":
+        for key in (
+            "starLog",
+            "whiteboard",
+            "screensaverPhotos",
+            "rewards",
+            "redemptions",
+            "lists",
+        ):
+            view.pop(key, None)
+    elif scope == "rewards":
+        for key in (
+            "whiteboard",
+            "screensaverPhotos",
+            "chores",
+            "consequences",
+            "consequenceHits",
+            "bonusHits",
+            "completions",
+            "lists",
+        ):
+            view.pop(key, None)
+    elif scope == "calendar":
+        for key in (
+            "starLog",
+            "whiteboard",
+            "screensaverPhotos",
+            "chores",
+            "consequences",
+            "consequenceHits",
+            "bonusHits",
+            "completions",
+            "rewards",
+            "redemptions",
+        ):
+            view.pop(key, None)
+    return view

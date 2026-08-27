@@ -672,6 +672,7 @@
     };
 
     const IS_KIOSK = new URLSearchParams(location.search).has("kiosk");
+    const IS_KIOSK_FRAME = new URLSearchParams(location.search).has("frame");
     if (IS_KIOSK) {
       document.body.classList.add("kiosk");
     }
@@ -1157,19 +1158,9 @@
     async function loadLists() {
       const fetchId = ++listsFetchId;
       try {
-        const data = await FamilyAPI.getState();
+        const data = await FamilyAPI.getState(IS_KIOSK_FRAME ? { scope: "calendar" } : undefined);
         if (fetchId !== listsFetchId) return;
-        agendaKids = data.kids?.length ? data.kids : CFG.kids || [];
-        const nextGrocery = data.lists?.grocery || [];
-        const nextReminders = data.lists?.reminders || [];
-        const fp = JSON.stringify({ grocery: nextGrocery, reminders: nextReminders });
-        if (fp === listsFp) return;
-        listsFp = fp;
-        listState.grocery.items = nextGrocery;
-        listState.reminders.items = nextReminders;
-        renderChecklist("grocery");
-        renderChecklist("reminders");
-        renderAgenda();
+        applyListState(data);
       } catch (err) {
         if (fetchId !== listsFetchId) return;
         console.warn("Family API lists unavailable.", err);
@@ -1180,6 +1171,20 @@
       }
     }
 
+    function applyListState(data) {
+      agendaKids = data.kids?.length ? data.kids : CFG.kids || [];
+      const nextGrocery = data.lists?.grocery || [];
+      const nextReminders = data.lists?.reminders || [];
+      const fp = JSON.stringify({ grocery: nextGrocery, reminders: nextReminders });
+      if (fp === listsFp) return;
+      listsFp = fp;
+      listState.grocery.items = nextGrocery;
+      listState.reminders.items = nextReminders;
+      renderChecklist("grocery");
+      renderChecklist("reminders");
+      renderAgenda();
+    }
+
     wireListAddButtons();
     wireChecklists();
     window.TouchInput?.attach?.();
@@ -1188,8 +1193,7 @@
       const data = e.detail;
       if (!data?.lists) return;
       listsFetchId += 1;
-      agendaKids = data.kids?.length ? data.kids : agendaKids;
-      syncListStateFromApi(data);
+      applyListState(data);
     });
 
     ScreenChrome.init();
@@ -1200,7 +1204,9 @@
     // Realtime-ish refresh cadence (Pi kiosk friendly)
     setInterval(loadAlerts, 3 * 60 * 1000);
     setInterval(loadCalendar, 60 * 1000);
-    setInterval(loadLists, 2500);
+    if (!IS_KIOSK_FRAME) {
+      setInterval(loadLists, 2500);
+    }
     // Month highlight only needs day-rollover checks
     setInterval(() => {
       const day = new Date().getDate();
@@ -1219,7 +1225,7 @@
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
         loadCalendar();
-        loadLists();
+        if (!IS_KIOSK_FRAME) loadLists();
       }
     });
   </script>

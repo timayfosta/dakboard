@@ -448,6 +448,7 @@
   <script src="../shared/screens.js"></script>
   <script src="../shared/kiosk-nav.js?v=3"></script>
   <script>
+    const IS_KIOSK_FRAME = new URLSearchParams(location.search).has("frame");
     const state = { data: null, kidId: null, receiptKidId: null, fp: "" };
 
     if (new URLSearchParams(location.search).has("kiosk")) {
@@ -701,21 +702,25 @@
       if (state.receiptKidId) fillReceipt(state.receiptKidId);
     }
 
+    function applyState(data) {
+      const fp = JSON.stringify({
+        kids: data.kids,
+        rewards: data.rewards,
+        balances: data.balances,
+        redemptions: data.redemptions,
+        starLog: data.starLog,
+        kidId: state.kidId,
+      });
+      if (fp === state.fp) return;
+      state.fp = fp;
+      state.data = data;
+      renderAll();
+    }
+
     async function load() {
       try {
-        const data = await FamilyAPI.getState();
-        const fp = JSON.stringify({
-          kids: data.kids,
-          rewards: data.rewards,
-          balances: data.balances,
-          redemptions: data.redemptions,
-          starLog: data.starLog,
-          kidId: state.kidId,
-        });
-        if (fp === state.fp) return;
-        state.fp = fp;
-        state.data = data;
-        renderAll();
+        const data = await FamilyAPI.getState(IS_KIOSK_FRAME ? { scope: "rewards" } : undefined);
+        applyState(data);
       } catch (err) {
         if (!state.data) {
           document.getElementById("rewardGrid").innerHTML =
@@ -732,9 +737,14 @@
 
     ScreenChrome.init();
     load();
-    setInterval(load, 2000);
+    window.addEventListener("family-state-update", (e) => {
+      if (IS_KIOSK_FRAME && e.detail) applyState(e.detail);
+    });
+    if (!IS_KIOSK_FRAME) {
+      setInterval(load, 2000);
+    }
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") load();
+      if (document.visibilityState === "visible" && !IS_KIOSK_FRAME) load();
     });
   </script>
 </body>

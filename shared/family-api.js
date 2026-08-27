@@ -1,7 +1,10 @@
 /* Kiosk/display client for Family Board API */
 (function () {
-  async function getState() {
-    const res = await fetch("/api/family/state", { cache: "no-store" });
+  async function getState(opts) {
+    const url = new URL("/api/family/state", location.origin);
+    const scope = typeof opts === "string" ? opts : opts?.scope;
+    if (scope && scope !== "full") url.searchParams.set("scope", scope);
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`Family state HTTP ${res.status}`);
     return res.json();
   }

@@ -17,6 +17,14 @@
     return true;
   }
 
+  function detectScope() {
+    const path = location.pathname;
+    if (path.includes("chores")) return "chores";
+    if (path.includes("rewards")) return "rewards";
+    if (path.includes("calendar")) return "calendar";
+    return "full";
+  }
+
   async function sync() {
     if (!isActiveDisplay()) return;
     try {
@@ -27,7 +35,8 @@
       lastRevision = revision;
 
       if (!window.FamilyAPI?.getState) return;
-      const data = await FamilyAPI.getState();
+      const scope = detectScope();
+      const data = await FamilyAPI.getState(scope === "full" ? undefined : { scope });
       window.dispatchEvent(new CustomEvent("family-state-update", { detail: data }));
       window.dispatchEvent(
         new CustomEvent("family-settings-update", { detail: data.settings || {} })
@@ -60,6 +69,8 @@
       if (e.data?.type === "fb-kiosk-shown") sync();
     });
   }
+
+  window.DisplayActive = { isActive: isActiveDisplay };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

@@ -889,6 +889,7 @@
   <script src="../shared/screens.js"></script>
   <script src="../shared/kiosk-nav.js?v=3"></script>
   <script>
+    const IS_KIOSK_FRAME = new URLSearchParams(location.search).has("frame");
     const CHEERS = ["Nice!", "Star power!", "Crushed it!", "Legend!", "Boom!", "Quest done!"];
 
     const PERIOD_DUE = { morning: "12:00", afternoon: "17:00", evening: "21:00" };
@@ -1570,34 +1571,38 @@
       if (!state.viewAll) checkReminders();
     }
 
+    function applyState(data, forceRender) {
+      const nextFp = fingerprint({
+        kids: data.kids,
+        chores: data.chores,
+        balances: data.balances,
+        completions: data.completions,
+        consequenceHits: data.consequenceHits,
+        bonusHits: data.bonusHits,
+        today: data.today,
+      });
+      if (!forceRender && nextFp === state.fingerprints.data) return;
+      state.fingerprints.data = nextFp;
+      if (state.data?.today && state.data.today !== data.today) {
+        Object.keys(localStorage).forEach((k) => {
+          if (k.startsWith("fb-chore-win:") || k.startsWith("fb-chore-remind:")) {
+            if (!k.includes(data.today)) localStorage.removeItem(k);
+          }
+        });
+      }
+      state.data = data;
+      if (forceRender) {
+        state.fingerprints.kids = "";
+        state.fingerprints.chores = "";
+        state.fingerprints.all = "";
+      }
+      renderAll(forceRender);
+    }
+
     async function load(forceRender) {
       try {
-        const data = await FamilyAPI.getState();
-        const nextFp = fingerprint({
-          kids: data.kids,
-          chores: data.chores,
-          balances: data.balances,
-          completions: data.completions,
-          consequenceHits: data.consequenceHits,
-          bonusHits: data.bonusHits,
-          today: data.today,
-        });
-        if (!forceRender && nextFp === state.fingerprints.data) return;
-        state.fingerprints.data = nextFp;
-        if (state.data?.today && state.data.today !== data.today) {
-          Object.keys(localStorage).forEach((k) => {
-            if (k.startsWith("fb-chore-win:") || k.startsWith("fb-chore-remind:")) {
-              if (!k.includes(data.today)) localStorage.removeItem(k);
-            }
-          });
-        }
-        state.data = data;
-        if (forceRender) {
-          state.fingerprints.kids = "";
-          state.fingerprints.chores = "";
-          state.fingerprints.all = "";
-        }
-        renderAll(forceRender);
+        const data = await FamilyAPI.getState(IS_KIOSK_FRAME ? { scope: "chores" } : undefined);
+        applyState(data, forceRender);
       } catch (err) {
         if (!state.data) {
           document.getElementById("activeChores").innerHTML =
@@ -1626,6 +1631,9 @@
     ScreenChrome.init();
     updateViewToggle();
     load(true);
+    window.addEventListener("family-state-update", (e) => {
+      if (IS_KIOSK_FRAME && e.detail) applyState(e.detail, false);
+    });
     let profileFitTimer = 0;
     window.addEventListener("resize", () => {
       clearTimeout(profileFitTimer);
@@ -1644,10 +1652,12 @@
       state.fingerprints.all = "";
       if (state.data) renderAll(true);
     });
-    setInterval(() => load(false), 2000);
+    if (!IS_KIOSK_FRAME) {
+      setInterval(() => load(false), 2000);
+    }
     setInterval(() => checkReminders(), 60000);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") load(false);
+      if (document.visibilityState === "visible" && !IS_KIOSK_FRAME) load(false);
     });
   </script>
 </body>

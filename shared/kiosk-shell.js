@@ -26,7 +26,6 @@
   let pauseMs = defaultPauseMs;
   let pauseUntil = 0;
   let rotateTimer = null;
-  let preloadStarted = false;
 
   if (mouseMode) {
     document.body.classList.add("kiosk-mouse");
@@ -56,6 +55,13 @@
     return q.length ? q : allScreens.slice();
   }
 
+  function nextRotationId(fromId = currentId) {
+    const queue = rotationQueue();
+    if (queue.length < 2) return null;
+    const ri = queue.findIndex((s) => s.id === fromId);
+    return queue[ri < 0 ? 0 : (ri + 1) % queue.length].id;
+  }
+
   function frameUrl(id) {
     const screen = allScreens.find((s) => s.id === id);
     const q = new URLSearchParams();
@@ -76,6 +82,25 @@
     return iframe;
   }
 
+  /** Keep only the visible screen + next in rotation — saves Pi RAM */
+  function trimFrames() {
+    const nextId = nextRotationId();
+    const keep = new Set([currentId]);
+    if (nextId) keep.add(nextId);
+    frames.forEach((el, key) => {
+      if (!keep.has(key)) {
+        el.remove();
+        frames.delete(key);
+      }
+    });
+  }
+
+  function preloadNext() {
+    const nextId = nextRotationId();
+    if (!nextId || nextId === currentId) return;
+    ensureFrame(nextId);
+  }
+
   function show(id) {
     if (!allScreens.some((s) => s.id === id)) id = allScreens[0].id;
     currentId = id;
@@ -83,19 +108,12 @@
     frames.forEach((el, key) => {
       el.classList.toggle("on", key === id);
     });
+    preloadNext();
+    trimFrames();
     try {
       frames.get(id)?.contentWindow?.postMessage({ type: "fb-kiosk-shown" }, location.origin);
     } catch {}
     scheduleRotation();
-  }
-
-  function preloadRest() {
-    if (preloadStarted) return;
-    preloadStarted = true;
-    allScreens.forEach((s, i) => {
-      if (s.id === currentId) return;
-      setTimeout(() => ensureFrame(s.id), 250 + i * 200);
-    });
   }
 
   function goToNextRotation() {
@@ -144,6 +162,8 @@
   function applyRotationSettings() {
     pauseMs = Math.max(0, Number(rotationSettings?.pauseOnTouchSeconds ?? 120) * 1000);
     scheduleRotation();
+    preloadNext();
+    trimFrames();
   }
 
   async function loadRotationSettings() {
@@ -191,10 +211,5 @@
 
   rotationSettings = defaultRotationSettings();
   show(startId);
-  const first = frames.get(currentId);
-  if (first) {
-    first.addEventListener("load", () => setTimeout(preloadRest, 200), { once: true });
-  }
-  setTimeout(preloadRest, 2500);
   loadRotationSettings();
 })();

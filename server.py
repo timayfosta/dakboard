@@ -945,7 +945,11 @@ class Handler(SimpleHTTPRequestHandler):
                 },
             )
         if path == "/api/family/state":
-            return send_json(self, db.public_state())
+            qs = urllib.parse.parse_qs(parsed.query)
+            scope = (qs.get("scope") or [None])[0]
+            if scope not in ("chores", "rewards", "calendar", "full"):
+                scope = None
+            return send_json(self, db.public_state(scope=scope))
         if path == "/api/family/revision":
             return send_json(self, {"revision": db.get_revision()})
         if path == "/api/family/kids":
