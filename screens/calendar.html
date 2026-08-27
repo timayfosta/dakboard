@@ -10,7 +10,6 @@
   <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="../shared/base.css" />
   <link rel="stylesheet" href="../shared/screen-chrome.css" />
-  <link rel="stylesheet" href="../shared/touch-input.css?v=4" />
   <style>
     .screen .panel {
       background: transparent;
@@ -649,8 +648,7 @@
 
   <script src="../shared/weather-icons.js"></script>
   <script src="../shared/screen-chrome.js"></script>
-  <script src="../shared/swipe-words.js"></script>
-  <script src="../shared/touch-input.js?v=4"></script>
+  <script src="../shared/touch-input-loader.js?v=4"></script>
   <script src="../shared/calendar-colors.js"></script>
   <script src="../shared/calendar.js"></script>
   <script src="../shared/family-api.js"></script>
@@ -1187,7 +1185,6 @@
 
     wireListAddButtons();
     wireChecklists();
-    window.TouchInput?.attach?.();
 
     window.addEventListener("family-state-update", (e) => {
       const data = e.detail;

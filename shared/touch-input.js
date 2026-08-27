@@ -648,5 +648,10 @@
     );
   }
 
-  window.TouchInput = { open, close, attach, markTextFields };
+  const api = { open, close, attach, markTextFields };
+  if (window.TouchInput?._install) {
+    window.TouchInput._install(api);
+  } else {
+    window.TouchInput = api;
+  }
 })();
