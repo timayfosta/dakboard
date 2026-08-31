@@ -2,6 +2,7 @@
 (function () {
   const POLL_MS = 2000;
   let lastRevision = -1;
+  let syncing = false;
 
   function isActiveDisplay() {
     if (document.visibilityState !== "visible") return false;
@@ -17,6 +18,12 @@
     return true;
   }
 
+  function whenActive(fn) {
+    return function (...args) {
+      if (isActiveDisplay()) return fn.apply(this, args);
+    };
+  }
+
   function detectScope() {
     const path = location.pathname;
     if (path.includes("chores")) return "chores";
@@ -26,7 +33,8 @@
   }
 
   async function sync() {
-    if (!isActiveDisplay()) return;
+    if (!isActiveDisplay() || syncing) return;
+    syncing = true;
     try {
       const res = await fetch("/api/family/revision", { cache: "no-store" });
       if (!res.ok) return;
@@ -43,6 +51,8 @@
       );
     } catch {
       /* offline */
+    } finally {
+      syncing = false;
     }
   }
 
@@ -70,7 +80,7 @@
     });
   }
 
-  window.DisplayActive = { isActive: isActiveDisplay };
+  window.DisplayActive = { isActive: isActiveDisplay, whenActive };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

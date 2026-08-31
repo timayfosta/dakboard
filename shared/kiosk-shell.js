@@ -82,17 +82,9 @@
     return iframe;
   }
 
-  /** Keep only the visible screen + next in rotation — saves Pi RAM */
+  /** Once loaded, keep iframes in memory — destroying them freezes Pi Chromium */
   function trimFrames() {
-    const nextId = nextRotationId();
-    const keep = new Set([currentId]);
-    if (nextId) keep.add(nextId);
-    frames.forEach((el, key) => {
-      if (!keep.has(key)) {
-        el.remove();
-        frames.delete(key);
-      }
-    });
+    /* intentionally disabled */
   }
 
   function preloadNext() {

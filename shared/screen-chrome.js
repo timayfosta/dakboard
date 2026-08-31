@@ -176,18 +176,28 @@
     mount();
     if (!document.getElementById("clock")) return;
     updateClock();
-    loadCachedWeather();
-    loadWeather();
+    const activeOnly = window.DisplayActive?.whenActive || ((fn) => fn);
+    if (window.DisplayActive?.isActive?.()) {
+      loadCachedWeather();
+      loadWeather();
+    }
     if (started) return;
     started = true;
-    setInterval(updateClock, 1000);
-    setInterval(loadWeather, POLL_MS);
-    window.addEventListener("online", loadWeather);
+    setInterval(activeOnly(updateClock), 1000);
+    setInterval(activeOnly(loadWeather), POLL_MS);
+    window.addEventListener("online", activeOnly(loadWeather));
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-        updateClock();
-        loadWeather();
-      }
+      if (!window.DisplayActive?.isActive?.()) return;
+      updateClock();
+      loadWeather();
+    });
+    window.addEventListener("message", (e) => {
+      if (e.origin !== location.origin) return;
+      if (e.data?.type !== "fb-kiosk-shown") return;
+      if (!window.DisplayActive?.isActive?.()) return;
+      updateClock();
+      loadCachedWeather();
+      loadWeather();
     });
   }
 

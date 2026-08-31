@@ -157,8 +157,7 @@ exec "$BROWSER" \
   --no-first-run \
   --no-default-browser-check \
   --password-store=basic \
-  --fast \
-  --fast-start \
+  --disable-dev-shm-usage \
   --disable-pinch \
   --overscroll-history-navigation=0 \
   --force-device-scale-factor=1

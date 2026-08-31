@@ -19,6 +19,7 @@ const API = {
   session: (token) => API.request("/api/auth/me", { token }),
   health: () => API.request("/api/health"),
   state: () => API.request("/api/family/state"),
+  lists: () => API.request("/api/family/lists"),
   saveKid: (token, item) => API.request("/api/family/kids", { method: "POST", token, body: item }),
   saveChore: (token, item) => API.request("/api/family/chores", { method: "POST", token, body: item }),
   saveConsequence: (token, item) =>

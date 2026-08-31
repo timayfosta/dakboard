@@ -17,6 +17,12 @@ DATA_PATH = ROOT / "data" / "family.json"
 _lock = threading.Lock()
 _cache_state: dict[str, Any] | None = None
 _cache_mtime: float = 0.0
+_cache_revision: int = 0
+
+
+def _sync_cache_revision(state: dict[str, Any]) -> None:
+    global _cache_revision
+    _cache_revision = int((state.get("meta") or {}).get("revision") or 0)
 
 
 def _id(prefix: str = "id") -> str:
@@ -159,6 +165,7 @@ def _load_unlocked() -> dict[str, Any]:
         DATA_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
         _cache_state = deepcopy(state)
         _cache_mtime = DATA_PATH.stat().st_mtime
+        _sync_cache_revision(_cache_state)
         return deepcopy(state)
     try:
         mtime = DATA_PATH.stat().st_mtime
@@ -170,6 +177,7 @@ def _load_unlocked() -> dict[str, Any]:
             raise ValueError("family.json root must be an object")
         _cache_state = data
         _cache_mtime = mtime
+        _sync_cache_revision(_cache_state)
         return deepcopy(data)
     except (json.JSONDecodeError, ValueError, OSError) as exc:
         # Keep a backup and reseeds so the server can still boot on Pi
@@ -180,6 +188,9 @@ def _load_unlocked() -> dict[str, Any]:
             backup = None
         state = default_state()
         DATA_PATH.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        _cache_state = deepcopy(state)
+        _cache_mtime = DATA_PATH.stat().st_mtime
+        _sync_cache_revision(_cache_state)
         print(
             f"[db] WARNING: could not read {DATA_PATH} ({exc}). "
             f"Re-seeded defaults"
@@ -203,6 +214,7 @@ def _save_unlocked(state: dict[str, Any]) -> dict[str, Any]:
     tmp.replace(DATA_PATH)
     _cache_state = deepcopy(state)
     _cache_mtime = DATA_PATH.stat().st_mtime
+    _sync_cache_revision(_cache_state)
     return deepcopy(state)
 
 
@@ -211,10 +223,25 @@ def load_db() -> dict[str, Any]:
         return _load_unlocked()
 
 
+def peek_revision() -> int:
+    with _lock:
+        if _cache_state is None:
+            _load_unlocked()
+        return _cache_revision
+
+
+def get_lists_snapshot() -> dict[str, Any]:
+    with _lock:
+        if _cache_state is None:
+            _load_unlocked()
+        lists = (_cache_state or {}).get("lists") or {}
+        return {"revision": _cache_revision, "lists": deepcopy(lists)}
+
+
 def get_revision(state: dict[str, Any] | None = None) -> int:
-    if state is None:
-        state = load_db()
-    return int((state.get("meta") or {}).get("revision") or 0)
+    if state is not None:
+        return int((state.get("meta") or {}).get("revision") or 0)
+    return peek_revision()
 
 
 def save_db(state: dict[str, Any]) -> dict[str, Any]:

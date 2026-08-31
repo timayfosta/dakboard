@@ -2,7 +2,7 @@
 (function () {
   const BOOT_KEY = "family-board-boot-id";
   const STOP_KEY = "family-board-stopped";
-  const POLL_MS = 2500;
+  const POLL_MS = 10000;
   let sawDown = false;
   let timer = null;
 

@@ -1655,7 +1655,10 @@
     if (!IS_KIOSK_FRAME) {
       setInterval(() => load(false), 2000);
     }
-    setInterval(() => checkReminders(), 60000);
+    setInterval(
+      (window.DisplayActive?.whenActive || ((fn) => fn))(checkReminders),
+      60000
+    );
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && !IS_KIOSK_FRAME) load(false);
     });

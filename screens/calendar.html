@@ -1198,9 +1198,10 @@
     loadCalendar();
     loadLists();
 
-    // Realtime-ish refresh cadence (Pi kiosk friendly)
-    setInterval(loadAlerts, 3 * 60 * 1000);
-    setInterval(loadCalendar, 60 * 1000);
+    // Realtime-ish refresh cadence (Pi kiosk friendly — active screen only)
+    const activeOnly = window.DisplayActive?.whenActive || ((fn) => fn);
+    setInterval(activeOnly(loadAlerts), 3 * 60 * 1000);
+    setInterval(activeOnly(loadCalendar), 60 * 1000);
     if (!IS_KIOSK_FRAME) {
       setInterval(loadLists, 2500);
     }
@@ -1220,10 +1221,9 @@
       loadAlerts();
     });
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-        loadCalendar();
-        if (!IS_KIOSK_FRAME) loadLists();
-      }
+      if (!window.DisplayActive?.isActive?.()) return;
+      loadCalendar();
+      if (!IS_KIOSK_FRAME) loadLists();
     });
   </script>
 </body>

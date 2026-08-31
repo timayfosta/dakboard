@@ -951,7 +951,9 @@ class Handler(SimpleHTTPRequestHandler):
                 scope = None
             return send_json(self, db.public_state(scope=scope))
         if path == "/api/family/revision":
-            return send_json(self, {"revision": db.get_revision()})
+            return send_json(self, {"revision": db.peek_revision()})
+        if path == "/api/family/lists":
+            return send_json(self, db.get_lists_snapshot())
         if path == "/api/family/kids":
             return send_json(self, {"items": db.load_db().get("kids", [])})
         if path == "/api/family/chores":

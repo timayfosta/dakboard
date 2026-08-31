@@ -269,15 +269,29 @@
     render();
   }
 
+  function applyListsFromPayload(lists) {
+    if (!lists) return;
+    if (!state.data) state.data = {};
+    state.data.lists = lists;
+    state.listsFp = JSON.stringify(lists);
+    if (state.tab === "lists") renderTab();
+  }
+
+  function applyListsFromResponse(res) {
+    if (res?.state?.lists) {
+      applyListsFromPayload(res.state.lists);
+      return true;
+    }
+    return false;
+  }
+
   async function pollLists() {
     if (!state.token) return;
     try {
-      const data = await AdminAPI.state();
+      const data = await AdminAPI.lists();
       const fp = JSON.stringify(data.lists || {});
       if (fp === state.listsFp) return;
-      state.listsFp = fp;
-      state.data = data;
-      if (state.tab === "lists") renderTab();
+      applyListsFromPayload(data.lists);
     } catch {
       /* server offline */
     }
@@ -286,7 +300,8 @@
   function syncListPolling() {
     clearInterval(listPollTimer);
     if (!state.token) return;
-    listPollTimer = setInterval(pollLists, 2500);
+    const ms = state.tab === "lists" ? 800 : 3000;
+    listPollTimer = setInterval(pollLists, ms);
   }
 
   function kidName(id) {
@@ -2451,9 +2466,9 @@
     $("[data-clear-completed]")?.addEventListener("click", async (e) => {
       const name = e.currentTarget.dataset.clearCompleted;
       try {
-        await AdminAPI.clearCompletedList(state.token, name);
+        const res = await AdminAPI.clearCompletedList(state.token, name);
         toast("Completed items cleared");
-        await refresh();
+        if (!applyListsFromResponse(res)) await refresh();
       } catch (err) {
         toast(apiErrorMessage(err));
       }
@@ -2467,11 +2482,11 @@
         try {
           const res = await AdminAPI.addListItem(name, text);
           form.reset();
-          await refresh();
+          if (!applyListsFromResponse(res)) await refresh();
           if (res.item && window.ListUndo) {
             ListUndo.offer(`Added "${text}"`, async () => {
               await AdminAPI.deleteListItem(state.token, name, res.item.id);
-              await refresh();
+              await pollLists();
             });
           } else {
             toast("Item added");
@@ -2484,19 +2499,41 @@
 
     $$("[data-list-toggle]").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        const name = btn.dataset.listToggle;
+        const itemId = btn.dataset.id;
+        const prevLists = JSON.parse(JSON.stringify(state.data?.lists || {}));
+        const prevFp = state.listsFp;
+        const items = prevLists[name] || [];
+        const item = items.find((row) => row.id === itemId);
+        if (item) {
+          if (item.done) {
+            item.done = false;
+            delete item.completedAt;
+          } else {
+            item.done = true;
+            item.completedAt = Date.now();
+          }
+          applyListsFromPayload(prevLists);
+        }
         try {
-          const name = btn.dataset.listToggle;
-          const res = await AdminAPI.toggleListItem(state.token, name, btn.dataset.id);
+          const res = await AdminAPI.toggleListItem(state.token, name, itemId);
           if (res.completed) state.listCompletedOpen = true;
-          await refresh();
+          if (!applyListsFromResponse(res)) {
+            state.listsFp = prevFp;
+            if (state.data) state.data.lists = prevLists;
+            if (state.tab === "lists") renderTab();
+          }
           if (res.item && window.ListUndo) {
             const label = res.completed ? `Completed "${res.item.text}"` : `Restored "${res.item.text}"`;
             ListUndo.offer(label, async () => {
               await AdminAPI.toggleListItem(state.token, name, res.item.id);
-              await refresh();
+              await pollLists();
             });
           }
         } catch (err) {
+          state.listsFp = prevFp;
+          if (state.data) state.data.lists = prevLists;
+          if (state.tab === "lists") renderTab();
           toast(apiErrorMessage(err));
         }
       });
@@ -3036,6 +3073,7 @@
     e.preventDefault();
     state.tab = normalizeTab(btn.dataset.tab);
     renderTab();
+    syncListPolling();
   });
 
   window.addEventListener("beforeinstallprompt", (e) => {

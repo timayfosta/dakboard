@@ -263,14 +263,17 @@
       return;
     }
     const isKiosk = document.body.classList.contains("kiosk") || new URLSearchParams(location.search).has("kiosk");
+    const activeOnly = window.DisplayActive?.whenActive || ((fn) => fn);
     ensureLayer();
-    refreshSettings();
-    refreshManifest(true);
+    if (window.DisplayActive?.isActive?.()) {
+      refreshSettings();
+      refreshManifest(true);
+    }
     document.addEventListener("family-settings-update", (e) => {
       applySettings(e.detail?.screensaver);
     });
-    setInterval(() => refreshManifest(false), 300000);
-    setInterval(() => apply(), 15000);
+    setInterval(activeOnly(() => refreshManifest(false)), 300000);
+    setInterval(activeOnly(apply), 15000);
 
     ["click", "touchstart", "keydown"].forEach((evt) => {
       document.addEventListener(evt, bumpInteraction, { passive: true, capture: true });
@@ -287,17 +290,14 @@
     }
     document.addEventListener("kiosk-interaction", bumpInteraction);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-        lastInteraction = Date.now();
-        refreshSettings();
-        apply();
-      }
+      if (!window.DisplayActive?.isActive?.()) return;
+      lastInteraction = Date.now();
+      apply();
     });
     window.addEventListener("message", (e) => {
       if (e.origin !== location.origin) return;
       if (e.data?.type !== "fb-kiosk-shown") return;
       lastInteraction = Date.now();
-      refreshSettings();
       apply();
     });
   }

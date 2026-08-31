@@ -105,9 +105,11 @@
     ensureLayer();
     apply();
     scheduleBoundaryCheck();
-    refreshSettings();
-    setInterval(apply, 15000);
-    setInterval(refreshSettings, 30000);
+    const activeOnly = window.DisplayActive?.whenActive || ((fn) => fn);
+    if (window.DisplayActive?.isActive?.()) {
+      refreshSettings();
+    }
+    setInterval(activeOnly(apply), 15000);
     document.addEventListener("family-settings-update", (e) => {
       applySettings(e.detail?.nightMode);
     });
@@ -115,7 +117,7 @@
       applySettings(e.detail?.settings?.nightMode);
     });
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") apply();
+      if (window.DisplayActive?.isActive?.()) apply();
     });
   }
 
