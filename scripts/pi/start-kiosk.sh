@@ -158,6 +158,7 @@ exec "$BROWSER" \
   --no-default-browser-check \
   --password-store=basic \
   --disable-dev-shm-usage \
+  --renderer-process-limit=2 \
   --disable-pinch \
   --overscroll-history-navigation=0 \
   --force-device-scale-factor=1

@@ -448,7 +448,7 @@
   <script src="../shared/screens.js"></script>
   <script src="../shared/kiosk-nav.js?v=3"></script>
   <script>
-    const IS_KIOSK_FRAME = new URLSearchParams(location.search).has("frame");
+    const IS_KIOSK = new URLSearchParams(location.search).has("kiosk");
     const state = { data: null, kidId: null, receiptKidId: null, fp: "" };
 
     if (new URLSearchParams(location.search).has("kiosk")) {
@@ -719,7 +719,7 @@
 
     async function load() {
       try {
-        const data = await FamilyAPI.getState(IS_KIOSK_FRAME ? { scope: "rewards" } : undefined);
+        const data = await FamilyAPI.getState(IS_KIOSK ? { scope: "rewards" } : undefined);
         applyState(data);
       } catch (err) {
         if (!state.data) {
@@ -738,13 +738,13 @@
     ScreenChrome.init();
     load();
     window.addEventListener("family-state-update", (e) => {
-      if (IS_KIOSK_FRAME && e.detail) applyState(e.detail);
+      if (IS_KIOSK && e.detail) applyState(e.detail);
     });
-    if (!IS_KIOSK_FRAME) {
+    if (!IS_KIOSK) {
       setInterval(load, 2000);
     }
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && !IS_KIOSK_FRAME) load();
+      if (document.visibilityState === "visible" && !IS_KIOSK) load();
     });
   </script>
 </body>

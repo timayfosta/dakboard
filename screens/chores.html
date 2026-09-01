@@ -889,7 +889,7 @@
   <script src="../shared/screens.js"></script>
   <script src="../shared/kiosk-nav.js?v=3"></script>
   <script>
-    const IS_KIOSK_FRAME = new URLSearchParams(location.search).has("frame");
+    const IS_KIOSK = new URLSearchParams(location.search).has("kiosk");
     const CHEERS = ["Nice!", "Star power!", "Crushed it!", "Legend!", "Boom!", "Quest done!"];
 
     const PERIOD_DUE = { morning: "12:00", afternoon: "17:00", evening: "21:00" };
@@ -1601,7 +1601,7 @@
 
     async function load(forceRender) {
       try {
-        const data = await FamilyAPI.getState(IS_KIOSK_FRAME ? { scope: "chores" } : undefined);
+        const data = await FamilyAPI.getState(IS_KIOSK ? { scope: "chores" } : undefined);
         applyState(data, forceRender);
       } catch (err) {
         if (!state.data) {
@@ -1632,7 +1632,7 @@
     updateViewToggle();
     load(true);
     window.addEventListener("family-state-update", (e) => {
-      if (IS_KIOSK_FRAME && e.detail) applyState(e.detail, false);
+      if (IS_KIOSK && e.detail) applyState(e.detail, false);
     });
     let profileFitTimer = 0;
     window.addEventListener("resize", () => {
@@ -1652,7 +1652,7 @@
       state.fingerprints.all = "";
       if (state.data) renderAll(true);
     });
-    if (!IS_KIOSK_FRAME) {
+    if (!IS_KIOSK) {
       setInterval(() => load(false), 2000);
     }
     setInterval(
@@ -1660,7 +1660,7 @@
       60000
     );
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && !IS_KIOSK_FRAME) load(false);
+      if (document.visibilityState === "visible" && !IS_KIOSK) load(false);
     });
   </script>
 </body>

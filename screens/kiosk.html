@@ -11,41 +11,47 @@
   <link rel="preload" href="../shared/fonts/Baloo2-800.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="../shared/fonts/Nunito-700.woff2" as="font" type="font/woff2" crossorigin />
   <style>
-    html, body {
+    html, body.kiosk {
       margin: 0;
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: var(--bg0, #0a0a0c);
+      background: var(--bg0, #000);
     }
 
     #kioskShell {
       position: fixed;
       inset: 0;
+      background: var(--bg0, #000);
     }
 
-    #kioskShell iframe {
+    #screenFrame {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
       border: 0;
-      background: transparent;
-      visibility: hidden;
-      pointer-events: none;
+      background: var(--bg0, #000);
+      opacity: 0;
+      transition: opacity 0.2s ease;
     }
 
-    #kioskShell iframe.on {
-      visibility: visible;
-      pointer-events: auto;
+    #screenFrame.ready {
+      opacity: 1;
+    }
+
+    #kioskShell.loading #screenFrame:not(.ready) {
+      opacity: 0;
     }
   </style>
 </head>
 <body class="kiosk">
-  <div id="kioskShell"></div>
+  <div id="kioskShell">
+    <iframe id="screenFrame" title="Family Board"></iframe>
+  </div>
   <script src="../shared/family-api.js"></script>
   <script src="../shared/screens.js"></script>
   <script src="../shared/live-reload.js"></script>
-  <script src="../shared/kiosk-shell.js"></script>
+  <script src="../shared/kiosk-navigator.js"></script>
 </body>
 </html>

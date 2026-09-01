@@ -680,3 +680,13 @@ body.has-kiosk-nav.kiosk .toast {
 [data-theme="day"] .kiosk-nav {
   box-shadow: 0 -4px 18px rgba(15, 23, 42, 0.06);
 }
+
+/* Smooth crossfade when opening a screen directly (non-embed navigation) */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.22s;
+}

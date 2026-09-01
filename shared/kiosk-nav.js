@@ -3,7 +3,8 @@
 (function () {
   const params = new URLSearchParams(location.search);
   if (!params.has("kiosk")) return;
-  const inFrame = params.has("frame") && window.parent !== window;
+  const inEmbed = params.has("embed") && window.parent !== window;
+  const inFrame = (params.has("frame") && window.parent !== window) || inEmbed;
 
   window.addEventListener(
     "keydown",

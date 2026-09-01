@@ -670,7 +670,6 @@
     };
 
     const IS_KIOSK = new URLSearchParams(location.search).has("kiosk");
-    const IS_KIOSK_FRAME = new URLSearchParams(location.search).has("frame");
     if (IS_KIOSK) {
       document.body.classList.add("kiosk");
     }
@@ -1156,7 +1155,7 @@
     async function loadLists() {
       const fetchId = ++listsFetchId;
       try {
-        const data = await FamilyAPI.getState(IS_KIOSK_FRAME ? { scope: "calendar" } : undefined);
+        const data = await FamilyAPI.getState(IS_KIOSK ? { scope: "calendar" } : undefined);
         if (fetchId !== listsFetchId) return;
         applyListState(data);
       } catch (err) {
@@ -1202,7 +1201,7 @@
     const activeOnly = window.DisplayActive?.whenActive || ((fn) => fn);
     setInterval(activeOnly(loadAlerts), 3 * 60 * 1000);
     setInterval(activeOnly(loadCalendar), 60 * 1000);
-    if (!IS_KIOSK_FRAME) {
+    if (!IS_KIOSK) {
       setInterval(loadLists, 2500);
     }
     // Month highlight only needs day-rollover checks
@@ -1223,7 +1222,7 @@
     document.addEventListener("visibilitychange", () => {
       if (!window.DisplayActive?.isActive?.()) return;
       loadCalendar();
-      if (!IS_KIOSK_FRAME) loadLists();
+      if (!IS_KIOSK) loadLists();
     });
   </script>
 </body>

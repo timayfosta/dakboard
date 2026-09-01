@@ -70,6 +70,7 @@
   }
 
   function inHiddenKioskFrame() {
+    if (new URLSearchParams(location.search).has("embed")) return false;
     if (!new URLSearchParams(location.search).has("frame")) return false;
     try {
       return !window.frameElement?.classList.contains("on");
@@ -114,6 +115,7 @@
   }
 
   function bumpInteraction() {
+    if (inHiddenKioskFrame()) return;
     lastInteraction = Date.now();
     storeTime(IDLE_KEY, lastInteraction);
     if (active) {
@@ -185,6 +187,15 @@
   }
 
   function apply(forceState) {
+    if (inHiddenKioskFrame()) {
+      stopSlideshow();
+      if (active) {
+        active = false;
+        layer?.classList.remove("active");
+        document.body.classList.remove("screensaver-on");
+      }
+      return;
+    }
     ensureLayer();
     const next = typeof forceState === "boolean" ? forceState : shouldShow(new Date());
     if (next === active) return;
@@ -197,6 +208,7 @@
 
   function scheduleIdleCheck() {
     clearTimeout(idleTimer);
+    if (inHiddenKioskFrame()) return;
     if (!config.enabled) return;
     if (inScheduleWindow(new Date())) {
       apply();

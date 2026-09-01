@@ -1,4 +1,4 @@
-/* Keep kiosk screens loaded in iframes — cycle by showing, not navigating */
+/* Single-iframe kiosk shell — one screen document at a time, stable outer frame (no flash) */
 (function () {
   const params = new URLSearchParams(location.search);
   if (!params.has("kiosk")) return;
@@ -18,14 +18,18 @@
   const defaultPauseMs = Math.max(0, (registry.pauseOnTouchSeconds || 120) * 1000);
   const startId = params.get("start") || allScreens[0].id;
   const shell = document.getElementById("kioskShell");
-  if (!shell) return;
+  const iframe = document.getElementById("screenFrame");
+  if (!shell || !iframe) return;
 
-  const frames = new Map();
   let currentId = "";
   let rotationSettings = null;
   let pauseMs = defaultPauseMs;
   let pauseUntil = 0;
   let rotateTimer = null;
+  let shownTimer = null;
+  let navigating = false;
+  let prerenderTag = null;
+  let loadGen = 0;
 
   if (mouseMode) {
     document.body.classList.add("kiosk-mouse");
@@ -62,50 +66,100 @@
     return queue[ri < 0 ? 0 : (ri + 1) % queue.length].id;
   }
 
-  function frameUrl(id) {
+  function screenUrl(id) {
     const screen = allScreens.find((s) => s.id === id);
+    if (!screen) return "";
     const q = new URLSearchParams();
     q.set("kiosk", "1");
-    q.set("frame", "1");
+    q.set("embed", "1");
     if (mouseMode) q.set("mouse", "1");
     return `${screen.path}?${q}`;
   }
 
-  function ensureFrame(id) {
-    if (frames.has(id)) return frames.get(id);
-    const iframe = document.createElement("iframe");
-    iframe.title = id;
-    iframe.setAttribute("data-screen", id);
-    iframe.src = frameUrl(id);
-    shell.appendChild(iframe);
-    frames.set(id, iframe);
-    return iframe;
+  function isFrameReady() {
+    try {
+      return iframe.contentDocument?.readyState === "complete";
+    } catch {
+      return false;
+    }
   }
 
-  /** Once loaded, keep iframes in memory — destroying them freezes Pi Chromium */
-  function trimFrames() {
-    /* intentionally disabled */
+  function notifyShown() {
+    clearTimeout(shownTimer);
+    shownTimer = setTimeout(() => {
+      try {
+        iframe.contentWindow?.postMessage({ type: "fb-kiosk-shown" }, location.origin);
+      } catch {}
+    }, 200);
   }
 
-  function preloadNext() {
+  function finishShow() {
+    shell.classList.remove("loading");
+    iframe.classList.add("ready");
+    navigating = false;
+    notifyShown();
+    warmNextScreen();
+    scheduleRotation();
+  }
+
+  function warmNextScreen() {
     const nextId = nextRotationId();
-    if (!nextId || nextId === currentId) return;
-    ensureFrame(nextId);
+    if (!nextId) return;
+    const href = screenUrl(nextId);
+    const abs = new URL(href, location.origin).href;
+
+    document.querySelectorAll('link[rel="prefetch"][data-kiosk-warm]').forEach((el) => el.remove());
+    prerenderTag?.remove();
+    prerenderTag = null;
+
+    const prefetch = document.createElement("link");
+    prefetch.rel = "prefetch";
+    prefetch.href = href;
+    prefetch.dataset.kioskWarm = "1";
+    document.head.appendChild(prefetch);
+
+    if (HTMLScriptElement.supports?.("speculationrules")) {
+      prerenderTag = document.createElement("script");
+      prerenderTag.type = "speculationrules";
+      prerenderTag.dataset.kioskWarm = "1";
+      prerenderTag.textContent = JSON.stringify({
+        prerender: [{ source: "list", urls: [abs] }],
+      });
+      document.head.appendChild(prerenderTag);
+    }
   }
 
   function show(id) {
     if (!allScreens.some((s) => s.id === id)) id = allScreens[0].id;
+    const href = screenUrl(id);
+    if (!href) return;
+
     currentId = id;
-    ensureFrame(id);
-    frames.forEach((el, key) => {
-      el.classList.toggle("on", key === id);
-    });
-    preloadNext();
-    trimFrames();
-    try {
-      frames.get(id)?.contentWindow?.postMessage({ type: "fb-kiosk-shown" }, location.origin);
-    } catch {}
-    scheduleRotation();
+    const sameDoc =
+      iframe.dataset.screenId === id &&
+      (isFrameReady() || navigating);
+
+    if (sameDoc && isFrameReady()) {
+      finishShow();
+      return;
+    }
+
+    navigating = true;
+    iframe.dataset.screenId = id;
+    shell.classList.add("loading");
+    iframe.classList.remove("ready");
+
+    const gen = ++loadGen;
+    iframe.addEventListener(
+      "load",
+      () => {
+        if (gen !== loadGen) return;
+        finishShow();
+      },
+      { once: true }
+    );
+
+    iframe.src = href;
   }
 
   function goToNextRotation() {
@@ -132,6 +186,12 @@
         scheduleRotation();
         return;
       }
+      try {
+        if (iframe.contentDocument?.querySelector(".touch-input-overlay.open")) {
+          scheduleRotation();
+          return;
+        }
+      } catch {}
       goToNextRotation();
     }, cfgSeconds * 1000);
   }
@@ -154,14 +214,13 @@
   function applyRotationSettings() {
     pauseMs = Math.max(0, Number(rotationSettings?.pauseOnTouchSeconds ?? 120) * 1000);
     scheduleRotation();
-    preloadNext();
-    trimFrames();
+    warmNextScreen();
   }
 
   async function loadRotationSettings() {
     if (window.FamilyAPI?.getState) {
       try {
-        const data = await FamilyAPI.getState();
+        const data = await FamilyAPI.getState({ scope: "calendar" });
         if (data.settings?.rotation) rotationSettings = data.settings.rotation;
         if (data.settings?.kioskTheme && window.KioskTheme) {
           window.KioskTheme.apply(data.settings.kioskTheme);

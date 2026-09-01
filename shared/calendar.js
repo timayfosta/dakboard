@@ -343,6 +343,7 @@
     // Keep the proxy URL clean — extra query params are unused and can confuse tunnels
     const url = new URL(proxyUrl, window.location.origin);
     const CACHE_KEY = "family-board-ics-cache-v1";
+    const CACHE_MAX_MS = 6 * 60 * 60 * 1000;
 
     const parseFeed = (text) => {
       if (!text || !/BEGIN:(VCALENDAR|VEVENT)/i.test(text)) {
@@ -396,7 +397,11 @@
         const raw = localStorage.getItem(CACHE_KEY);
         if (raw) {
           const cached = JSON.parse(raw);
-          if (cached?.text) return parseFeed(cached.text);
+          if (Date.now() - Number(cached.savedAt || 0) > CACHE_MAX_MS) {
+            localStorage.removeItem(CACHE_KEY);
+          } else if (cached?.text) {
+            return parseFeed(cached.text);
+          }
         }
       } catch (_) {
         /* ignore */

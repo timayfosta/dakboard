@@ -1,11 +1,16 @@
 /* Poll server revision; broadcast state when admin or API changes data */
 (function () {
-  const POLL_MS = 2000;
+  const inEmbed = new URLSearchParams(location.search).has("embed");
+  const inFrame = new URLSearchParams(location.search).has("frame");
+  const isKiosk = new URLSearchParams(location.search).has("kiosk");
+  const POLL_MS = inEmbed || inFrame || isKiosk ? 5000 : 2000;
   let lastRevision = -1;
   let syncing = false;
+  let showSyncTimer = null;
 
   function isActiveDisplay() {
     if (document.visibilityState !== "visible") return false;
+    if (new URLSearchParams(location.search).has("embed")) return true;
     if (new URLSearchParams(location.search).has("frame")) {
       try {
         if (window.frameElement && !window.frameElement.classList.contains("on")) {
@@ -76,7 +81,10 @@
     });
     window.addEventListener("message", (e) => {
       if (e.origin !== location.origin) return;
-      if (e.data?.type === "fb-kiosk-shown") sync();
+      if (e.data?.type === "fb-kiosk-shown") {
+        clearTimeout(showSyncTimer);
+        showSyncTimer = setTimeout(sync, 400);
+      }
     });
   }
 
