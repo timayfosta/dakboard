@@ -238,6 +238,10 @@ def get_lists_snapshot() -> dict[str, Any]:
         return {"revision": _cache_revision, "lists": deepcopy(lists)}
 
 
+def lists_public(state: dict[str, Any]) -> dict[str, Any]:
+    return deepcopy(state.get("lists") or {})
+
+
 def get_revision(state: dict[str, Any] | None = None) -> int:
     if state is not None:
         return int((state.get("meta") or {}).get("revision") or 0)

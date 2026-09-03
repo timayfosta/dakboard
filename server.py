@@ -676,6 +676,11 @@ def send_json(handler: SimpleHTTPRequestHandler, payload: Any, status: int = 200
     handler.wfile.write(body)
 
 
+def list_mutation_payload(state: dict[str, Any], **extra: Any) -> dict[str, Any]:
+    """Lists-only state for fast grocery/reminder mutations on mobile."""
+    return {**extra, "state": {"lists": db.lists_public(state)}}
+
+
 def read_json(handler: SimpleHTTPRequestHandler) -> dict:
     length = int(handler.headers.get("Content-Length") or 0)
     raw = handler.rfile.read(length) if length else b"{}"
@@ -1739,7 +1744,7 @@ class Handler(SimpleHTTPRequestHandler):
             state.setdefault("lists", {})[name] = items
 
         _, state = db.mutate_db(mut)
-        send_json(self, {"state": db.public_state(state)})
+        send_json(self, list_mutation_payload(state))
 
     def list_add(self, payload: dict):
         name = payload.get("name")
@@ -1753,7 +1758,7 @@ class Handler(SimpleHTTPRequestHandler):
             return item
 
         item, state = db.mutate_db(mut)
-        send_json(self, {"item": item, "state": db.public_state(state)})
+        send_json(self, list_mutation_payload(state, item=item))
 
     def list_toggle(self, payload: dict):
         name = payload.get("name")
@@ -1786,13 +1791,13 @@ class Handler(SimpleHTTPRequestHandler):
             return send_json(self, {"error": "Item not found"}, 404)
         send_json(
             self,
-            {
-                "removed": False,
-                "completed": found["completed"],
-                "itemId": item_id,
-                "item": item,
-                "state": db.public_state(state),
-            },
+            list_mutation_payload(
+                state,
+                removed=False,
+                completed=found["completed"],
+                itemId=item_id,
+                item=item,
+            ),
         )
 
     def list_clear_completed(self, payload: dict):
@@ -1805,7 +1810,7 @@ class Handler(SimpleHTTPRequestHandler):
             state["lists"][name] = [i for i in items if not (isinstance(i, dict) and i.get("done"))]
 
         _, state = db.mutate_db(mut)
-        send_json(self, {"ok": True, "state": db.public_state(state)})
+        send_json(self, list_mutation_payload(state, ok=True))
 
     def list_restore(self, payload: dict):
         name = payload.get("name")
@@ -1826,7 +1831,7 @@ class Handler(SimpleHTTPRequestHandler):
                 items.insert(0, item)
 
         _, state = db.mutate_db(mut)
-        send_json(self, {"ok": True, "state": db.public_state(state)})
+        send_json(self, list_mutation_payload(state, ok=True))
 
     def whiteboard_save(self, payload: dict):
         strokes = payload.get("strokes")

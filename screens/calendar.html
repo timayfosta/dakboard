@@ -1109,19 +1109,27 @@
             onSubmit: async (text) => {
               const itemText = String(text || "").trim();
               if (!itemText) return;
-              const res = await FamilyAPI.addListItem(kind, itemText);
-              listsFetchId += 1;
-              if (res?.state) syncListStateFromApi(res.state);
-              else await loadLists();
-              if (res.item && window.ListUndo) {
-                ListUndo.offer(`Added "${itemText}"`, async () => {
-                  const undo = await FamilyAPI.toggleListItem(kind, res.item.id, {
-                    allowOnKiosk: true,
+              const snap = optimisticAddListItem(kind, itemText);
+              if (!snap) return;
+              try {
+                const res = await FamilyAPI.addListItem(kind, snap.trimmed);
+                listsFetchId += 1;
+                if (res?.state?.lists) syncListStateFromApi(res.state);
+                else if (res?.lists) syncListStateFromApi({ lists: res.lists });
+                else await loadLists();
+                if (res.item && window.ListUndo) {
+                  ListUndo.offer(`Added "${snap.trimmed}"`, async () => {
+                    const undo = await FamilyAPI.toggleListItem(kind, res.item.id, {
+                      allowOnKiosk: true,
+                    });
+                    listsFetchId += 1;
+                    if (undo?.state?.lists) syncListStateFromApi(undo.state);
+                    else await loadLists();
                   });
-                  listsFetchId += 1;
-                  if (undo?.state) syncListStateFromApi(undo.state);
-                  else await loadLists();
-                });
+                }
+              } catch (err) {
+                rollbackListState(snap.prev, snap.prevFp);
+                console.warn("Failed to add list item", err);
               }
             },
           });
@@ -1169,7 +1177,7 @@
     }
 
     function applyListState(data) {
-      agendaKids = data.kids?.length ? data.kids : CFG.kids || [];
+      agendaKids = data.kids?.length ? data.kids : agendaKids;
       const nextGrocery = data.lists?.grocery || [];
       const nextReminders = data.lists?.reminders || [];
       const fp = JSON.stringify({ grocery: nextGrocery, reminders: nextReminders });
@@ -1177,6 +1185,33 @@
       listsFp = fp;
       listState.grocery.items = nextGrocery;
       listState.reminders.items = nextReminders;
+      renderChecklist("grocery");
+      renderChecklist("reminders");
+      renderAgenda();
+    }
+
+    function optimisticAddListItem(kind, text) {
+      const trimmed = String(text || "").trim();
+      if (!trimmed) return null;
+      const prev = {
+        grocery: [...(listState.grocery.items || [])],
+        reminders: [...(listState.reminders.items || [])],
+      };
+      const prevFp = listsFp;
+      listState[kind].items = [{ id: `tmp_${Date.now()}`, text: trimmed, done: false }, ...listState[kind].items];
+      listsFp = JSON.stringify({
+        grocery: listState.grocery.items,
+        reminders: listState.reminders.items,
+      });
+      renderChecklist(kind);
+      renderAgenda();
+      return { prev, prevFp, trimmed };
+    }
+
+    function rollbackListState(prev, prevFp) {
+      listState.grocery.items = prev.grocery;
+      listState.reminders.items = prev.reminders;
+      listsFp = prevFp;
       renderChecklist("grocery");
       renderChecklist("reminders");
       renderAgenda();

@@ -278,11 +278,24 @@
   }
 
   function applyListsFromResponse(res) {
-    if (res?.state?.lists) {
-      applyListsFromPayload(res.state.lists);
+    const lists = res?.state?.lists ?? res?.lists;
+    if (lists) {
+      applyListsFromPayload(lists);
       return true;
     }
     return false;
+  }
+
+  function optimisticAddListItem(name, text) {
+    const trimmed = String(text || "").trim();
+    if (!trimmed) return null;
+    const prevLists = JSON.parse(JSON.stringify(state.data?.lists || {}));
+    const prevFp = state.listsFp;
+    const lists = JSON.parse(JSON.stringify(state.data?.lists || {}));
+    if (!lists[name]) lists[name] = [];
+    lists[name].unshift({ id: `tmp_${Date.now()}`, text: trimmed, done: false });
+    applyListsFromPayload(lists);
+    return { prevLists, prevFp, trimmed };
   }
 
   async function pollLists() {
@@ -2479,19 +2492,28 @@
         e.preventDefault();
         const name = form.dataset.listAdd;
         const text = new FormData(form).get("text");
+        const input = form.querySelector('input[name="text"]');
+        const snap = optimisticAddListItem(name, text);
+        if (!snap) return;
+        form.reset();
+        input?.focus();
         try {
-          const res = await AdminAPI.addListItem(name, text);
-          form.reset();
-          if (!applyListsFromResponse(res)) await refresh();
+          const res = await AdminAPI.addListItem(name, snap.trimmed);
+          if (!applyListsFromResponse(res)) {
+            state.listsFp = snap.prevFp;
+            if (state.data) state.data.lists = snap.prevLists;
+            if (state.tab === "lists") renderTab();
+          }
           if (res.item && window.ListUndo) {
-            ListUndo.offer(`Added "${text}"`, async () => {
+            ListUndo.offer(`Added "${snap.trimmed}"`, async () => {
               await AdminAPI.deleteListItem(state.token, name, res.item.id);
               await pollLists();
             });
-          } else {
-            toast("Item added");
           }
         } catch (err) {
+          state.listsFp = snap.prevFp;
+          if (state.data) state.data.lists = snap.prevLists;
+          if (state.tab === "lists") renderTab();
           toast(apiErrorMessage(err));
         }
       });
