@@ -1150,9 +1150,10 @@
           (result.events || []).map((e) => [e.id, e.title, +e.start, +e.end, e.allDay])
         )
       );
-      if (fp === eventsFp) return;
-      eventsFp = fp;
-      events = result.events;
+      if (fp !== eventsFp) {
+        eventsFp = fp;
+        events = result.events;
+      }
       if (calendarSource === "demo" && calendarError) {
         console.warn("Using demo calendar events:", calendarError);
       }

@@ -665,6 +665,42 @@ def fetch_google_calendar_api() -> dict[str, Any] | None:
     return {"source": "google-oauth", "events": events}
 
 
+def _parse_event_dt(value: str) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    try:
+        if len(text) == 10 and text[4] == "-":
+            return datetime.fromisoformat(f"{text}T00:00:00").replace(tzinfo=timezone.utc)
+        if text.endswith("Z"):
+            return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return None
+
+
+def filter_calendar_events(events: list[Any], days_ahead: int | None = None) -> list[Any]:
+    """Keep only events still upcoming within the rolling daysAhead window."""
+    cfg = load_config_calendar()
+    horizon_days = days_ahead if days_ahead is not None else int(cfg.get("daysAhead") or 21)
+    now = datetime.now(timezone.utc)
+    horizon = now + timedelta(days=horizon_days)
+    kept: list[Any] = []
+    for item in events:
+        if not isinstance(item, dict):
+            continue
+        start = _parse_event_dt(str(item.get("start") or ""))
+        end = _parse_event_dt(str(item.get("end") or item.get("start") or ""))
+        if not start or not end:
+            continue
+        if end >= now and start <= horizon:
+            kept.append(item)
+    return kept
+
+
 def send_json(handler: SimpleHTTPRequestHandler, payload: Any, status: int = 200):
     body = json.dumps(payload).encode("utf-8")
     handler.send_response(status)
@@ -1314,11 +1350,16 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _write_calendar_json(self, payload: dict[str, Any], *, cached: bool = False) -> None:
         if not cached:
+            payload = {**payload, "fetchedAt": int(time.time() * 1000)}
             try:
                 CAL_JSON_CACHE.parent.mkdir(parents=True, exist_ok=True)
                 CAL_JSON_CACHE.write_text(json.dumps(payload), encoding="utf-8")
             except OSError:
                 pass
+        else:
+            events = payload.get("events")
+            if isinstance(events, list):
+                payload = {**payload, "events": filter_calendar_events(events)}
         send_json(self, {**payload, "cached": True} if cached else payload)
 
     def _cached_calendar_json(self) -> bool:
@@ -1330,7 +1371,14 @@ class Handler(SimpleHTTPRequestHandler):
             return False
         if not isinstance(payload, dict) or not isinstance(payload.get("events"), list):
             return False
-        self._write_calendar_json(payload, cached=True)
+        fetched_at = int(payload.get("fetchedAt") or CAL_JSON_CACHE.stat().st_mtime * 1000)
+        age_ms = int(time.time() * 1000) - fetched_at
+        if age_ms > 7 * 86400 * 1000:
+            print(
+                f"Calendar JSON cache is {age_ms // 86400000}d old — refresh OAuth or iCal on the Pi",
+                flush=True,
+            )
+        self._write_calendar_json({**payload, "fetchedAt": fetched_at}, cached=True)
         return True
 
     def proxy_calendar(self):
@@ -1340,15 +1388,15 @@ class Handler(SimpleHTTPRequestHandler):
                 if payload is not None:
                     return self._write_calendar_json(payload)
             except Exception as exc:  # noqa: BLE001
-                print(f"Calendar OAuth failed, falling back to iCal: {exc}", flush=True)
-                if self._cached_calendar_json():
-                    return
+                print(f"Calendar OAuth failed, trying iCal: {exc}", flush=True)
 
         ics_url = (load_secrets().get("icsUrl") or "").strip()
         if not ics_url:
             cached = CAL_CACHE.read_bytes() if CAL_CACHE.exists() else b""
             if self._is_ics_payload(cached):
                 return self._write_calendar_bytes(cached, cached=True)
+            if self._cached_calendar_json():
+                return
             return send_json(
                 self,
                 {
@@ -1410,6 +1458,9 @@ class Handler(SimpleHTTPRequestHandler):
         cached = CAL_CACHE.read_bytes() if CAL_CACHE.exists() else b""
         if self._is_ics_payload(cached):
             return self._write_calendar_bytes(cached, cached=True)
+
+        if self._cached_calendar_json():
+            return
 
         send_json(self, {"error": live_error or "Google Calendar unavailable"}, 502)
 

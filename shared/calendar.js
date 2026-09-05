@@ -336,6 +336,15 @@
     return events.sort((a, b) => a.start - b.start);
   }
 
+  function eventsInWindow(events, daysAhead = 21) {
+    const now = new Date();
+    const dayStart = startOfDay(now);
+    const horizon = addDays(now, daysAhead);
+    return events.filter(
+      (e) => (e.end >= now || (e.allDay && e.end >= dayStart)) && e.start <= horizon
+    );
+  }
+
   async function fetchViaProxy(cfg) {
     const { proxyUrl, daysAhead = 21 } = cfg.googleCalendar || {};
     if (!proxyUrl) return null;
@@ -355,8 +364,7 @@
         /* ignore quota */
       }
       const parsed = parseIcs(text, daysAhead);
-      const horizon = addDays(new Date(), daysAhead);
-      return parsed.filter((e) => e.start <= horizon);
+      return eventsInWindow(parsed, daysAhead);
     };
 
     try {
@@ -378,7 +386,7 @@
         const data = await res.json();
         if (data?.error) throw new Error(data.error);
         const items = data.events || data.items || data;
-        return (items || []).map((item) =>
+        const normalized = (items || []).map((item) =>
           normalizeEvent({
             id: item.id,
             title: item.title || item.summary || "(No title)",
@@ -389,6 +397,7 @@
             color: item.color || item.backgroundColor || item.colorId,
           })
         );
+        return eventsInWindow(normalized, daysAhead);
       }
       return parseFeed(await res.text());
     } catch (err) {
