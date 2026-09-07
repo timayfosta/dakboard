@@ -239,8 +239,125 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 0.65rem;
       margin-bottom: 0.75rem;
       flex-shrink: 0;
+    }
+
+    .shop-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .wins-btn {
+      border: 2px solid var(--gold-line, var(--line));
+      background: var(--surface);
+      color: var(--ink);
+      border-radius: 999px;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(1.25rem, 3.6cqw, 1.65rem);
+      padding: 0.45rem 0.95rem;
+      white-space: nowrap;
+    }
+
+    .wins-btn.open {
+      background: var(--gold-soft);
+      color: var(--gold-ink);
+      border-color: var(--gold-line);
+    }
+
+    .wins-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 70;
+      align-items: center;
+      justify-content: center;
+      padding: 0.7rem;
+      background: rgba(0, 0, 0, 0.62);
+    }
+
+    .wins-overlay.show { display: flex; }
+
+    .wins-sheet {
+      position: relative;
+      width: min(96%, 720px);
+      max-height: min(88%, 920px);
+      display: flex;
+      flex-direction: column;
+      background: var(--panel-strong);
+      border: 2px solid var(--gold-line, var(--line));
+      border-radius: 20px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+
+    .wins-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65rem;
+      padding: 0.85rem 1rem;
+      border-bottom: 2px solid var(--line);
+      flex-shrink: 0;
+    }
+
+    .wins-head h2 {
+      font-family: var(--font-display);
+      font-size: clamp(1.85rem, 5.4cqw, 2.4rem);
+      font-weight: 800;
+      margin: 0;
+    }
+
+    .wins-close {
+      width: 56px;
+      height: 56px;
+      border: 0;
+      background: transparent;
+      font-size: 2.4rem;
+      line-height: 1;
+      color: var(--ink-soft);
+    }
+
+    .wins-list {
+      list-style: none;
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
+      padding: 0.65rem 0.85rem 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .wins-list li {
+      background: var(--surface);
+      border: 2px solid var(--gold-line, var(--line));
+      border-radius: 16px;
+      padding: 0.75rem 0.9rem;
+      font-weight: 800;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.65rem;
+      font-size: clamp(1.35rem, 3.8cqw, 1.75rem);
+      line-height: 1.2;
+    }
+
+    .wins-list .meta {
+      color: var(--ink-soft);
+      white-space: nowrap;
+      font-size: 0.85em;
+    }
+
+    .wins-list li.wins-empty {
+      justify-content: center;
+      border-style: dashed;
+      color: var(--ink-soft);
+      font-weight: 700;
     }
 
     .shop-head h2 {
@@ -321,55 +438,6 @@
       line-height: 1;
     }
 
-    .recent {
-      flex: 0 1 auto;
-      max-height: 52%;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      background: color-mix(in srgb, var(--gold-soft, var(--gold-wash)) 55%, var(--panel));
-      border: 2px solid var(--gold-line, var(--line));
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--sunny, #f5c84c) 18%, transparent);
-    }
-
-    .recent h2 {
-      font-family: var(--font-display);
-      font-size: clamp(1.85rem, 5.4cqw, 2.4rem);
-      font-weight: 800;
-      margin-bottom: 0.55rem;
-      flex-shrink: 0;
-    }
-
-    .recent-list {
-      list-style: none;
-      overflow: auto;
-      flex: 0 1 auto;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .recent-list li {
-      background: var(--surface);
-      border: 2px solid var(--gold-line, var(--line));
-      border-radius: 16px;
-      padding: 0.75rem 0.9rem;
-      font-weight: 800;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 0.65rem;
-      font-size: clamp(1.35rem, 3.8cqw, 1.75rem);
-      line-height: 1.2;
-    }
-
-    .recent-list .meta {
-      color: var(--ink-soft);
-      white-space: nowrap;
-      font-size: 0.85em;
-    }
-
     .toast {
       position: fixed;
       left: 50%;
@@ -407,15 +475,22 @@
     <section class="panel shop" aria-label="Rewards">
       <div class="shop-head">
         <h2>Tap to redeem</h2>
-        <div class="balance-pill" id="balancePill">★ 0</div>
+        <div class="shop-head-actions">
+          <button type="button" class="wins-btn" id="winsBtn" aria-haspopup="dialog">Recent wins</button>
+          <div class="balance-pill" id="balancePill">★ 0</div>
+        </div>
       </div>
       <div class="reward-grid" id="rewardGrid"></div>
     </section>
-
-    <section class="panel recent" aria-label="Recent redemptions">
-      <h2>Recent wins</h2>
-      <ul class="recent-list" id="recentList"></ul>
-    </section>
+  </div>
+  <div class="wins-overlay" id="winsOverlay" role="dialog" aria-modal="true" aria-labelledby="winsTitle">
+    <article class="wins-sheet">
+      <header class="wins-head">
+        <h2 id="winsTitle">Recent wins</h2>
+        <button type="button" class="wins-close" id="winsClose" aria-label="Close">×</button>
+      </header>
+      <ul class="wins-list" id="winsList"></ul>
+    </article>
   </div>
   <div class="receipt-overlay" id="receiptOverlay" role="dialog" aria-modal="true" aria-labelledby="receiptWho">
     <article class="receipt-sheet">
@@ -449,7 +524,7 @@
   <script src="../shared/kiosk-nav.js?v=3"></script>
   <script>
     const IS_KIOSK = new URLSearchParams(location.search).has("kiosk");
-    const state = { data: null, kidId: null, receiptKidId: null, fp: "" };
+    const state = { data: null, kidId: null, receiptKidId: null, winsOpen: false, fp: "" };
 
     if (new URLSearchParams(location.search).has("kiosk")) {
       document.body.classList.add("kiosk");
@@ -599,14 +674,16 @@
 
     function recentWins() {
       const cutoff = Date.now() - RECENT_WIN_MS;
-      return (state.data?.redemptions || []).filter((item) => Number(item.at || 0) >= cutoff);
+      return (state.data?.redemptions || [])
+        .filter((item) => Number(item.at || 0) >= cutoff)
+        .sort((a, b) => Number(b.at || 0) - Number(a.at || 0));
     }
 
-    function renderRecent() {
-      const list = document.getElementById("recentList");
+    function fillWinsList() {
+      const list = document.getElementById("winsList");
       const items = recentWins();
       if (!items.length) {
-        list.innerHTML = `<li><span>No redemptions yet — earn stars on the chore screen!</span></li>`;
+        list.innerHTML = `<li class="wins-empty"><span>No redemptions in the last 48 hours.</span></li>`;
         return;
       }
       list.innerHTML = items
@@ -617,9 +694,28 @@
             hour: "numeric",
             minute: "2-digit",
           });
-          return `<li><span>${item.icon || "🎁"} ${item.kidName}: ${item.title}</span><span class="meta">★${item.cost} · ${when}</span></li>`;
+          return `<li><span>${item.icon || "🎁"} ${item.kidName}: ${item.title}</span><span class="meta">−★${item.cost} · ${when}</span></li>`;
         })
         .join("");
+    }
+
+    function openWins() {
+      closeReceipt();
+      fillWinsList();
+      state.winsOpen = true;
+      document.getElementById("winsOverlay").classList.add("show");
+      document.getElementById("winsBtn").classList.add("open");
+    }
+
+    function closeWins() {
+      state.winsOpen = false;
+      document.getElementById("winsOverlay").classList.remove("show");
+      document.getElementById("winsBtn").classList.remove("open");
+    }
+
+    function toggleWins() {
+      if (state.winsOpen) closeWins();
+      else openWins();
     }
 
     function receiptDate(ms) {
@@ -678,6 +774,7 @@
         closeReceipt();
         return;
       }
+      closeWins();
       closeReceipt();
       const kid = activeKids().find((k) => k.id === kidId);
       if (!kid || !fillReceipt(kidId)) return;
@@ -698,7 +795,7 @@
     function renderAll() {
       renderPicker();
       renderShop();
-      renderRecent();
+      if (state.winsOpen) fillWinsList();
       if (state.receiptKidId) fillReceipt(state.receiptKidId);
     }
 
@@ -733,6 +830,11 @@
     document.getElementById("receiptClose").addEventListener("click", closeReceipt);
     document.getElementById("receiptOverlay").addEventListener("click", (e) => {
       if (e.target.id === "receiptOverlay") closeReceipt();
+    });
+    document.getElementById("winsBtn").addEventListener("click", toggleWins);
+    document.getElementById("winsClose").addEventListener("click", closeWins);
+    document.getElementById("winsOverlay").addEventListener("click", (e) => {
+      if (e.target.id === "winsOverlay") closeWins();
     });
 
     ScreenChrome.init();
