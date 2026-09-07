@@ -57,6 +57,7 @@ STARTED_AT = int(time.time() * 1000)
 PHOTOS_DIR = ROOT / "data" / "photos"
 CAL_CACHE = ROOT / "data" / "calendar-cache.ics"
 CAL_JSON_CACHE = ROOT / "data" / "calendar-cache.json"
+CAL_COLOR_MAP = ROOT / "data" / "calendar-color-map.json"
 CONFIG_JS = ROOT / "shared" / "config.js"
 SECRETS = ROOT / "shared" / "secrets.local.js"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -65,6 +66,10 @@ GOOGLE_CAL_API = "https://www.googleapis.com/calendar/v3"
 _oauth_lock = threading.Lock()
 _oauth_access = {"token": "", "expires_at": 0.0}
 _oauth_colors = {"event": {}, "fetched_at": 0.0}
+_oauth_calendar_down_until = 0.0
+OAUTH_CALENDAR_BACKOFF_SEC = 600
+OAUTH_CALENDAR_TIMEOUT_SEC = 8
+_ics_json_cache: dict[str, Any] = {"digest": "", "payload": None}
 SESSIONS: dict[str, float] = {}  # token -> expires_at
 FILE_SESSIONS: dict[str, float] = {}  # files token -> expires_at
 SESSION_HOURS = 30 * 24
@@ -301,13 +306,17 @@ def load_config_calendar() -> dict[str, Any]:
     text = CONFIG_JS.read_text(encoding="utf-8") if CONFIG_JS.exists() else ""
     cal_id = ""
     days = 21
+    default_color = "#7986CB"
     match = re.search(r'calendarId:\s*"([^"]+)"', text)
     if match:
         cal_id = match.group(1).strip()
     days_match = re.search(r"daysAhead:\s*(\d+)", text)
     if days_match:
         days = max(1, int(days_match.group(1)))
-    return {"calendarId": cal_id, "daysAhead": days}
+    color_match = re.search(r'defaultEventColor:\s*"([^"]+)"', text)
+    if color_match:
+        default_color = color_match.group(1).strip()
+    return {"calendarId": cal_id, "daysAhead": days, "defaultEventColor": default_color}
 
 
 ROCHELLE_WEATHER = {
@@ -512,7 +521,9 @@ def fetch_weather() -> dict[str, Any]:
     return payload
 
 
-def _google_http_json(url: str, *, token: str = "", data: bytes | None = None) -> dict[str, Any]:
+def _google_http_json(
+    url: str, *, token: str = "", data: bytes | None = None, timeout: float = 30
+) -> dict[str, Any]:
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -520,7 +531,7 @@ def _google_http_json(url: str, *, token: str = "", data: bytes | None = None) -
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data is not None else "GET")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = ""
@@ -541,7 +552,7 @@ def _google_http_json(url: str, *, token: str = "", data: bytes | None = None) -
         raise RuntimeError(detail or f"Google HTTP {exc.code}") from exc
 
 
-def google_access_token() -> str:
+def google_access_token(*, timeout: float = 30) -> str:
     secrets_map = load_secrets()
     client_id = secrets_map.get("googleClientId") or ""
     client_secret = secrets_map.get("googleClientSecret") or ""
@@ -562,6 +573,7 @@ def google_access_token() -> str:
                     "grant_type": "refresh_token",
                 }
             ).encode("utf-8"),
+            timeout=timeout,
         )
         token = str(payload.get("access_token") or "")
         if not token:
@@ -572,11 +584,11 @@ def google_access_token() -> str:
         return token
 
 
-def google_event_color_map(token: str) -> dict[str, str]:
+def google_event_color_map(token: str, *, timeout: float = 30) -> dict[str, str]:
     now = time.time()
     if _oauth_colors["event"] and _oauth_colors["fetched_at"] > now - 86400:
         return dict(_oauth_colors["event"])
-    data = _google_http_json(GOOGLE_COLORS_URL, token=token)
+    data = _google_http_json(GOOGLE_COLORS_URL, token=token, timeout=timeout)
     event = {
         str(key): str(value.get("background") or "")
         for key, value in (data.get("event") or {}).items()
@@ -596,73 +608,97 @@ def _all_day_end(end_date: str) -> str:
         return f"{end_date}T23:59:59"
 
 
+def _should_skip_oauth_calendar() -> bool:
+    if time.time() >= _oauth_calendar_down_until:
+        return False
+    mapping = load_calendar_color_map()
+    return mapping.get("__oauth__") == "1"
+
+
 def fetch_google_calendar_api() -> dict[str, Any] | None:
+    global _oauth_calendar_down_until
     if not oauth_calendar_configured():
         return None
+    if _should_skip_oauth_calendar():
+        return None
+    timeout = OAUTH_CALENDAR_TIMEOUT_SEC
     cfg = load_config_calendar()
-    calendar_id = cfg.get("calendarId") or ""
-    if not calendar_id:
-        raise RuntimeError("Missing googleCalendar.calendarId in shared/config.js")
-    token = google_access_token()
-    colors = google_event_color_map(token)
-    cal_url = f"{GOOGLE_CAL_API}/calendars/{urllib.parse.quote(calendar_id, safe='')}"
-    calendar = _google_http_json(cal_url, token=token)
-    default_color = str(calendar.get("backgroundColor") or "")
-    labels = {
-        str(label.get("id")): str(label.get("backgroundColor") or "")
-        for label in ((calendar.get("labelProperties") or {}).get("eventLabels") or [])
-        if isinstance(label, dict) and label.get("id") and label.get("backgroundColor")
-    }
-
-    now = datetime.now(timezone.utc)
-    time_min = now.isoformat().replace("+00:00", "Z")
-    time_max = (now + timedelta(days=int(cfg.get("daysAhead") or 21))).isoformat().replace("+00:00", "Z")
-    events: list[dict[str, Any]] = []
-    page_token = ""
-    while True:
-        params = {
-            "timeMin": time_min,
-            "timeMax": time_max,
-            "singleEvents": "true",
-            "orderBy": "startTime",
-            "maxResults": "250",
-            "eventLabelVersion": "1",
+    fallback_color = str(cfg.get("defaultEventColor") or "#7986CB")
+    try:
+        calendar_id = cfg.get("calendarId") or ""
+        if not calendar_id:
+            raise RuntimeError("Missing googleCalendar.calendarId in shared/config.js")
+        token = google_access_token(timeout=timeout)
+        colors = google_event_color_map(token, timeout=timeout)
+        cal_url = f"{GOOGLE_CAL_API}/calendars/{urllib.parse.quote(calendar_id, safe='')}"
+        calendar = _google_http_json(cal_url, token=token, timeout=timeout)
+        default_color = str(calendar.get("backgroundColor") or "") or fallback_color
+        labels = {
+            str(label.get("id")): str(label.get("backgroundColor") or "")
+            for label in ((calendar.get("labelProperties") or {}).get("eventLabels") or [])
+            if isinstance(label, dict) and label.get("id") and label.get("backgroundColor")
         }
-        if page_token:
-            params["pageToken"] = page_token
-        url = f"{cal_url}/events?{urllib.parse.urlencode(params)}"
-        data = _google_http_json(url, token=token)
-        for item in data.get("items") or []:
-            if not isinstance(item, dict):
-                continue
-            start = item.get("start") or {}
-            end = item.get("end") or {}
-            all_day = bool(start.get("date") and not start.get("dateTime"))
-            start_val = start.get("dateTime") or (f"{start.get('date')}T00:00:00" if start.get("date") else "")
-            if all_day and end.get("date"):
-                end_val = _all_day_end(str(end.get("date")))
-            else:
-                end_val = end.get("dateTime") or start_val
-            color = (
-                labels.get(str(item.get("eventLabelId") or ""))
-                or colors.get(str(item.get("colorId") or ""))
-                or default_color
-            )
-            events.append(
-                {
-                    "id": item.get("id"),
-                    "title": item.get("summary") or "(No title)",
-                    "start": start_val,
-                    "end": end_val,
-                    "allDay": all_day,
-                    "location": item.get("location") or "",
-                    "color": color,
-                }
-            )
-        page_token = str(data.get("nextPageToken") or "")
-        if not page_token:
-            break
-    return {"source": "google-oauth", "events": events}
+
+        now = datetime.now(timezone.utc)
+        time_min = now.isoformat().replace("+00:00", "Z")
+        time_max = (now + timedelta(days=int(cfg.get("daysAhead") or 21))).isoformat().replace("+00:00", "Z")
+        events: list[dict[str, Any]] = []
+        page_token = ""
+        while True:
+            params = {
+                "timeMin": time_min,
+                "timeMax": time_max,
+                "singleEvents": "true",
+                "orderBy": "startTime",
+                "maxResults": "250",
+                "eventLabelVersion": "1",
+            }
+            if page_token:
+                params["pageToken"] = page_token
+            url = f"{cal_url}/events?{urllib.parse.urlencode(params)}"
+            data = _google_http_json(url, token=token, timeout=timeout)
+            for item in data.get("items") or []:
+                if not isinstance(item, dict):
+                    continue
+                start = item.get("start") or {}
+                end = item.get("end") or {}
+                all_day = bool(start.get("date") and not start.get("dateTime"))
+                start_val = start.get("dateTime") or (
+                    f"{start.get('date')}T00:00:00" if start.get("date") else ""
+                )
+                if all_day and end.get("date"):
+                    end_val = _all_day_end(str(end.get("date")))
+                else:
+                    end_val = end.get("dateTime") or start_val
+                color = (
+                    labels.get(str(item.get("eventLabelId") or ""))
+                    or colors.get(str(item.get("colorId") or ""))
+                    or default_color
+                )
+                color = normalize_event_color(color) or fallback_color
+                events.append(
+                    {
+                        "id": item.get("id"),
+                        "title": item.get("summary") or "(No title)",
+                        "start": start_val,
+                        "end": end_val,
+                        "allDay": all_day,
+                        "location": item.get("location") or "",
+                        "color": color,
+                    }
+                )
+            page_token = str(data.get("nextPageToken") or "")
+            if not page_token:
+                break
+        _oauth_calendar_down_until = 0.0
+        return {
+            "source": "google-oauth",
+            "events": events,
+            "defaultColor": normalize_event_color(default_color) or fallback_color,
+        }
+    except Exception:
+        _oauth_calendar_down_until = time.time() + OAUTH_CALENDAR_BACKOFF_SEC
+        raise
 
 
 def _parse_event_dt(value: str) -> datetime | None:
@@ -699,6 +735,371 @@ def filter_calendar_events(events: list[Any], days_ahead: int | None = None) -> 
         if end >= now and start <= horizon:
             kept.append(item)
     return kept
+
+
+def _unfold_ics(text: str) -> str:
+    return re.sub(r"\n[ \t]", "", text.replace("\r\n", "\n"))
+
+
+def _ics_field(chunk: str, key: str) -> tuple[str, str]:
+    match = re.search(rf"^{key}(;[^:]*)?:(.*)$", chunk, re.MULTILINE | re.IGNORECASE)
+    if not match:
+        return "", ""
+    return match.group(1) or "", (match.group(2) or "").strip()
+
+
+def _parse_ics_date(value: str, params: str) -> tuple[datetime | None, bool]:
+    raw = (value or "").strip()
+    param_text = (params or "").upper()
+    if "VALUE=DATE" in param_text or re.fullmatch(r"\d{8}", raw):
+        year, month, day = int(raw[:4]), int(raw[4:6]), int(raw[6:8])
+        return datetime(year, month, day, tzinfo=timezone.utc), True
+    match = re.fullmatch(r"(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?", raw)
+    if match:
+        dt = datetime(
+            int(match.group(1)),
+            int(match.group(2)),
+            int(match.group(3)),
+            int(match.group(4)),
+            int(match.group(5)),
+            int(match.group(6)),
+            tzinfo=timezone.utc,
+        )
+        return dt, False
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt, False
+    except ValueError:
+        return None, False
+
+
+def _ics_dt_to_iso(dt: datetime, all_day: bool) -> str:
+    if all_day:
+        return dt.astimezone(timezone.utc).strftime("%Y-%m-%d")
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+GOOGLE_EVENT_COLOR_HEX = {
+    "1": "#a4bdfc",
+    "2": "#7ae7bf",
+    "3": "#dbadff",
+    "4": "#ff887c",
+    "5": "#fbd75b",
+    "6": "#ffb878",
+    "7": "#46d6db",
+    "8": "#e1e1e1",
+    "9": "#5484ed",
+    "10": "#51b749",
+    "11": "#dc2127",
+}
+
+
+def normalize_event_color(raw: Any) -> str:
+    if raw is None:
+        return ""
+    text = str(raw).strip()
+    if not text:
+        return ""
+    if text.startswith("#") and len(text) >= 4:
+        return text
+    if text in GOOGLE_EVENT_COLOR_HEX:
+        return GOOGLE_EVENT_COLOR_HEX[text]
+    if text.isdigit() and text in GOOGLE_EVENT_COLOR_HEX:
+        return GOOGLE_EVENT_COLOR_HEX[text]
+    match = re.search(r"#([0-9a-f]{3}|[0-9a-f]{6})\b", text, re.I)
+    return match.group(0) if match else ""
+
+
+def _merge_color_map_entry(mapping: dict[str, str], event_id: str, title: str, color: str) -> None:
+    if not color:
+        return
+    if event_id:
+        mapping[event_id] = color
+        base = event_id.split("_")[0]
+        if base:
+            mapping[base] = color
+        uid_base = event_id.split("@")[0]
+        if uid_base:
+            mapping[uid_base] = color
+    if title:
+        mapping[f"title:{title.strip().lower()}"] = color
+
+
+def _read_color_map_file() -> dict[str, str]:
+    if not CAL_COLOR_MAP.exists():
+        return {}
+    try:
+        payload = json.loads(CAL_COLOR_MAP.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, value in payload.items():
+        color = normalize_event_color(value)
+        if color:
+            out[str(key)] = color
+    return out
+
+
+def _write_color_map_file(mapping: dict[str, str]) -> None:
+    if not mapping:
+        return
+    try:
+        CAL_COLOR_MAP.parent.mkdir(parents=True, exist_ok=True)
+        CAL_COLOR_MAP.write_text(json.dumps(mapping), encoding="utf-8")
+        _ics_json_cache["digest"] = ""
+    except OSError:
+        pass
+
+
+def load_calendar_color_map() -> dict[str, str]:
+    mapping = _read_color_map_file()
+    if CAL_JSON_CACHE.exists():
+        try:
+            payload = json.loads(CAL_JSON_CACHE.read_text(encoding="utf-8"))
+            default_color = normalize_event_color(payload.get("defaultColor"))
+            if default_color:
+                mapping.setdefault("__default__", default_color)
+            for item in payload.get("events") or []:
+                if not isinstance(item, dict):
+                    continue
+                color = normalize_event_color(item.get("color"))
+                if not color:
+                    continue
+                _merge_color_map_entry(
+                    mapping,
+                    str(item.get("id") or ""),
+                    str(item.get("title") or ""),
+                    color,
+                )
+        except Exception:  # noqa: BLE001
+            pass
+    return mapping
+
+
+def save_calendar_color_map(
+    events: list[Any], default_color: str = "", *, oauth: bool = False
+) -> None:
+    mapping = load_calendar_color_map()
+    normalized_default = normalize_event_color(default_color) or normalize_event_color(
+        load_config_calendar().get("defaultEventColor")
+    )
+    if normalized_default:
+        mapping["__default__"] = normalized_default
+    if oauth:
+        mapping["__oauth__"] = "1"
+    for item in events:
+        if not isinstance(item, dict):
+            continue
+        color = normalize_event_color(item.get("color"))
+        if not color:
+            continue
+        _merge_color_map_entry(
+            mapping,
+            str(item.get("id") or ""),
+            str(item.get("title") or ""),
+            color,
+        )
+    _write_color_map_file(mapping)
+
+
+def try_refresh_calendar_colors() -> None:
+    if not oauth_calendar_configured():
+        return
+    try:
+        token = google_access_token(timeout=OAUTH_CALENDAR_TIMEOUT_SEC)
+        color_ids = google_event_color_map(token, timeout=OAUTH_CALENDAR_TIMEOUT_SEC)
+        mapping = load_calendar_color_map()
+        for cid, hex_color in color_ids.items():
+            normalized = normalize_event_color(hex_color)
+            if normalized:
+                mapping[f"colorId:{cid}"] = normalized
+        _write_color_map_file(mapping)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def match_kid_color(title: str, kids: list[dict[str, Any]]) -> str:
+    lower = str(title or "").lower()
+    if not lower:
+        return ""
+    active = [kid for kid in kids if kid.get("active", True) is not False and kid.get("name")]
+    for kid in sorted(active, key=lambda row: len(str(row.get("name") or "")), reverse=True):
+        name = str(kid.get("name") or "")
+        if re.search(rf"\b{re.escape(name)}\b", lower, re.I):
+            return normalize_event_color(kid.get("color"))
+    return ""
+
+
+def _resolve_event_color(item: dict[str, Any], color_map: dict[str, str]) -> str:
+    direct = normalize_event_color(item.get("color"))
+    if direct:
+        return direct
+    event_id = str(item.get("id") or "")
+    title = str(item.get("title") or "").strip().lower()
+    for key in (event_id, event_id.split("_")[0], event_id.split("@")[0], f"title:{title}"):
+        if key and key in color_map:
+            return color_map[key]
+    return ""
+
+
+def enrich_event_colors(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    color_map = load_calendar_color_map()
+    kids = db.load_db().get("kids") or []
+    default_color = (
+        color_map.get("__default__")
+        or normalize_event_color(load_config_calendar().get("defaultEventColor"))
+        or "#7986CB"
+    )
+    for item in events:
+        if not isinstance(item, dict):
+            continue
+        if normalize_event_color(item.get("color")):
+            item["color"] = normalize_event_color(item.get("color"))
+            continue
+        color = _resolve_event_color(item, color_map)
+        if not color:
+            color = match_kid_color(str(item.get("title") or ""), kids)
+        if not color:
+            color = default_color
+        item["color"] = color
+    return events
+
+
+def _expand_rrule_simple(
+    master: dict[str, Any], range_start: datetime, range_end: datetime
+) -> list[dict[str, Any]]:
+    rule_raw = str(master.get("rrule") or "")
+    if not rule_raw:
+        if master["start"] <= range_end and master["end"] >= range_start:
+            return [master]
+        return []
+
+    parts: dict[str, str] = {}
+    for segment in rule_raw.replace("RRULE:", "").split(";"):
+        if "=" not in segment:
+            continue
+        key, value = segment.split("=", 1)
+        parts[key.upper()] = value
+    freq = parts.get("FREQ", "").upper()
+    if freq not in ("DAILY", "WEEKLY"):
+        if master["start"] <= range_end and master["end"] >= range_start:
+            return [master]
+        return []
+
+    interval = max(1, int(parts.get("INTERVAL") or "1"))
+    duration = master["end"] - master["start"]
+    out: list[dict[str, Any]] = []
+    cursor = master["start"]
+    produced = 0
+    while cursor <= range_end and produced < 400:
+        if cursor >= range_start and cursor >= master["start"]:
+            row = dict(master)
+            row["start"] = cursor
+            row["end"] = cursor + duration
+            row["id"] = f"{master['id']}-{int(cursor.timestamp() * 1000)}"
+            out.append(row)
+            produced += 1
+        if freq == "DAILY":
+            cursor += timedelta(days=interval)
+        else:
+            cursor += timedelta(weeks=interval)
+    return out
+
+
+def parse_ics_events(data: bytes, days_ahead: int | None = None) -> list[dict[str, Any]]:
+    cfg = load_config_calendar()
+    horizon_days = days_ahead if days_ahead is not None else int(cfg.get("daysAhead") or 21)
+    now = datetime.now(timezone.utc)
+    range_start = now - timedelta(days=1)
+    range_end = now + timedelta(days=horizon_days)
+    color_map = load_calendar_color_map()
+    text = _unfold_ics(data.decode("utf-8", errors="replace"))
+    header = text.split("BEGIN:VEVENT")[0]
+    header_color = ""
+    for key in ("COLOR", "X-APPLE-CALENDAR-COLOR", "X-OUTLOOK-COLOR", "X-GOOGLE-CALENDAR-COLOR"):
+        _, val = _ics_field(header, key)
+        header_color = normalize_event_color(val)
+        if header_color:
+            break
+    if not header_color:
+        header_color = color_map.get("__default__") or normalize_event_color(
+            cfg.get("defaultEventColor")
+        )
+    events: list[dict[str, Any]] = []
+
+    for index, block in enumerate(text.split("BEGIN:VEVENT")[1:], 1):
+        chunk = block.split("END:VEVENT")[0]
+        dt_params, dt_value = _ics_field(chunk, "DTSTART")
+        if not dt_value:
+            continue
+        start, all_day = _parse_ics_date(dt_value, dt_params)
+        if not start or start > range_end:
+            continue
+        end_params, end_value = _ics_field(chunk, "DTEND")
+        if end_value:
+            end, _ = _parse_ics_date(end_value, end_params)
+        else:
+            end = start + (timedelta(days=1) if all_day else timedelta(hours=1))
+        if not end or end < range_start:
+            continue
+
+        _, summary = _ics_field(chunk, "SUMMARY")
+        _, uid = _ics_field(chunk, "UID")
+        _, location = _ics_field(chunk, "LOCATION")
+        _, rrule = _ics_field(chunk, "RRULE")
+        _, color_val = _ics_field(chunk, "COLOR")
+        if not color_val:
+            _, color_val = _ics_field(chunk, "X-GOOGLE-CALENDAR-COLOR")
+        event_id = uid or f"ics-{index}"
+        title = summary or "(No title)"
+        color = normalize_event_color(color_val) or _resolve_event_color(
+            {"id": event_id, "title": title, "color": ""}, color_map
+        ) or header_color
+        master = {
+            "id": event_id,
+            "title": title,
+            "start": start,
+            "end": end,
+            "allDay": all_day,
+            "location": location or "",
+            "color": color,
+            "rrule": rrule,
+        }
+        for row in _expand_rrule_simple(master, range_start, range_end):
+            events.append(
+                {
+                    "id": row["id"],
+                    "title": row["title"],
+                    "start": _ics_dt_to_iso(row["start"], row["allDay"]),
+                    "end": _ics_dt_to_iso(row["end"], row["allDay"]),
+                    "allDay": row["allDay"],
+                    "location": row["location"],
+                    "color": row.get("color") or "",
+                }
+            )
+
+    events.sort(key=lambda item: str(item.get("start") or ""))
+    return events
+
+
+def ics_bytes_to_json(data: bytes) -> dict[str, Any]:
+    digest = hashlib.sha256(data).hexdigest()
+    cached = _ics_json_cache.get("payload")
+    if _ics_json_cache.get("digest") == digest and isinstance(cached, dict):
+        return dict(cached)
+    events = enrich_event_colors(filter_calendar_events(parse_ics_events(data)))
+    payload = {
+        "source": "google-ical",
+        "events": events,
+        "fetchedAt": int(time.time() * 1000),
+    }
+    _ics_json_cache["digest"] = digest
+    _ics_json_cache["payload"] = payload
+    return payload
 
 
 def send_json(handler: SimpleHTTPRequestHandler, payload: Any, status: int = 200):
@@ -1348,7 +1749,17 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _serve_ics_as_json(self, data: bytes, *, cached: bool = False) -> None:
+        payload = ics_bytes_to_json(data)
+        self._write_calendar_json(payload, cached=cached)
+
     def _write_calendar_json(self, payload: dict[str, Any], *, cached: bool = False) -> None:
+        events = payload.get("events")
+        if isinstance(events, list):
+            if cached:
+                events = filter_calendar_events(events)
+            events = enrich_event_colors(events)
+            payload = {**payload, "events": events}
         if not cached:
             payload = {**payload, "fetchedAt": int(time.time() * 1000)}
             try:
@@ -1356,10 +1767,11 @@ class Handler(SimpleHTTPRequestHandler):
                 CAL_JSON_CACHE.write_text(json.dumps(payload), encoding="utf-8")
             except OSError:
                 pass
-        else:
-            events = payload.get("events")
-            if isinstance(events, list):
-                payload = {**payload, "events": filter_calendar_events(events)}
+            save_calendar_color_map(
+                payload.get("events") or [],
+                str(payload.get("defaultColor") or ""),
+                oauth=str(payload.get("source") or "") == "google-oauth",
+            )
         send_json(self, {**payload, "cached": True} if cached else payload)
 
     def _cached_calendar_json(self) -> bool:
@@ -1382,6 +1794,9 @@ class Handler(SimpleHTTPRequestHandler):
         return True
 
     def proxy_calendar(self):
+        if not load_calendar_color_map().get("__oauth__"):
+            try_refresh_calendar_colors()
+
         if oauth_calendar_configured():
             try:
                 payload = fetch_google_calendar_api()
@@ -1394,7 +1809,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not ics_url:
             cached = CAL_CACHE.read_bytes() if CAL_CACHE.exists() else b""
             if self._is_ics_payload(cached):
-                return self._write_calendar_bytes(cached, cached=True)
+                return self._serve_ics_as_json(cached, cached=True)
             if self._cached_calendar_json():
                 return
             return send_json(
@@ -1433,7 +1848,7 @@ class Handler(SimpleHTTPRequestHandler):
                         CAL_CACHE.write_bytes(data)
                     except OSError:
                         pass
-                    return self._write_calendar_bytes(data)
+                    return self._serve_ics_as_json(data)
                 live_error = (
                     "icsUrl did not return a Google iCal feed — open Google Calendar → "
                     "Settings → Integrate calendar → copy a fresh Secret address in iCal format"
@@ -1457,7 +1872,7 @@ class Handler(SimpleHTTPRequestHandler):
 
         cached = CAL_CACHE.read_bytes() if CAL_CACHE.exists() else b""
         if self._is_ics_payload(cached):
-            return self._write_calendar_bytes(cached, cached=True)
+            return self._serve_ics_as_json(cached, cached=True)
 
         if self._cached_calendar_json():
             return

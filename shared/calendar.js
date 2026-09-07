@@ -292,6 +292,7 @@
       if (!dtStart) return;
 
       const start = parseIcsDate(dtStart.value, dtStart.params || "");
+      if (start.date > rangeEnd) return;
       const end = dtEnd
         ? parseIcsDate(dtEnd.value, dtEnd.params || "")
         : { date: new Date(start.date), allDay: start.allDay };
@@ -345,6 +346,55 @@
     );
   }
 
+  const COLOR_MAP_KEY = "family-calendar-color-map-v1";
+
+  function saveColorMapFromItems(items) {
+    if (!items?.length) return;
+    const map = {};
+    items.forEach((item) => {
+      const color = parseColorValue(item.color || item.backgroundColor || item.colorId);
+      if (!color) return;
+      const id = String(item.id || "");
+      const title = String(item.title || item.summary || "").trim().toLowerCase();
+      if (id) {
+        map[id] = color;
+        const base = id.split("_")[0];
+        if (base) map[base] = color;
+        const uid = id.split("@")[0];
+        if (uid) map[uid] = color;
+      }
+      if (title) map[`title:${title}`] = color;
+    });
+    if (!Object.keys(map).length) return;
+    try {
+      localStorage.setItem(COLOR_MAP_KEY, JSON.stringify(map));
+    } catch (_) {
+      /* ignore quota */
+    }
+  }
+
+  function enrichEventsWithColors(events) {
+    let map = {};
+    try {
+      map = JSON.parse(localStorage.getItem(COLOR_MAP_KEY) || "{}");
+    } catch (_) {
+      map = {};
+    }
+    if (!Object.keys(map).length) return events;
+    return events.map((ev) => {
+      if (ev.color) return ev;
+      const id = String(ev.id || "");
+      const title = String(ev.title || "").trim().toLowerCase();
+      const color =
+        map[id] ||
+        map[id.split("_")[0]] ||
+        map[id.split("@")[0]] ||
+        map[`title:${title}`] ||
+        "";
+      return color ? { ...ev, color } : ev;
+    });
+  }
+
   async function fetchViaProxy(cfg) {
     const { proxyUrl, daysAhead = 21 } = cfg.googleCalendar || {};
     if (!proxyUrl) return null;
@@ -353,18 +403,31 @@
     const url = new URL(proxyUrl, window.location.origin);
     const CACHE_KEY = "family-board-ics-cache-v1";
     const CACHE_MAX_MS = 6 * 60 * 60 * 1000;
+    let lastIcsHash = "";
 
     const parseFeed = (text) => {
       if (!text || !/BEGIN:(VCALENDAR|VEVENT)/i.test(text)) {
         throw new Error("Calendar proxy did not return an iCal feed");
+      }
+      let hash = "";
+      try {
+        hash = `${text.length}:${text.slice(0, 96)}:${text.slice(-96)}`;
+      } catch (_) {
+        hash = String(text.length);
+      }
+      if (hash && hash === lastIcsHash && parseFeed._cachedEvents) {
+        return parseFeed._cachedEvents;
       }
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), text }));
       } catch (_) {
         /* ignore quota */
       }
-      const parsed = parseIcs(text, daysAhead);
-      return eventsInWindow(parsed, daysAhead);
+      const parsed = enrichEventsWithColors(parseIcs(text, daysAhead));
+      const inWindow = eventsInWindow(parsed, daysAhead);
+      lastIcsHash = hash;
+      parseFeed._cachedEvents = inWindow;
+      return inWindow;
     };
 
     try {
@@ -386,6 +449,7 @@
         const data = await res.json();
         if (data?.error) throw new Error(data.error);
         const items = data.events || data.items || data;
+        saveColorMapFromItems(items);
         const normalized = (items || []).map((item) =>
           normalizeEvent({
             id: item.id,
@@ -397,7 +461,7 @@
             color: item.color || item.backgroundColor || item.colorId,
           })
         );
-        return eventsInWindow(normalized, daysAhead);
+        return eventsInWindow(enrichEventsWithColors(normalized), daysAhead);
       }
       return parseFeed(await res.text());
     } catch (err) {

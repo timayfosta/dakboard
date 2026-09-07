@@ -55,6 +55,7 @@ window.FAMILY_CONFIG = {
     calendarId: "family00724596334294402291@group.calendar.google.com",
     maxUpcoming: 15,
     daysAhead: 21,
+    defaultEventColor: "#7986CB",
     /*
      * Private calendar (recommended): leave calendar private and use a
      * local/Cloudflare proxy for the secret iCal URL.

@@ -1140,6 +1140,8 @@
     let eventsFp = "";
     let listsFp = "";
     let listsFetchId = 0;
+    let agendaDayKey = "";
+    let monthKey = "";
 
     async function loadCalendar() {
       const result = await FamilyCalendar.loadEvents(CFG);
@@ -1147,18 +1149,26 @@
       calendarError = result.error || "";
       const fp = JSON.stringify(
         [calendarSource, calendarError].concat(
-          (result.events || []).map((e) => [e.id, e.title, +e.start, +e.end, e.allDay])
+          (result.events || []).map((e) => [e.id, e.title, +e.start, +e.end, e.allDay, e.color])
         )
       );
+      const todayKey = new Date().toDateString();
+      const monthK = `${new Date().getFullYear()}-${new Date().getMonth()}`;
       if (fp !== eventsFp) {
         eventsFp = fp;
         events = result.events;
+        renderAgenda();
+      } else if (todayKey !== agendaDayKey) {
+        renderAgenda();
+      }
+      agendaDayKey = todayKey;
+      if (monthK !== monthKey) {
+        monthKey = monthK;
+        renderMonth();
       }
       if (calendarSource === "demo" && calendarError) {
         console.warn("Using demo calendar events:", calendarError);
       }
-      renderAgenda();
-      renderMonth();
     }
 
     async function loadLists() {
