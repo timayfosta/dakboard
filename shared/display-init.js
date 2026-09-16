@@ -1,5 +1,12 @@
 /* Portrait canvas scaling — 1080×1920 design, fits any display */
 (function () {
+  const params = new URLSearchParams(location.search);
+  const isEmbedKiosk = params.has("kiosk") && params.has("embed");
+
+  if (isEmbedKiosk) {
+    document.documentElement.classList.add("embed-boot");
+  }
+
   try {
     const t = localStorage.getItem("family-kiosk-theme");
     if (t === "day" || t === "night") {
@@ -47,6 +54,20 @@
   function init() {
     ensureScaler();
     applyScale();
+    if (isEmbedKiosk) revealEmbed();
+  }
+
+  function revealEmbed() {
+    const reveal = () => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          document.documentElement.classList.remove("embed-boot");
+          document.documentElement.classList.add("embed-ready");
+        });
+      });
+    };
+    if (document.readyState === "complete") reveal();
+    else window.addEventListener("load", reveal, { once: true });
   }
 
   if (document.readyState === "loading") {

@@ -1,4 +1,4 @@
-/* Single-iframe kiosk shell — one screen document at a time, stable outer frame (no flash) */
+/* Dual-iframe kiosk shell — crossfade between screens (no black flash) */
 (function () {
   const params = new URLSearchParams(location.search);
   if (!params.has("kiosk")) return;
@@ -18,9 +18,12 @@
   const defaultPauseMs = Math.max(0, (registry.pauseOnTouchSeconds || 120) * 1000);
   const startId = params.get("start") || allScreens[0].id;
   const shell = document.getElementById("kioskShell");
-  const iframe = document.getElementById("screenFrame");
-  if (!shell || !iframe) return;
+  const frameA = document.getElementById("screenFrameA");
+  const frameB = document.getElementById("screenFrameB");
+  if (!shell || !frameA || !frameB) return;
 
+  const frames = { a: frameA, b: frameB };
+  let frontKey = "a";
   let currentId = "";
   let rotationSettings = null;
   let pauseMs = defaultPauseMs;
@@ -30,12 +33,21 @@
   let navigating = false;
   let prerenderTag = null;
   let loadGen = 0;
+  const BLANK_DELAY_MS = 420;
 
   if (mouseMode) {
     document.body.classList.add("kiosk-mouse");
     try {
       localStorage.setItem("family-kiosk-mouse", "1");
     } catch {}
+  }
+
+  function frontFrame() {
+    return frames[frontKey];
+  }
+
+  function backFrame() {
+    return frames[frontKey === "a" ? "b" : "a"];
   }
 
   function defaultRotationSettings() {
@@ -76,28 +88,80 @@
     return `${screen.path}?${q}`;
   }
 
-  function isFrameReady() {
+  function isFrameReady(frame) {
     try {
-      return iframe.contentDocument?.readyState === "complete";
+      return frame.contentDocument?.readyState === "complete";
     } catch {
       return false;
     }
   }
 
-  function notifyShown() {
+  function notifyShown(frame) {
     clearTimeout(shownTimer);
     shownTimer = setTimeout(() => {
       try {
-        iframe.contentWindow?.postMessage({ type: "fb-kiosk-shown" }, location.origin);
+        (frame || frontFrame()).contentWindow?.postMessage({ type: "fb-kiosk-shown" }, location.origin);
       } catch {}
     }, 200);
   }
 
-  function finishShow() {
-    shell.classList.remove("loading");
-    iframe.classList.add("ready");
+  function blankFrame(frame) {
+    if (!frame || frame === frontFrame()) return;
+    try {
+      if (frame.src && frame.src !== "about:blank") {
+        frame.src = "about:blank";
+      }
+    } catch {}
+    frame.dataset.screenId = "";
+  }
+
+  function afterFramePaint(frame, gen, fn) {
+    const run = () => {
+      if (gen !== loadGen) return;
+      requestAnimationFrame(() => {
+        if (gen !== loadGen) return;
+        requestAnimationFrame(() => {
+          if (gen !== loadGen) return;
+          fn();
+        });
+      });
+    };
+    try {
+      if (frame.contentDocument?.readyState === "complete") run();
+      else frame.addEventListener("load", run, { once: true });
+    } catch {
+      run();
+    }
+  }
+
+  function finishSwap(incoming, outgoing, id) {
+    incoming.classList.add("show");
+    outgoing.classList.remove("show");
+    frontKey = incoming === frameA ? "a" : "b";
+    currentId = id;
+    incoming.dataset.screenId = id;
     navigating = false;
-    notifyShown();
+    notifyShown(incoming);
+    warmNextScreen();
+    scheduleRotation();
+    setTimeout(() => blankFrame(outgoing), BLANK_DELAY_MS);
+  }
+
+  function isFrameBlank(frame) {
+    try {
+      const src = frame.getAttribute("src") || "";
+      return !src || src === "about:blank";
+    } catch {
+      return true;
+    }
+  }
+
+  function finishFirstShow(frame, id) {
+    frame.classList.add("show");
+    frame.dataset.screenId = id;
+    currentId = id;
+    navigating = false;
+    notifyShown(frame);
     warmNextScreen();
     scheduleRotation();
   }
@@ -134,32 +198,30 @@
     const href = screenUrl(id);
     if (!href) return;
 
-    currentId = id;
-    const sameDoc =
-      iframe.dataset.screenId === id &&
-      (isFrameReady() || navigating);
-
-    if (sameDoc && isFrameReady()) {
-      finishShow();
+    const front = frontFrame();
+    if (front.dataset.screenId === id && isFrameReady(front) && !navigating) {
+      notifyShown(front);
+      scheduleRotation();
+      warmNextScreen();
       return;
     }
 
-    navigating = true;
-    iframe.dataset.screenId = id;
-    shell.classList.add("loading");
-    iframe.classList.remove("ready");
-
+    const outgoing = frontFrame();
+    const incoming = isFrameBlank(outgoing) ? outgoing : backFrame();
     const gen = ++loadGen;
-    iframe.addEventListener(
-      "load",
-      () => {
-        if (gen !== loadGen) return;
-        finishShow();
-      },
-      { once: true }
-    );
+    navigating = true;
+    incoming.dataset.pendingId = id;
 
-    iframe.src = href;
+    const onReady = () => {
+      if (incoming === outgoing) {
+        afterFramePaint(incoming, gen, () => finishFirstShow(incoming, id));
+        return;
+      }
+      afterFramePaint(incoming, gen, () => finishSwap(incoming, outgoing, id));
+    };
+
+    incoming.addEventListener("load", onReady, { once: true });
+    incoming.src = href;
   }
 
   function goToNextRotation() {
@@ -187,7 +249,7 @@
         return;
       }
       try {
-        if (iframe.contentDocument?.querySelector(".touch-input-overlay.open")) {
+        if (frontFrame().contentDocument?.querySelector(".touch-input-overlay.open")) {
           scheduleRotation();
           return;
         }

@@ -25,7 +25,7 @@
       background: var(--bg0, #000);
     }
 
-    #screenFrame {
+    .screen-frame {
       position: absolute;
       inset: 0;
       width: 100%;
@@ -33,21 +33,22 @@
       border: 0;
       background: var(--bg0, #000);
       opacity: 0;
-      transition: opacity 0.2s ease;
+      z-index: 0;
+      pointer-events: none;
+      transition: opacity 0.38s ease;
     }
 
-    #screenFrame.ready {
+    .screen-frame.show {
       opacity: 1;
-    }
-
-    #kioskShell.loading #screenFrame:not(.ready) {
-      opacity: 0;
+      z-index: 1;
+      pointer-events: auto;
     }
   </style>
 </head>
 <body class="kiosk">
   <div id="kioskShell">
-    <iframe id="screenFrame" title="Family Board"></iframe>
+    <iframe id="screenFrameA" class="screen-frame show" title="Family Board"></iframe>
+    <iframe id="screenFrameB" class="screen-frame" title="Family Board"></iframe>
   </div>
   <script src="../shared/family-api.js"></script>
   <script src="../shared/screens.js"></script>

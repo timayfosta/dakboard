@@ -227,6 +227,21 @@ body.kiosk {
   cursor: none;
 }
 
+/* Kiosk embed: hide until first paint (reduces iframe load flash) */
+html.embed-boot,
+html.embed-boot body {
+  background: var(--bg0, #000);
+}
+
+html.embed-boot .tv-frame {
+  opacity: 0;
+}
+
+html.embed-ready .tv-frame {
+  opacity: 1;
+  transition: opacity 0.22s ease;
+}
+
 /* Don't highlight/select text while swiping the TV. Inputs can still be edited. */
 body.kiosk,
 body.tv-stage {
