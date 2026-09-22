@@ -743,23 +743,24 @@
             const kind =
               row.type === "consequence" || row.type === "bonus"
                 ? "Extra"
+                : row.type === "noneDone"
+                  ? "No chores"
                 : row.type === "redeem"
                   ? "Reward"
                   : row.type === "adjust"
                     ? "Adjustment"
                     : "Chore";
             const tone =
-              row.type === "consequence"
+              row.type === "consequence" || row.type === "noneDone" || stars < 0
                 ? "consequence"
                 : row.type === "chore" || row.type === "bonus" || !row.type
                   ? "chore"
-                  : stars >= 0
-                    ? "good"
-                    : "bad";
+                  : "good";
+            const amt = stars < 0 ? `−★${Math.abs(stars)}` : stars > 0 ? `+★${stars}` : "★0";
             return `
               <div class="receipt-line ${tone}">
                 <span>${row.icon || ""} ${row.title}</span>
-                <span class="amt">${stars >= 0 ? "+" : ""}★${stars}</span>
+                <span class="amt">${amt}</span>
                 <span class="meta">${receiptDate(row.at)} · ${kind}${late}</span>
               </div>`;
           })

@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 from copy import deepcopy
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -122,10 +122,17 @@ def default_state() -> dict[str, Any]:
         "consequenceHits": [],
         "bonusHits": [],
         "starLog": [],
+        "noneDoneApplied": {},
         "whiteboard": {"version": 1, "strokes": [], "updatedAt": 0},
         "screensaverPhotos": [],
         "settings": {
             "allDoneBonus": 3,
+            "noneDonePenalty": {
+                "enabled": False,
+                "stars": 0,
+                "applyTime": "21:00",
+                "byKid": {},
+            },
             "familyName": "Family Board",
             "rotation": {
                 "pauseOnTouchSeconds": 120,
@@ -344,14 +351,14 @@ def chore_star_value(chore: dict[str, Any], default: int = 1) -> int:
 
 
 def late_star_value(chore: dict[str, Any]) -> int:
-    """Stars earned after the due time. Blank lateStars keeps the old half-price default."""
+    """Stars after the due time. Blank lateStars keeps the old half-price default. Can be negative."""
     base = chore_star_value(chore)
     raw = chore.get("lateStars") if isinstance(chore, dict) else None
     if raw in (None, ""):
         if base <= 0:
             return 0
         return max(1, base // 2)
-    return clamp_int(raw, 0, 0, 99)
+    return clamp_int(raw, 0, -99, 99)
 
 
 def chore_stars_for_now(chore: dict[str, Any], when=None) -> tuple[int, bool]:
@@ -371,11 +378,21 @@ def completion_stars(entry: Any, chore: dict[str, Any]) -> int:
         return chore_star_value(chore)
     if isinstance(entry, dict):
         if "stars" in entry and entry.get("stars") not in (None, ""):
-            return clamp_int(entry.get("stars"), 0, 0, 99)
+            return clamp_int(entry.get("stars"), 0, -99, 99)
         return chore_star_value(chore)
     if isinstance(entry, (int, float)):
-        return clamp_int(entry, 0, 0, 99)
+        return clamp_int(entry, 0, -99, 99)
     return 0
+
+
+def apply_star_delta(balance: int, delta: int) -> tuple[int, int]:
+    """Apply a star change and clamp at 0. Returns (new_balance, applied_delta)."""
+    current = int(balance or 0)
+    change = int(delta or 0)
+    if change >= 0:
+        return current + change, change
+    applied = max(change, -current)
+    return current + applied, applied
 
 
 def today_key() -> str:
@@ -584,6 +601,174 @@ def prune_redemptions(state: dict[str, Any]) -> bool:
     return True
 
 
+def default_none_done_penalty() -> dict[str, Any]:
+    return {
+        "enabled": False,
+        "stars": 0,
+        "applyTime": "21:00",
+        "byKid": {},
+    }
+
+
+def merged_none_done_penalty(raw: dict[str, Any] | None = None) -> dict[str, Any]:
+    defaults = default_none_done_penalty()
+    src = raw if isinstance(raw, dict) else {}
+    by_kid: dict[str, int] = {}
+    raw_kids = src.get("byKid") if isinstance(src.get("byKid"), dict) else {}
+    for kid_id, value in raw_kids.items():
+        key = str(kid_id or "").strip()
+        if not key or value in (None, ""):
+            continue
+        by_kid[key] = clamp_int(value, 0, 0, 99)
+    apply_time = parse_due_time(src.get("applyTime")) or defaults["applyTime"]
+    return {
+        "enabled": bool(src.get("enabled", defaults["enabled"])),
+        "stars": clamp_int(src.get("stars"), defaults["stars"], 0, 99),
+        "applyTime": apply_time,
+        "byKid": by_kid,
+    }
+
+
+def none_done_stars_for_kid(settings: dict[str, Any], kid_id: str) -> int:
+    by_kid = settings.get("byKid") or {}
+    if kid_id in by_kid:
+        return clamp_int(by_kid.get(kid_id), 0, 0, 99)
+    return clamp_int(settings.get("stars"), 0, 0, 99)
+
+
+def kid_chores_due_on(state: dict[str, Any], kid_id: str, day: Any) -> list[dict[str, Any]]:
+    due: list[dict[str, Any]] = []
+    for chore in state.get("chores") or []:
+        if not isinstance(chore, dict) or chore.get("active") is False:
+            continue
+        if kid_id not in (chore.get("kidIds") or []):
+            continue
+        if chore_due_on(chore, day):
+            due.append(chore)
+    return due
+
+
+def kid_completed_any_on(state: dict[str, Any], kid_id: str, day: str) -> bool:
+    bucket = (state.get("completions") or {}).get(day) or {}
+    if not isinstance(bucket, dict):
+        return False
+    suffix = f":{kid_id}"
+    for key, entry in bucket.items():
+        if not str(key).endswith(suffix):
+            continue
+        if entry:
+            return True
+    return False
+
+
+def prune_none_done_applied(state: dict[str, Any], keep_days: int = 21) -> bool:
+    raw = state.get("noneDoneApplied")
+    if not isinstance(raw, dict):
+        state["noneDoneApplied"] = {}
+        return True
+    cutoff = date.today() - timedelta(days=keep_days)
+    kept: dict[str, list[str]] = {}
+    for day, kids in raw.items():
+        try:
+            when = date.fromisoformat(str(day)[:10])
+        except ValueError:
+            continue
+        if when < cutoff:
+            continue
+        kept[str(day)[:10]] = [str(kid) for kid in (kids or []) if kid]
+    if kept != raw:
+        state["noneDoneApplied"] = kept
+        return True
+    return False
+
+
+def apply_none_done_penalties(state: dict[str, Any], when: datetime | None = None) -> bool:
+    """Deduct stars when a child finished no chores by the admin cutoff (or overnight)."""
+    settings = merged_none_done_penalty((state.get("settings") or {}).get("noneDonePenalty"))
+    if not settings["enabled"]:
+        return prune_none_done_applied(state)
+
+    now = when or datetime.now()
+    today = now.date()
+    today_s = today.isoformat()
+    yesterday_s = (today - timedelta(days=1)).isoformat()
+    apply_mins = due_time_minutes(settings["applyTime"])
+    now_mins = now.hour * 60 + now.minute
+    last_chore_day = str((state.get("meta") or {}).get("lastChoreDay") or "")
+    days: list[str] = []
+    # Yesterday is only safe before rollover wipes that day's completions.
+    if last_chore_day != today_s:
+        days.append(yesterday_s)
+    if apply_mins is not None and now_mins >= apply_mins:
+        days.append(today_s)
+
+    applied_map = state.setdefault("noneDoneApplied", {})
+    if not isinstance(applied_map, dict):
+        applied_map = {}
+        state["noneDoneApplied"] = applied_map
+
+    dirty = False
+    bal = state.setdefault("balances", {})
+    bad_hits = state.setdefault("consequenceHits", [])
+    stamped = now_ms()
+
+    for day in days:
+        already = {str(kid) for kid in (applied_map.get(day) or [])}
+        day_kids = list(already)
+        for kid in state.get("kids") or []:
+            if not isinstance(kid, dict) or kid.get("active") is False:
+                continue
+            kid_id = str(kid.get("id") or "").strip()
+            if not kid_id or kid_id in already:
+                continue
+            stars = none_done_stars_for_kid(settings, kid_id)
+            if stars <= 0 or not kid_chores_due_on(state, kid_id, day):
+                day_kids.append(kid_id)
+                dirty = True
+                continue
+            if kid_completed_any_on(state, kid_id, day):
+                day_kids.append(kid_id)
+                dirty = True
+                continue
+
+            current = int(bal.get(kid_id) or 0)
+            new_bal, applied = apply_star_delta(current, -stars)
+            bal[kid_id] = new_bal
+            taken = abs(applied)
+            if taken:
+                hit = {
+                    "id": _id("hit"),
+                    "kidId": kid_id,
+                    "title": "No chores done",
+                    "reason": "No chores done",
+                    "icon": "⚠️",
+                    "stars": taken,
+                    "kind": "bad",
+                    "at": stamped,
+                }
+                bad_hits.append(hit)
+                append_star_log(
+                    state,
+                    kidId=kid_id,
+                    type="noneDone",
+                    title="No chores done",
+                    icon="⚠️",
+                    stars=-taken,
+                    at=stamped,
+                    day=day,
+                    ref=f"noneDone:{day}",
+                )
+            day_kids.append(kid_id)
+            dirty = True
+        applied_map[day] = day_kids
+
+    if dirty:
+        state["consequenceHits"] = recent_consequence_hits(state)
+    if prune_none_done_applied(state):
+        dirty = True
+    return dirty
+
+
 def rollover_completions(state: dict[str, Any]) -> bool:
     """Drop completed-chore display buckets when the calendar day changes."""
     today = today_key()
@@ -664,6 +849,8 @@ def prepare_state(state: dict[str, Any]) -> bool:
         dirty = True
     if migrate_star_log(state):
         dirty = True
+    if apply_none_done_penalties(state):
+        dirty = True
     if rollover_completions(state):
         dirty = True
     if prune_redemptions(state):
@@ -717,6 +904,9 @@ def merged_settings(state: dict[str, Any]) -> dict[str, Any]:
         ss["idleMinutes"] = 5
     settings["rotation"] = merged_rotation((state.get("settings") or {}).get("rotation"))
     settings["kioskTheme"] = "day" if settings.get("kioskTheme") == "day" else "night"
+    settings["noneDonePenalty"] = merged_none_done_penalty(
+        (state.get("settings") or {}).get("noneDonePenalty")
+    )
     return settings
 
 
@@ -727,7 +917,8 @@ def public_state(state: dict[str, Any] | None = None, scope: str | None = None) 
             if prepare_state(state):
                 _save_unlocked(state)
             return _public_view(state, scope)
-    prepare_state(state)
+    if prepare_state(state):
+        save_db(state)
     return _public_view(state, scope)
 
 

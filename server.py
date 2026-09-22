@@ -1919,10 +1919,10 @@ class Handler(SimpleHTTPRequestHandler):
                 stars = db.clamp_int(existing.get("stars"), 1, 0, 99)
             if "lateStars" in payload:
                 late_raw = payload.get("lateStars")
-                late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, 0, 99)
+                late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, -99, 99)
             else:
                 late_raw = existing.get("lateStars")
-                late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, 0, 99)
+                late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, -99, 99)
             interval, interval_days, interval_anchor = db.normalize_interval(payload, existing)
             chore = {
                 "id": existing.get("id") or chore_id or new_id("chore"),
@@ -2408,6 +2408,25 @@ class Handler(SimpleHTTPRequestHandler):
                 ),
                 "screens": merged_screens,
             }
+        nd = payload.get("noneDonePenalty")
+        if isinstance(nd, dict):
+            current = settings.get("noneDonePenalty") or {}
+            raw_kids = nd.get("byKid") if "byKid" in nd else current.get("byKid")
+            by_kid = {}
+            if isinstance(raw_kids, dict):
+                for kid_id, value in raw_kids.items():
+                    key = str(kid_id or "").strip()
+                    if not key or value in (None, ""):
+                        continue
+                    by_kid[key] = db.clamp_int(value, 0, 0, 99)
+            settings["noneDonePenalty"] = {
+                "enabled": bool(nd.get("enabled", current.get("enabled", False))),
+                "stars": db.clamp_int(nd.get("stars", current.get("stars", 0)), 0, 0, 99),
+                "applyTime": self._normalize_time(
+                    nd.get("applyTime"), current.get("applyTime", "21:00")
+                ),
+                "byKid": by_kid,
+            }
         db.save_db(state)
         send_json(self, {"ok": True, "settings": db.public_state(state)["settings"]})
 
@@ -2572,16 +2591,18 @@ class Handler(SimpleHTTPRequestHandler):
         if bucket.get(key):
             refund = db.completion_stars(bucket.get(key), chore)
             del bucket[key]
-            bal[kid_id] = max(0, bal[kid_id] - refund)
+            new_bal, _applied = db.apply_star_delta(bal[kid_id], -refund)
+            bal[kid_id] = new_bal
             db.remove_star_log(state, ref=f"chore:{chore_id}", kid_id=kid_id, day=day)
             done = False
             stars_earned = 0
             late = False
         else:
-            stars_earned, late = db.chore_stars_for_now(chore)
+            quoted, late = db.chore_stars_for_now(chore)
             stamped = db.now_ms()
+            new_bal, stars_earned = db.apply_star_delta(bal[kid_id], quoted)
+            bal[kid_id] = new_bal
             bucket[key] = {"stars": stars_earned, "late": late, "at": stamped}
-            bal[kid_id] += stars_earned
             db.append_star_log(
                 state,
                 kidId=kid_id,

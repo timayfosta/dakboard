@@ -432,6 +432,10 @@
       font-weight: 800;
     }
 
+    .stars-badge.neg {
+      color: #ff8a8a;
+    }
+
     .check {
       width: clamp(2.8rem, 7.4cqw, 3.6rem);
       height: clamp(2.8rem, 7.4cqw, 3.6rem);
@@ -1150,7 +1154,13 @@
         return defaultLateStars(choreStars(chore));
       }
       const n = Number(chore.lateStars);
-      return Number.isFinite(n) ? Math.max(0, Math.min(99, n)) : defaultLateStars(choreStars(chore));
+      return Number.isFinite(n) ? Math.max(-99, Math.min(99, n)) : defaultLateStars(choreStars(chore));
+    }
+
+    function formatStarAmount(stars) {
+      const n = Number(stars) || 0;
+      if (n < 0) return `−★${Math.abs(n)}`;
+      return `★ ${n}`;
     }
 
     function choreStarsNow(chore, done) {
@@ -1165,7 +1175,7 @@
       bits.push(formatDueTimeLabel(chore));
       const sched = choreScheduleLabel(chore);
       if (sched) bits.push(sched);
-      if (!done && isPastDue(chore)) bits.push(`LATE — ★${lateStarValue(chore)}`);
+      if (!done && isPastDue(chore)) bits.push(`LATE — ${formatStarAmount(lateStarValue(chore))}`);
       return bits.join(" · ");
     }
 
@@ -1258,9 +1268,9 @@
         fresh.forEach((c) => localStorage.setItem(remindKey(kid.id, c.id), "1"));
         document.getElementById("remindTitle").textContent = `${kid.emoji} ${kid.name} — past due`;
         document.getElementById("remindBody").textContent =
-          `These weren't finished on time. Completing now earns the late star amount.`;
+          `These weren't finished on time. Completing now uses the late star amount — that can add, zero, or take stars.`;
         document.getElementById("remindList").innerHTML = overdue
-          .map((c) => `<li>${c.icon ? `${c.icon} ` : ""}${c.title} · ${formatDueTimeLabel(c)} · ★${lateStarValue(c)}</li>`)
+          .map((c) => `<li>${c.icon ? `${c.icon} ` : ""}${c.title} · ${formatDueTimeLabel(c)} · ${formatStarAmount(lateStarValue(c))}</li>`)
           .join("");
         document.getElementById("reminderOverlay").classList.add("show");
         if (state.kidId !== kid.id) {
@@ -1300,7 +1310,7 @@
           ${icon ? `<div class="chore-ico"><span class="emoji">${icon}</span></div>` : ""}
           <div class="chore-text">
             <h3>${chore.title}</h3>
-            <p><span class="stars-badge">★ ${choreStarsNow(chore, done)}</span> · ${choreDescription(chore, done)}</p>
+            <p><span class="stars-badge${choreStarsNow(chore, done) < 0 ? " neg" : ""}">${formatStarAmount(choreStarsNow(chore, done))}</span> · ${choreDescription(chore, done)}</p>
           </div>
           <div class="check check-${style}">${checkMark(chore, done)}</div>
         </li>`;
@@ -1341,12 +1351,20 @@
         state.fingerprints.all = "";
 
         if (res.done && el) {
-          if ((res.starsEarned || 0) > 0) {
+          const earned = Number(res.starsEarned) || 0;
+          if (earned > 0) {
             FamilyFX.starBurst(document.getElementById("fxRoot"), el);
-            const label = res.late ? `+${res.starsEarned}★ late` : `+${res.starsEarned}★`;
-            FamilyFX.floatLabel(el, label);
+            FamilyFX.floatLabel(el, res.late ? `+${earned}★ late` : `+${earned}★`);
+            cheer(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
+          } else if (earned < 0) {
+            FamilyFX.floatLabel(el, res.late ? `${earned}★ late` : `${earned}★`);
+            cheer("Late — stars taken");
+          } else if (res.late) {
+            FamilyFX.floatLabel(el, "0★ late");
+            cheer("Finished late");
+          } else {
+            cheer(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
           }
-          cheer(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
         }
 
         renderAll(true);

@@ -567,6 +567,20 @@
     return Math.max(0, Math.min(99, n));
   }
 
+  function parseSignedStars(value, fallback = 0) {
+    if (value === null || value === undefined || value === "") return fallback;
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(-99, Math.min(99, Math.trunc(n)));
+  }
+
+  function formatStarAmount(stars) {
+    const n = Number(stars) || 0;
+    if (n < 0) return `−★${Math.abs(n)}`;
+    if (n > 0) return `+★${n}`;
+    return "★0";
+  }
+
   function normalizePickerIcon(value) {
     const raw = String(value ?? "").trim();
     if (!raw || raw === ICON_NONE) return "";
@@ -631,16 +645,15 @@
     if (chore?.lateStars === undefined || chore?.lateStars === null || chore?.lateStars === "") {
       return defaultLateStars(chore?.stars);
     }
-    return parseStars(chore.lateStars, defaultLateStars(chore?.stars));
+    return parseSignedStars(chore.lateStars, defaultLateStars(chore?.stars));
   }
 
   function lateStarsLabel(chore) {
     if (!choreDueTimeValue(chore)) return "";
-    if (chore?.lateStars === 0 || chore?.lateStars === "0") return "late ★0";
     if (chore?.lateStars === undefined || chore?.lateStars === null || chore?.lateStars === "") {
       return "late half";
     }
-    return `late ★${parseStars(chore.lateStars, 0)}`;
+    return `late ${formatStarAmount(lateStarValue(chore))}`;
   }
 
   function readLateStarsField(form) {
@@ -648,7 +661,7 @@
     if (!input) return "";
     const raw = String(input.value ?? "").trim();
     if (raw === "") return "";
-    return parseStars(raw, 0);
+    return parseSignedStars(raw, 0);
   }
 
   function parseDueParts(hhmm) {
@@ -852,7 +865,7 @@
           ? "0"
           : chore.lateStars === undefined || chore.lateStars === null || chore.lateStars === ""
             ? ""
-            : String(parseStars(chore.lateStars, 0));
+            : String(parseSignedStars(chore.lateStars, 0));
     }
     syncDueTimeUi(form);
     const intervalSel = form.querySelector('[name="interval"]');
@@ -930,6 +943,7 @@
 
   function receiptKindLabel(row) {
     if (row.type === "consequence" || row.type === "bonus") return "Extra";
+    if (row.type === "noneDone") return "No chores";
     if (row.type === "redeem") return "Reward";
     if (row.type === "adjust") return "Adjustment";
     return "Chore";
@@ -937,7 +951,8 @@
 
   function receiptTone(row) {
     const stars = Number(row.stars || 0);
-    if (row.type === "consequence") return "bad";
+    if (row.type === "consequence" || row.type === "noneDone") return "bad";
+    if (stars < 0) return "bad";
     if (row.type === "chore" || row.type === "bonus" || !row.type) return "good";
     return stars >= 0 ? "good" : "bad";
   }
@@ -965,12 +980,11 @@
         .map((row) => {
           const stars = Number(row.stars || 0);
           const late = row.late ? " · LATE" : "";
-          const sign = stars > 0 ? "+" : "";
           return `
             <div class="receipt-line ${receiptTone(row)}">
               <div class="receipt-line-main">
                 <span>${escapeHtml(row.icon || "")} ${escapeHtml(row.title || "")}</span>
-                <span class="amt">${sign}★${stars}</span>
+                <span class="amt">${formatStarAmount(stars)}</span>
                 <span class="meta">${escapeHtml(receiptDate(row.at))} · ${escapeHtml(receiptKindLabel(row))}${late}</span>
               </div>
               <button type="button" class="btn-x" data-del-log="${escapeHtml(row.id)}" aria-label="Remove line">×</button>
@@ -1123,12 +1137,12 @@
               </div>
             </div>
             <button type="button" class="btn ghost compact time-clear hidden" data-due-clear>Anytime</button>
-            <p class="field-hint">Use the arrows and AM/PM. Anytime means no deadline. After the time, finishing earns the late star amount.</p>
+            <p class="field-hint">Use the arrows and AM/PM. Anytime means no deadline. After the time, finishing uses the late star amount.</p>
           </div>
           <div class="field hidden" id="lateStarsField">
             <label>Late stars</label>
-            <input name="lateStars" type="number" min="0" max="99" placeholder="Half" />
-            <p class="field-hint">Stars earned after the due time. Leave blank for half of the regular stars.</p>
+            <input name="lateStars" type="number" min="-99" max="99" step="1" placeholder="Half" />
+            <p class="field-hint">Stars after the due time. Leave blank for half. Use 0 for none, or a negative number to take stars.</p>
           </div>
           <div class="field">
             <label>Shows up</label>
@@ -1167,6 +1181,7 @@
           </div>
         </form>
       </section>
+      ${renderNoneDoneCard(d)}
       <section class="list">
         ${d.chores
           .filter((c) => c.active !== false)
@@ -1187,6 +1202,69 @@
             </article>`;
           })
           .join("")}
+      </section>`;
+  }
+
+  function noneDoneSettings(d) {
+    return {
+      enabled: false,
+      stars: 0,
+      applyTime: "21:00",
+      byKid: {},
+      ...(d?.settings?.noneDonePenalty || {}),
+    };
+  }
+
+  function renderNoneDoneCard(d) {
+    const nd = noneDoneSettings(d);
+    const kids = (d.kids || []).filter((k) => k.active !== false);
+    const byKid = nd.byKid || {};
+    const kidRows = kids
+      .map((k) => {
+        const override = Object.prototype.hasOwnProperty.call(byKid, k.id) ? String(byKid[k.id]) : "";
+        return `
+          <label class="none-done-kid">
+            <span>${k.emoji ? `${k.emoji} ` : ""}${k.name}</span>
+            <input
+              type="number"
+              min="0"
+              max="99"
+              step="1"
+              inputmode="numeric"
+              name="noneDone_${k.id}"
+              data-none-done-kid="${k.id}"
+              value="${escAttr(override)}"
+              placeholder="${escAttr(String(nd.stars || 0))}"
+            />
+          </label>`;
+      })
+      .join("");
+    return `
+      <section class="card">
+        <h2>If no chores are done</h2>
+        <form id="noneDoneForm">
+          <label class="night-toggle">
+            <input type="checkbox" name="enabled" ${nd.enabled ? "checked" : ""} />
+            <span>Deduct stars when a child finishes nothing</span>
+          </label>
+          <p class="muted field-hint">Admin only. The TV cannot change this. At the time below, any child who still has zero chores done loses stars.</p>
+          <div class="ss-grid">
+            <label>
+              Default stars to take
+              <input type="number" name="stars" min="0" max="99" step="1" inputmode="numeric" value="${escAttr(String(nd.stars || 0))}" />
+            </label>
+            <label>
+              Apply at
+              <input type="time" name="applyTime" value="${escAttr(nd.applyTime || "21:00")}" />
+            </label>
+          </div>
+          <div class="field">
+            <label>Per child</label>
+            <p class="field-hint">Leave blank to use the default. 0 means no deduction for that child.</p>
+            <div class="none-done-kids">${kidRows || `<p class="muted">Add kids first.</p>`}</div>
+          </div>
+          <button class="btn block" type="submit">Save no-chores penalty</button>
+        </form>
       </section>`;
   }
 
@@ -2306,6 +2384,38 @@
     }
 
     $("#cancelChoreEdit")?.addEventListener("click", () => resetChoreForm());
+
+    const noneDoneForm = $("#noneDoneForm");
+    if (noneDoneForm) {
+      noneDoneForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const fd = new FormData(noneDoneForm);
+        const btn = noneDoneForm.querySelector('button[type="submit"]');
+        const byKid = {};
+        noneDoneForm.querySelectorAll("[data-none-done-kid]").forEach((input) => {
+          const raw = String(input.value ?? "").trim();
+          if (raw === "") return;
+          byKid[input.dataset.noneDoneKid] = parseStars(raw, 0);
+        });
+        try {
+          if (btn) btn.disabled = true;
+          await AdminAPI.saveSettings(state.token, {
+            noneDonePenalty: {
+              enabled: fd.has("enabled"),
+              stars: parseStars(fd.get("stars"), 0),
+              applyTime: fd.get("applyTime") || "21:00",
+              byKid,
+            },
+          });
+          toast("No-chores penalty saved");
+          await refresh();
+        } catch (err) {
+          toast(apiErrorMessage(err));
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      });
+    }
 
     $$("[data-edit-chore-id]").forEach((btn) => {
       btn.addEventListener("click", () => {

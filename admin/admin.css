@@ -244,6 +244,27 @@ button, input, select, textarea {
   line-height: 1.35;
 }
 
+.none-done-kids {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.none-done-kid {
+  display: grid;
+  grid-template-columns: 1fr 5.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.none-done-kid input {
+  width: 100%;
+}
+
 .time-picker {
   display: grid;
   grid-template-columns: 1fr auto 1fr minmax(4.6rem, 0.8fr);
