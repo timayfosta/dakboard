@@ -1914,9 +1914,9 @@ class Handler(SimpleHTTPRequestHandler):
             else:
                 icon = db.normalize_chore_icon(existing.get("icon"))
             if "stars" in payload:
-                stars = db.clamp_int(payload.get("stars"), 0, 0, 99)
+                stars = db.clamp_int(payload.get("stars"), 0, -99, 99)
             else:
-                stars = db.clamp_int(existing.get("stars"), 1, 0, 99)
+                stars = db.clamp_int(existing.get("stars"), 1, -99, 99)
             if "lateStars" in payload:
                 late_raw = payload.get("lateStars")
                 late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, -99, 99)

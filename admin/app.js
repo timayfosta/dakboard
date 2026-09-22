@@ -597,12 +597,12 @@
     const input = form.querySelector('[name="stars"]');
     if (!input) return 0;
     if (input.value === "0" || input.valueAsNumber === 0) return 0;
-    return parseStars(input.value, 0);
+    return parseSignedStars(input.value, 0);
   }
 
   function lastChoreStars() {
     try {
-      return parseStars(sessionStorage.getItem(CHORE_STARS_KEY), 1);
+      return parseSignedStars(sessionStorage.getItem(CHORE_STARS_KEY), 1);
     } catch {
       return 1;
     }
@@ -610,8 +610,27 @@
 
   function rememberChoreStars(stars) {
     try {
-      sessionStorage.setItem(CHORE_STARS_KEY, String(parseStars(stars, 1)));
+      sessionStorage.setItem(CHORE_STARS_KEY, String(parseSignedStars(stars, 1)));
     } catch {}
+  }
+
+  function bumpStarField(form, name, dir) {
+    const input = form.querySelector(`[name="${name}"]`);
+    if (!input) return;
+    const raw = String(input.value ?? "").trim();
+    const current = raw === "" ? 0 : parseSignedStars(raw, 0);
+    input.value = String(Math.max(-99, Math.min(99, current + dir)));
+  }
+
+  function renderStarStepper(name, value, placeholder) {
+    const shown = value === "" || value === undefined || value === null ? "" : String(value);
+    const ph = placeholder === undefined ? "" : ` placeholder="${escAttr(String(placeholder))}"`;
+    return `
+      <div class="star-step">
+        <button type="button" class="star-step-btn" data-star-step="${name}" data-dir="-1" aria-label="Minus one star">−</button>
+        <input name="${name}" type="number" min="-99" max="99" step="1" inputmode="decimal" value="${escAttr(shown)}"${ph} />
+        <button type="button" class="star-step-btn" data-star-step="${name}" data-dir="1" aria-label="Plus one star">+</button>
+      </div>`;
   }
 
   function choreDueTimeValue(chore) {
@@ -750,7 +769,6 @@
   function syncDueTimeUi(form) {
     if (!form) return;
     const due = String(form.querySelector('[name="dueTime"]')?.value || "").trim();
-    form.querySelector("#lateStarsField")?.classList.toggle("hidden", !due);
     form.querySelector("[data-due-clear]")?.classList.toggle("hidden", !due);
   }
 
@@ -856,7 +874,7 @@
     }
     idInput.value = chore.id;
     form.querySelector('[name="title"]').value = chore.title || "";
-    form.querySelector('[name="stars"]').value = String(parseStars(chore.stars, 1));
+    form.querySelector('[name="stars"]').value = String(parseSignedStars(chore.stars, 1));
     setDueTimePicker(form, choreDueTimeValue(chore));
     const lateInput = form.querySelector('[name="lateStars"]');
     if (lateInput) {
@@ -1099,6 +1117,7 @@
     const checkStyleLabel = (id) => CHECK_STYLES.find((s) => s.id === id)?.label || "Circle";
     const lastStars = lastChoreStars();
     return `
+      ${renderNoneDoneCard(d)}
       <section class="card">
         <h2>Add chore</h2>
         <form id="choreForm">
@@ -1109,7 +1128,11 @@
             ${renderEmojiPicker("icon", CHORE_EMOJIS, ICON_NONE, { allowNone: true, size: "lg" })}
             <p class="field-hint">Kids who cannot read tap the picture. Pick something they will recognize.</p>
           </div>
-          <div class="field"><label>Stars</label><input name="stars" type="number" min="0" max="99" value="${escAttr(lastStars)}" /></div>
+          <div class="field">
+            <label>Stars</label>
+            ${renderStarStepper("stars", lastStars)}
+            <p class="field-hint">Use − to take stars, + to give them. Negative is allowed.</p>
+          </div>
           <div class="field"><label>Hint (optional)</label><input type="text" inputmode="text" name="hint" placeholder="Before school — pull covers neat" /></div>
           <div class="field">
             <label>Due by</label>
@@ -1139,10 +1162,10 @@
             <button type="button" class="btn ghost compact time-clear hidden" data-due-clear>Anytime</button>
             <p class="field-hint">Use the arrows and AM/PM. Anytime means no deadline. After the time, finishing uses the late star amount.</p>
           </div>
-          <div class="field hidden" id="lateStarsField">
+          <div class="field" id="lateStarsField">
             <label>Late stars</label>
-            <input name="lateStars" type="number" min="-99" max="99" step="1" placeholder="Half" />
-            <p class="field-hint">Stars after the due time. Leave blank for half. Use 0 for none, or a negative number to take stars.</p>
+            ${renderStarStepper("lateStars", "", "Half")}
+            <p class="field-hint">After the due time. Leave blank for half. Tap − to take stars when it is late.</p>
           </div>
           <div class="field">
             <label>Shows up</label>
@@ -1181,7 +1204,6 @@
           </div>
         </form>
       </section>
-      ${renderNoneDoneCard(d)}
       <section class="list">
         ${d.chores
           .filter((c) => c.active !== false)
@@ -1192,7 +1214,7 @@
               <div class="item-head">
                 <div class="item-main">
                   <div class="title">${icon ? icon + " " : ""}${c.title}</div>
-                  <div class="muted">★${parseStars(c.stars, 1)}${lateStarsLabel(c) ? ` · ${lateStarsLabel(c)}` : ""} · ${intervalLabel(c)} · ${formatDueTime(c)} · ${checkStyleLabel(c.checkStyle)} · ${kids}</div>
+                  <div class="muted">${formatStarAmount(parseSignedStars(c.stars, 1))}${lateStarsLabel(c) ? ` · ${lateStarsLabel(c)}` : ""} · ${intervalLabel(c)} · ${formatDueTime(c)} · ${checkStyleLabel(c.checkStyle)} · ${kids}</div>
                 </div>
                 <button type="button" class="btn-x" data-del-chore="${c.id}" aria-label="Remove ${c.title}">×</button>
               </div>
@@ -1241,7 +1263,7 @@
       .join("");
     return `
       <section class="card">
-        <h2>If no chores are done</h2>
+        <h2>No chores done</h2>
         <form id="noneDoneForm">
           <label class="night-toggle">
             <input type="checkbox" name="enabled" ${nd.enabled ? "checked" : ""} />
@@ -2333,6 +2355,9 @@
         setDueTimePicker(choreForm, dueTimeFromParts(hour, minute, ampm));
       });
       choreForm.querySelector("[data-due-clear]")?.addEventListener("click", () => setDueTimePicker(choreForm, ""));
+      choreForm.querySelectorAll("[data-star-step]").forEach((btn) => {
+        holdRepeat(btn, () => bumpStarField(choreForm, btn.dataset.starStep, Number(btn.dataset.dir) || 1));
+      });
       intervalSel?.addEventListener("change", () => syncIntervalUi(choreForm));
       syncDueTimeUi(choreForm);
       choreForm.querySelectorAll("[data-interval-day]").forEach((chip) => {

@@ -347,7 +347,7 @@ def normalize_chore_icon(value: Any) -> str:
 
 
 def chore_star_value(chore: dict[str, Any], default: int = 1) -> int:
-    return clamp_int(chore.get("stars"), default, 0, 99)
+    return clamp_int(chore.get("stars"), default, -99, 99)
 
 
 def late_star_value(chore: dict[str, Any]) -> int:
