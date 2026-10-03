@@ -10,7 +10,13 @@
 
   function isActiveDisplay() {
     if (document.visibilityState !== "visible") return false;
-    if (new URLSearchParams(location.search).has("embed")) return true;
+    if (inEmbed) {
+      /* Kiosk shell parks hidden screens; they skip clocks/refreshes until shown again. */
+      try {
+        if (window.frameElement?.classList.contains("is-parked")) return false;
+      } catch {}
+      return true;
+    }
     if (new URLSearchParams(location.search).has("frame")) {
       try {
         if (window.frameElement && !window.frameElement.classList.contains("on")) {
@@ -38,7 +44,9 @@
   }
 
   async function sync() {
-    if (!isActiveDisplay() || syncing) return;
+    /* Parked kiosk screens keep syncing data so they are current the moment they are revealed. */
+    const canSync = inEmbed ? document.visibilityState === "visible" : isActiveDisplay();
+    if (!canSync || syncing) return;
     syncing = true;
     try {
       const res = await fetch("/api/family/revision", { cache: "no-store" });

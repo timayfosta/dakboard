@@ -1,4 +1,4 @@
-/* Dual-iframe kiosk shell — crossfade between screens (no black flash) */
+/* Kiosk shell — every screen stays loaded in its own iframe; switching only reveals one (no reload, no black flash) */
 (function () {
   const params = new URLSearchParams(location.search);
   if (!params.has("kiosk")) return;
@@ -18,40 +18,32 @@
   const defaultPauseMs = Math.max(0, (registry.pauseOnTouchSeconds || 120) * 1000);
   const startId = params.get("start") || allScreens[0].id;
   const shell = document.getElementById("kioskShell");
-  const frameA = document.getElementById("screenFrameA");
-  const frameB = document.getElementById("screenFrameB");
-  if (!shell || !frameA || !frameB) return;
+  if (!shell) return;
 
-  const frames = { a: frameA, b: frameB };
-  let frontKey = "a";
-  let currentId = "";
+  const FADE_MS = 440;
+  const FAST_FADE_MS = 200;
+  /* Screens post fb-screen-ready once their data is drawn; don't wait forever on a slow one. */
+  const READY_TIMEOUT_MS = 3000;
+  /* A parked (opacity 0) frame may need a moment to paint once it is placed under the front one. */
+  const STAGE_SETTLE_MS = 80;
+
+  const frames = new Map();
+  let frontId = "";
+  let stagedId = "";
   let rotationSettings = null;
   let pauseMs = defaultPauseMs;
   let pauseUntil = 0;
   let rotateTimer = null;
-  let shownTimer = null;
-  let navigating = false;
-  let prerenderTag = null;
   let loadGen = 0;
   let swapTimer = 0;
   let swapCleanup = null;
-  const FADE_MS = 440;
-  /* Screens post fb-screen-ready once their data is drawn; don't wait forever on a slow one. */
-  const READY_TIMEOUT_MS = 3000;
+  let preloadStarted = false;
 
   if (mouseMode) {
     document.body.classList.add("kiosk-mouse");
     try {
       localStorage.setItem("family-kiosk-mouse", "1");
     } catch {}
-  }
-
-  function frontFrame() {
-    return frames[frontKey];
-  }
-
-  function backFrame() {
-    return frames[frontKey === "a" ? "b" : "a"];
   }
 
   function defaultRotationSettings() {
@@ -75,13 +67,6 @@
     return q.length ? q : allScreens.slice();
   }
 
-  function nextRotationId(fromId = currentId) {
-    const queue = rotationQueue();
-    if (queue.length < 2) return null;
-    const ri = queue.findIndex((s) => s.id === fromId);
-    return queue[ri < 0 ? 0 : (ri + 1) % queue.length].id;
-  }
-
   function screenUrl(id) {
     const screen = allScreens.find((s) => s.id === id);
     if (!screen) return "";
@@ -92,74 +77,90 @@
     return `${screen.path}?${q}`;
   }
 
-  function isFrameReady(frame) {
-    try {
-      return frame.contentDocument?.readyState === "complete";
-    } catch {
-      return false;
-    }
+  function frontFrame() {
+    return frames.get(frontId) || null;
+  }
+
+  function markReady(frame) {
+    if (!frame || frame.dataset.ready === "1") return;
+    frame.dataset.ready = "1";
+    clearTimeout(Number(frame.dataset.readyTimer) || 0);
+    const id = frame.dataset.screenId;
+    if (id !== frontId && id !== stagedId) frame.classList.add("is-parked");
+    frame.dispatchEvent(new Event("fb-ready"));
+  }
+
+  function whenReady(frame, fn) {
+    if (frame.dataset.ready === "1") fn();
+    else frame.addEventListener("fb-ready", fn, { once: true });
+  }
+
+  function ensureFrame(id) {
+    let frame = frames.get(id);
+    if (frame) return frame;
+    frame = document.createElement("iframe");
+    frame.className = "screen-frame";
+    frame.title = "Family Board";
+    frame.dataset.screenId = id;
+    frame.dataset.ready = "0";
+    frame.addEventListener("load", () => {
+      frame.dataset.ready = "0";
+      clearTimeout(Number(frame.dataset.readyTimer) || 0);
+      frame.dataset.readyTimer = String(setTimeout(() => markReady(frame), READY_TIMEOUT_MS));
+    });
+    frame.src = screenUrl(id);
+    shell.appendChild(frame);
+    frames.set(id, frame);
+    return frame;
   }
 
   function notifyShown(frame) {
-    clearTimeout(shownTimer);
-    shownTimer = setTimeout(() => {
-      try {
-        (frame || frontFrame()).contentWindow?.postMessage({ type: "fb-kiosk-shown" }, location.origin);
-      } catch {}
-    }, 200);
-  }
-
-  function blankFrame(frame) {
-    if (!frame || frame === frontFrame()) return;
     try {
-      if (frame.src && frame.src !== "about:blank") {
-        frame.src = "about:blank";
-      }
+      frame?.contentWindow?.postMessage({ type: "fb-kiosk-shown" }, location.origin);
     } catch {}
-    frame.dataset.screenId = "";
   }
 
-  function waitForScreenReady(frame, gen, fn) {
-    let settled = false;
-    let timer = 0;
-    const cleanup = () => {
-      clearTimeout(timer);
-      window.removeEventListener("message", onMessage);
-      frame.removeEventListener("load", onLoad);
-    };
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      if (gen !== loadGen) return;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (gen === loadGen) fn();
-        });
-      });
-    };
-    const onMessage = (e) => {
-      if (e.origin !== location.origin || e.source !== frame.contentWindow) return;
-      if (e.data?.type === "fb-screen-ready") finish();
-    };
-    const onLoad = () => {
-      if (gen !== loadGen) {
-        settled = true;
-        cleanup();
+  function afterFrames(count, fn) {
+    if (count <= 0) {
+      fn();
+      return;
+    }
+    requestAnimationFrame(() => afterFrames(count - 1, fn));
+  }
+
+  function startPreload() {
+    if (preloadStarted) return;
+    preloadStarted = true;
+    const startIndex = Math.max(0, allScreens.findIndex((s) => s.id === frontId));
+    const queue = [];
+    for (let i = 1; i < allScreens.length; i++) {
+      queue.push(allScreens[(startIndex + i) % allScreens.length].id);
+    }
+    const next = () => {
+      const id = queue.shift();
+      if (!id) return;
+      if (frames.has(id)) {
+        next();
         return;
       }
-      clearTimeout(timer);
-      timer = setTimeout(finish, READY_TIMEOUT_MS);
+      whenReady(ensureFrame(id), () => setTimeout(next, 250));
     };
-    window.addEventListener("message", onMessage);
-    frame.addEventListener("load", onLoad);
+    setTimeout(next, 600);
   }
 
-  function finishSwap(incoming, outgoing, id) {
-    frontKey = incoming === frameA ? "a" : "b";
-    currentId = id;
-    incoming.dataset.screenId = id;
-    navigating = false;
+  function finishFirstShow(frame, id) {
+    frame.classList.remove("is-staged", "is-parked", "is-leaving");
+    frame.classList.add("is-front");
+    frontId = id;
+    stagedId = "";
+    scheduleRotation();
+    startPreload();
+  }
+
+  function finishSwap(incoming, outgoing, id, fadeMs) {
+    frontId = id;
+    stagedId = "";
+    outgoing.style.transitionDuration = `${fadeMs}ms`;
     outgoing.classList.add("is-leaving");
     swapCleanup = () => {
       swapCleanup = null;
@@ -167,92 +168,57 @@
       incoming.classList.remove("is-staged");
       incoming.classList.add("is-front");
       outgoing.classList.remove("is-front", "is-leaving", "is-staged");
-      blankFrame(outgoing);
+      outgoing.style.transitionDuration = "";
+      outgoing.classList.add("is-parked");
     };
-    swapTimer = setTimeout(swapCleanup, FADE_MS);
-    notifyShown(incoming);
-    warmNextScreen();
+    swapTimer = setTimeout(swapCleanup, fadeMs + 20);
     scheduleRotation();
   }
 
-  function isFrameBlank(frame) {
-    try {
-      const src = frame.getAttribute("src") || "";
-      return !src || src === "about:blank";
-    } catch {
-      return true;
-    }
+  function unstage(id) {
+    const frame = frames.get(id);
+    if (!frame) return;
+    frame.classList.remove("is-staged");
+    if (frame.dataset.ready === "1") frame.classList.add("is-parked");
   }
 
-  function finishFirstShow(frame, id) {
-    frame.classList.remove("is-staged", "is-leaving");
-    frame.classList.add("is-front");
-    frame.dataset.screenId = id;
-    currentId = id;
-    navigating = false;
-    notifyShown(frame);
-    warmNextScreen();
-    scheduleRotation();
-  }
-
-  function warmNextScreen() {
-    const nextId = nextRotationId();
-    if (!nextId) return;
-    const href = screenUrl(nextId);
-    const abs = new URL(href, location.origin).href;
-
-    document.querySelectorAll('link[rel="prefetch"][data-kiosk-warm]').forEach((el) => el.remove());
-    prerenderTag?.remove();
-    prerenderTag = null;
-
-    const prefetch = document.createElement("link");
-    prefetch.rel = "prefetch";
-    prefetch.href = href;
-    prefetch.dataset.kioskWarm = "1";
-    document.head.appendChild(prefetch);
-
-    if (HTMLScriptElement.supports?.("speculationrules")) {
-      prerenderTag = document.createElement("script");
-      prerenderTag.type = "speculationrules";
-      prerenderTag.dataset.kioskWarm = "1";
-      prerenderTag.textContent = JSON.stringify({
-        prerender: [{ source: "list", urls: [abs] }],
-      });
-      document.head.appendChild(prerenderTag);
-    }
-  }
-
-  function show(id) {
+  function show(id, opts = {}) {
     if (!allScreens.some((s) => s.id === id)) id = allScreens[0].id;
-    const href = screenUrl(id);
-    if (!href) return;
-
     if (swapCleanup) swapCleanup();
 
-    const front = frontFrame();
-    if (front.dataset.screenId === id && isFrameReady(front) && !navigating) {
-      notifyShown(front);
+    if (stagedId && stagedId !== id) {
+      unstage(stagedId);
+      stagedId = "";
+      loadGen++;
+    }
+
+    if (id === frontId) {
+      notifyShown(frontFrame());
       scheduleRotation();
-      warmNextScreen();
       return;
     }
+    if (id === stagedId) return;
 
-    const outgoing = front;
-    const firstShow = isFrameBlank(outgoing);
-    const incoming = firstShow ? outgoing : backFrame();
+    const incoming = ensureFrame(id);
+    const outgoing = frontFrame();
     const gen = ++loadGen;
-    navigating = true;
-    incoming.dataset.pendingId = id;
-    if (!firstShow) {
-      incoming.classList.remove("is-front", "is-leaving");
-      incoming.classList.add("is-staged");
-    }
+    stagedId = id;
+    incoming.classList.remove("is-parked", "is-leaving", "is-front");
+    incoming.classList.add("is-staged");
+    const stagedAt = performance.now();
 
-    waitForScreenReady(incoming, gen, () => {
-      if (firstShow) finishFirstShow(incoming, id);
-      else finishSwap(incoming, outgoing, id);
+    whenReady(incoming, () => {
+      if (gen !== loadGen) return;
+      notifyShown(incoming);
+      const wait = Math.max(0, STAGE_SETTLE_MS - (performance.now() - stagedAt));
+      setTimeout(() => {
+        afterFrames(2, () => {
+          if (gen !== loadGen) return;
+          if (outgoing) finishSwap(incoming, outgoing, id, opts.fast ? FAST_FADE_MS : FADE_MS);
+          else finishFirstShow(incoming, id);
+        });
+      }, wait);
     });
-    incoming.src = href;
   }
 
   function goToNextRotation() {
@@ -261,7 +227,7 @@
       scheduleRotation();
       return;
     }
-    const ri = queue.findIndex((s) => s.id === currentId);
+    const ri = queue.findIndex((s) => s.id === frontId);
     const next = queue[ri < 0 ? 0 : (ri + 1) % queue.length];
     if (!next) return;
     show(next.id);
@@ -271,8 +237,8 @@
     clearTimeout(rotateTimer);
     const queue = rotationQueue();
     if (queue.length < 2) return;
-    const cfgSeconds = queue.some((s) => s.id === currentId)
-      ? screenConfig(currentId).seconds
+    const cfgSeconds = queue.some((s) => s.id === frontId)
+      ? screenConfig(frontId).seconds
       : defaultSeconds;
     rotateTimer = setTimeout(() => {
       if (Date.now() < pauseUntil) {
@@ -280,7 +246,7 @@
         return;
       }
       try {
-        if (frontFrame().contentDocument?.querySelector(".touch-input-overlay.open")) {
+        if (frontFrame()?.contentDocument?.querySelector(".touch-input-overlay.open")) {
           scheduleRotation();
           return;
         }
@@ -292,7 +258,7 @@
   function openAdmin() {
     const retQ = new URLSearchParams();
     retQ.set("kiosk", "1");
-    retQ.set("start", currentId);
+    retQ.set("start", frontId || startId);
     if (mouseMode) retQ.set("mouse", "1");
     try {
       sessionStorage.setItem("fb-kiosk-return", `/screens/kiosk.html?${retQ}`);
@@ -307,7 +273,6 @@
   function applyRotationSettings() {
     pauseMs = Math.max(0, Number(rotationSettings?.pauseOnTouchSeconds ?? 120) * 1000);
     scheduleRotation();
-    warmNextScreen();
   }
 
   async function loadRotationSettings() {
@@ -330,7 +295,16 @@
     if (e.origin !== location.origin) return;
     const data = e.data;
     if (!data || typeof data !== "object") return;
-    if (data.type === "fb-kiosk-go" && data.id) show(data.id);
+    if (data.type === "fb-screen-ready") {
+      for (const frame of frames.values()) {
+        if (frame.contentWindow === e.source) {
+          markReady(frame);
+          break;
+        }
+      }
+      return;
+    }
+    if (data.type === "fb-kiosk-go" && data.id) show(data.id, { fast: true });
     if (data.type === "fb-kiosk-admin") openAdmin();
     if (data.type === "fb-kiosk-pause") {
       pauseUntil = Date.now() + pauseMs;

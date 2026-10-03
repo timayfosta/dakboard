@@ -70,6 +70,8 @@
     if (timer) return;
     if (halted()) return;
     if (new URLSearchParams(location.search).has("frame")) return;
+    /* Kiosk shell reloads all screens together after a deploy. */
+    if (new URLSearchParams(location.search).has("embed") && window.parent !== window) return;
     const kiosk =
       document.body.classList.contains("kiosk") ||
       new URLSearchParams(location.search).has("kiosk");

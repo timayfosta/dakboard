@@ -653,9 +653,9 @@
   <script src="../shared/calendar.js"></script>
   <script src="../shared/family-api.js"></script>
   <script src="../shared/list-undo.js"></script>
-  <script src="../shared/display-sync.js"></script>
-  <script src="../shared/live-reload.js"></script>
-  <script src="../shared/night-mode.js"></script>
+  <script src="../shared/display-sync.js?v=2"></script>
+  <script src="../shared/live-reload.js?v=2"></script>
+  <script src="../shared/night-mode.js?v=2"></script>
   <script src="../shared/screensaver.js"></script>
   <script src="../shared/alerts.js"></script>
   <script src="../shared/screens.js"></script>
@@ -1246,6 +1246,11 @@
     const activeOnly = window.DisplayActive?.whenActive || ((fn) => fn);
     setInterval(activeOnly(loadAlerts), 3 * 60 * 1000);
     setInterval(activeOnly(loadCalendar), 60 * 1000);
+    window.addEventListener("message", (e) => {
+      if (e.origin !== location.origin || e.data?.type !== "fb-kiosk-shown") return;
+      loadCalendar();
+      loadAlerts();
+    });
     if (!IS_KIOSK) {
       setInterval(loadLists, 2500);
     }

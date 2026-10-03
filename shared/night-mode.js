@@ -119,6 +119,10 @@
     document.addEventListener("visibilitychange", () => {
       if (window.DisplayActive?.isActive?.()) apply();
     });
+    window.addEventListener("message", (e) => {
+      if (e.origin !== location.origin || e.data?.type !== "fb-kiosk-shown") return;
+      apply();
+    });
   }
 
   if (document.readyState === "loading") {
