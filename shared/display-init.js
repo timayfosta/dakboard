@@ -57,14 +57,43 @@
     if (isEmbedKiosk) revealEmbed();
   }
 
+  /* Kiosk shell keeps this screen hidden underneath until we report ready:
+     page painted + first data rendered (screens call FamilyScreenReady). */
+  let embedRevealed = false;
+  let dataReady = false;
+  let readySent = false;
+
+  function sendReady() {
+    if (readySent || !embedRevealed || !dataReady) return;
+    readySent = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          parent.postMessage({ type: "fb-screen-ready" }, location.origin);
+        } catch {}
+      });
+    });
+  }
+
+  window.FamilyScreenReady = () => {
+    dataReady = true;
+    sendReady();
+  };
+
   function revealEmbed() {
     const reveal = () => {
-      requestAnimationFrame(() => {
+      const fontsReady = document.fonts?.ready || Promise.resolve();
+      Promise.race([fontsReady, new Promise((r) => setTimeout(r, 800))]).then(() => {
         requestAnimationFrame(() => {
-          document.documentElement.classList.remove("embed-boot");
-          document.documentElement.classList.add("embed-ready");
+          requestAnimationFrame(() => {
+            document.documentElement.classList.remove("embed-boot");
+            document.documentElement.classList.add("embed-ready");
+            embedRevealed = true;
+            sendReady();
+          });
         });
       });
+      setTimeout(() => window.FamilyScreenReady(), 2200);
     };
     if (document.readyState === "complete") reveal();
     else window.addEventListener("load", reveal, { once: true });

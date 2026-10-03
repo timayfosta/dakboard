@@ -560,18 +560,20 @@
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  const STAR_MAX = 999;
+
   function parseStars(value, fallback = 1) {
     if (value === null || value === undefined || value === "") return fallback;
     const n = Number(value);
     if (!Number.isFinite(n)) return fallback;
-    return Math.max(0, Math.min(99, n));
+    return Math.max(0, Math.min(STAR_MAX, n));
   }
 
   function parseSignedStars(value, fallback = 0) {
     if (value === null || value === undefined || value === "") return fallback;
     const n = Number(value);
     if (!Number.isFinite(n)) return fallback;
-    return Math.max(-99, Math.min(99, Math.trunc(n)));
+    return Math.max(-STAR_MAX, Math.min(STAR_MAX, Math.trunc(n)));
   }
 
   function formatStarAmount(stars) {
@@ -619,7 +621,7 @@
     if (!input) return;
     const raw = String(input.value ?? "").trim();
     const current = raw === "" ? 0 : parseSignedStars(raw, 0);
-    input.value = String(Math.max(-99, Math.min(99, current + dir)));
+    input.value = String(Math.max(-STAR_MAX, Math.min(STAR_MAX, current + dir)));
   }
 
   function renderStarStepper(name, value, placeholder) {
@@ -628,7 +630,7 @@
     return `
       <div class="star-step">
         <button type="button" class="star-step-btn" data-star-step="${name}" data-dir="-1" aria-label="Minus one star">−</button>
-        <input name="${name}" type="number" min="-99" max="99" step="1" inputmode="decimal" value="${escAttr(shown)}"${ph} />
+        <input name="${name}" type="number" min="-999" max="999" step="1" inputmode="decimal" value="${escAttr(shown)}"${ph} />
         <button type="button" class="star-step-btn" data-star-step="${name}" data-dir="1" aria-label="Plus one star">+</button>
       </div>`;
   }
@@ -1250,7 +1252,7 @@
             <input
               type="number"
               min="0"
-              max="99"
+              max="999"
               step="1"
               inputmode="numeric"
               name="noneDone_${k.id}"
@@ -1273,7 +1275,7 @@
           <div class="ss-grid">
             <label>
               Default stars to take
-              <input type="number" name="stars" min="0" max="99" step="1" inputmode="numeric" value="${escAttr(String(nd.stars || 0))}" />
+              <input type="number" name="stars" min="0" max="999" step="1" inputmode="numeric" value="${escAttr(String(nd.stars || 0))}" />
             </label>
             <label>
               Apply at
@@ -1410,7 +1412,7 @@
             <label>Emoji (optional)</label>
             ${renderEmojiPicker("icon", EXTRA_EMOJIS, ICON_NONE, { allowNone: true })}
           </div>
-          <div class="field"><label id="extraStarsLabel">Stars to add</label><input name="stars" type="number" min="0" max="99" value="0" /></div>
+          <div class="field"><label id="extraStarsLabel">Stars to add</label><input name="stars" type="number" min="0" max="999" value="0" /></div>
           <div class="field"><label>Reason</label><input type="text" inputmode="text" name="hint" required placeholder="Helped with dinner without being asked" /></div>
           <div class="field"><label>Assign to</label>
             <div class="chips" id="extraKids">
@@ -1619,7 +1621,7 @@
             <label>Emoji (optional)</label>
             ${renderEmojiPicker("icon", ["🎁", "🍦", "🌙", "🎲", "🎬", "🍕", "🏞️", "🎉", "📱", "⭐", "🧸", "🎮"], "🎁", { allowNone: true })}
           </div>
-          <div class="field"><label>Star cost</label><input name="cost" type="number" min="0" max="99" value="10" /></div>
+          <div class="field"><label>Star cost</label><input name="cost" type="number" min="0" max="999" value="10" /></div>
           <div class="form-actions">
             <button class="btn block" type="submit">Save reward</button>
             <button class="btn ghost block hidden" type="button" id="cancelRewardEdit">Cancel edit</button>

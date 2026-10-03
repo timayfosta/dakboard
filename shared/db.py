@@ -328,6 +328,9 @@ def format_due_time(value: Any) -> str:
     return f"{hour12}:{minute:02d} {suffix}"
 
 
+STAR_MAX = 999
+
+
 def clamp_int(value: Any, default: int = 0, lo: int = 0, hi: int = 99) -> int:
     if value is None or value == "":
         n = default
@@ -347,7 +350,7 @@ def normalize_chore_icon(value: Any) -> str:
 
 
 def chore_star_value(chore: dict[str, Any], default: int = 1) -> int:
-    return clamp_int(chore.get("stars"), default, -99, 99)
+    return clamp_int(chore.get("stars"), default, -STAR_MAX, STAR_MAX)
 
 
 def late_star_value(chore: dict[str, Any]) -> int:
@@ -358,7 +361,7 @@ def late_star_value(chore: dict[str, Any]) -> int:
         if base <= 0:
             return 0
         return max(1, base // 2)
-    return clamp_int(raw, 0, -99, 99)
+    return clamp_int(raw, 0, -STAR_MAX, STAR_MAX)
 
 
 def chore_stars_for_now(chore: dict[str, Any], when=None) -> tuple[int, bool]:
@@ -378,10 +381,10 @@ def completion_stars(entry: Any, chore: dict[str, Any]) -> int:
         return chore_star_value(chore)
     if isinstance(entry, dict):
         if "stars" in entry and entry.get("stars") not in (None, ""):
-            return clamp_int(entry.get("stars"), 0, -99, 99)
+            return clamp_int(entry.get("stars"), 0, -STAR_MAX, STAR_MAX)
         return chore_star_value(chore)
     if isinstance(entry, (int, float)):
-        return clamp_int(entry, 0, -99, 99)
+        return clamp_int(entry, 0, -STAR_MAX, STAR_MAX)
     return 0
 
 
@@ -619,11 +622,11 @@ def merged_none_done_penalty(raw: dict[str, Any] | None = None) -> dict[str, Any
         key = str(kid_id or "").strip()
         if not key or value in (None, ""):
             continue
-        by_kid[key] = clamp_int(value, 0, 0, 99)
+        by_kid[key] = clamp_int(value, 0, 0, STAR_MAX)
     apply_time = parse_due_time(src.get("applyTime")) or defaults["applyTime"]
     return {
         "enabled": bool(src.get("enabled", defaults["enabled"])),
-        "stars": clamp_int(src.get("stars"), defaults["stars"], 0, 99),
+        "stars": clamp_int(src.get("stars"), defaults["stars"], 0, STAR_MAX),
         "applyTime": apply_time,
         "byKid": by_kid,
     }
@@ -632,8 +635,8 @@ def merged_none_done_penalty(raw: dict[str, Any] | None = None) -> dict[str, Any
 def none_done_stars_for_kid(settings: dict[str, Any], kid_id: str) -> int:
     by_kid = settings.get("byKid") or {}
     if kid_id in by_kid:
-        return clamp_int(by_kid.get(kid_id), 0, 0, 99)
-    return clamp_int(settings.get("stars"), 0, 0, 99)
+        return clamp_int(by_kid.get(kid_id), 0, 0, STAR_MAX)
+    return clamp_int(settings.get("stars"), 0, 0, STAR_MAX)
 
 
 def kid_chores_due_on(state: dict[str, Any], kid_id: str, day: Any) -> list[dict[str, Any]]:

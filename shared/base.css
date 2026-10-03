@@ -239,7 +239,6 @@ html.embed-boot .tv-frame {
 
 html.embed-ready .tv-frame {
   opacity: 1;
-  transition: opacity 0.22s ease;
 }
 
 /* Don't highlight/select text while swiping the TV. Inputs can still be edited. */

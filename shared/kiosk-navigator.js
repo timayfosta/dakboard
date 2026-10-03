@@ -33,7 +33,11 @@
   let navigating = false;
   let prerenderTag = null;
   let loadGen = 0;
-  const BLANK_DELAY_MS = 420;
+  let swapTimer = 0;
+  let swapCleanup = null;
+  const FADE_MS = 440;
+  /* Screens post fb-screen-ready once their data is drawn; don't wait forever on a slow one. */
+  const READY_TIMEOUT_MS = 3000;
 
   if (mouseMode) {
     document.body.classList.add("kiosk-mouse");
@@ -115,36 +119,60 @@
     frame.dataset.screenId = "";
   }
 
-  function afterFramePaint(frame, gen, fn) {
-    const run = () => {
+  function waitForScreenReady(frame, gen, fn) {
+    let settled = false;
+    let timer = 0;
+    const cleanup = () => {
+      clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+      frame.removeEventListener("load", onLoad);
+    };
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
       if (gen !== loadGen) return;
       requestAnimationFrame(() => {
-        if (gen !== loadGen) return;
         requestAnimationFrame(() => {
-          if (gen !== loadGen) return;
-          fn();
+          if (gen === loadGen) fn();
         });
       });
     };
-    try {
-      if (frame.contentDocument?.readyState === "complete") run();
-      else frame.addEventListener("load", run, { once: true });
-    } catch {
-      run();
-    }
+    const onMessage = (e) => {
+      if (e.origin !== location.origin || e.source !== frame.contentWindow) return;
+      if (e.data?.type === "fb-screen-ready") finish();
+    };
+    const onLoad = () => {
+      if (gen !== loadGen) {
+        settled = true;
+        cleanup();
+        return;
+      }
+      clearTimeout(timer);
+      timer = setTimeout(finish, READY_TIMEOUT_MS);
+    };
+    window.addEventListener("message", onMessage);
+    frame.addEventListener("load", onLoad);
   }
 
   function finishSwap(incoming, outgoing, id) {
-    incoming.classList.add("show");
-    outgoing.classList.remove("show");
     frontKey = incoming === frameA ? "a" : "b";
     currentId = id;
     incoming.dataset.screenId = id;
     navigating = false;
+    outgoing.classList.add("is-leaving");
+    swapCleanup = () => {
+      swapCleanup = null;
+      clearTimeout(swapTimer);
+      incoming.classList.remove("is-staged");
+      incoming.classList.add("is-front");
+      outgoing.classList.remove("is-front", "is-leaving", "is-staged");
+      blankFrame(outgoing);
+    };
+    swapTimer = setTimeout(swapCleanup, FADE_MS);
     notifyShown(incoming);
     warmNextScreen();
     scheduleRotation();
-    setTimeout(() => blankFrame(outgoing), BLANK_DELAY_MS);
   }
 
   function isFrameBlank(frame) {
@@ -157,7 +185,8 @@
   }
 
   function finishFirstShow(frame, id) {
-    frame.classList.add("show");
+    frame.classList.remove("is-staged", "is-leaving");
+    frame.classList.add("is-front");
     frame.dataset.screenId = id;
     currentId = id;
     navigating = false;
@@ -198,6 +227,8 @@
     const href = screenUrl(id);
     if (!href) return;
 
+    if (swapCleanup) swapCleanup();
+
     const front = frontFrame();
     if (front.dataset.screenId === id && isFrameReady(front) && !navigating) {
       notifyShown(front);
@@ -206,21 +237,21 @@
       return;
     }
 
-    const outgoing = frontFrame();
-    const incoming = isFrameBlank(outgoing) ? outgoing : backFrame();
+    const outgoing = front;
+    const firstShow = isFrameBlank(outgoing);
+    const incoming = firstShow ? outgoing : backFrame();
     const gen = ++loadGen;
     navigating = true;
     incoming.dataset.pendingId = id;
+    if (!firstShow) {
+      incoming.classList.remove("is-front", "is-leaving");
+      incoming.classList.add("is-staged");
+    }
 
-    const onReady = () => {
-      if (incoming === outgoing) {
-        afterFramePaint(incoming, gen, () => finishFirstShow(incoming, id));
-        return;
-      }
-      afterFramePaint(incoming, gen, () => finishSwap(incoming, outgoing, id));
-    };
-
-    incoming.addEventListener("load", onReady, { once: true });
+    waitForScreenReady(incoming, gen, () => {
+      if (firstShow) finishFirstShow(incoming, id);
+      else finishSwap(incoming, outgoing, id);
+    });
     incoming.src = href;
   }
 

@@ -1914,15 +1914,15 @@ class Handler(SimpleHTTPRequestHandler):
             else:
                 icon = db.normalize_chore_icon(existing.get("icon"))
             if "stars" in payload:
-                stars = db.clamp_int(payload.get("stars"), 0, -99, 99)
+                stars = db.clamp_int(payload.get("stars"), 0, -db.STAR_MAX, db.STAR_MAX)
             else:
-                stars = db.clamp_int(existing.get("stars"), 1, -99, 99)
+                stars = db.clamp_int(existing.get("stars"), 1, -db.STAR_MAX, db.STAR_MAX)
             if "lateStars" in payload:
                 late_raw = payload.get("lateStars")
-                late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, -99, 99)
+                late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, -db.STAR_MAX, db.STAR_MAX)
             else:
                 late_raw = existing.get("lateStars")
-                late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, -99, 99)
+                late_stars = None if late_raw in (None, "") else db.clamp_int(late_raw, 0, -db.STAR_MAX, db.STAR_MAX)
             interval, interval_days, interval_anchor = db.normalize_interval(payload, existing)
             chore = {
                 "id": existing.get("id") or chore_id or new_id("chore"),
@@ -1996,7 +1996,7 @@ class Handler(SimpleHTTPRequestHandler):
                 payload.get("stars") if "stars" in payload else existing.get("stars"),
                 0,
                 0,
-                99,
+                db.STAR_MAX,
             ),
             "kind": kind,
             "tone": kind,
@@ -2030,7 +2030,7 @@ class Handler(SimpleHTTPRequestHandler):
                 kind = db.extra_kind(payload)
             else:
                 kind = db.extra_kind(item)
-            stars = db.clamp_int(item.get("stars"), 0, 0, 99)
+            stars = db.clamp_int(item.get("stars"), 0, 0, db.STAR_MAX)
             title = item.get("title") or "Extra"
             icon = db.normalize_chore_icon(item.get("icon"))
             hint = item.get("hint") or ""
@@ -2116,7 +2116,7 @@ class Handler(SimpleHTTPRequestHandler):
             "id": payload.get("id") or new_id("reward"),
             "title": (payload.get("title") or "Reward").strip(),
             "icon": db.normalize_chore_icon(payload.get("icon")),
-            "cost": db.clamp_int(payload.get("cost"), 0, 0, 99),
+            "cost": db.clamp_int(payload.get("cost"), 0, 0, db.STAR_MAX),
             "active": payload.get("active", True),
         }
         rewards = state.setdefault("rewards", [])
@@ -2156,7 +2156,7 @@ class Handler(SimpleHTTPRequestHandler):
             kid_ids = [payload.get("kidId"), *kid_ids]
         kid_ids = [kid for kid in kid_ids if kid]
         reason = str(payload.get("reason") or payload.get("title") or "").strip()
-        stars = db.clamp_int(payload.get("stars"), 0, 0, 99)
+        stars = db.clamp_int(payload.get("stars"), 0, 0, db.STAR_MAX)
         icon = db.normalize_chore_icon(payload.get("icon"))
         if not kid_ids:
             return send_json(self, {"error": "Pick at least one kid"}, 400)
@@ -2418,10 +2418,10 @@ class Handler(SimpleHTTPRequestHandler):
                     key = str(kid_id or "").strip()
                     if not key or value in (None, ""):
                         continue
-                    by_kid[key] = db.clamp_int(value, 0, 0, 99)
+                    by_kid[key] = db.clamp_int(value, 0, 0, db.STAR_MAX)
             settings["noneDonePenalty"] = {
                 "enabled": bool(nd.get("enabled", current.get("enabled", False))),
-                "stars": db.clamp_int(nd.get("stars", current.get("stars", 0)), 0, 0, 99),
+                "stars": db.clamp_int(nd.get("stars", current.get("stars", 0)), 0, 0, db.STAR_MAX),
                 "applyTime": self._normalize_time(
                     nd.get("applyTime"), current.get("applyTime", "21:00")
                 ),

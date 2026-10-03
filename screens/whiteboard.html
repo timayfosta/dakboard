@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Family Board — Whiteboard</title>
   <script src="../shared/config.js"></script>
-  <script src="../shared/display-init.js"></script>
+  <script src="../shared/display-init.js?v=2"></script>
   <script src="../shared/kiosk-theme.js"></script>
   <link rel="stylesheet" href="../shared/fonts.css" />
-  <link rel="stylesheet" href="../shared/base.css" />
+  <link rel="stylesheet" href="../shared/base.css?v=2" />
   <link rel="stylesheet" href="../shared/screen-chrome.css" />
   <link rel="stylesheet" href="../shared/whiteboard.css" />
 </head>
@@ -42,7 +42,7 @@
     Whiteboard.init({
       canvas: document.getElementById("wbCanvas"),
       toolbar: document.getElementById("wbToolbar"),
-    });
+    }).finally(() => window.FamilyScreenReady?.());
   </script>
 </body>
 </html>

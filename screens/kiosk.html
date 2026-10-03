@@ -35,24 +35,35 @@
       opacity: 0;
       z-index: 0;
       pointer-events: none;
-      transition: opacity 0.38s ease;
     }
 
-    .screen-frame.show {
+    /* Next screen sits fully painted under the current one, so a swap never exposes black. */
+    .screen-frame.is-staged {
       opacity: 1;
       z-index: 1;
+    }
+
+    .screen-frame.is-front {
+      opacity: 1;
+      z-index: 2;
       pointer-events: auto;
+    }
+
+    .screen-frame.is-front.is-leaving {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.42s ease;
     }
   </style>
 </head>
 <body class="kiosk">
   <div id="kioskShell">
-    <iframe id="screenFrameA" class="screen-frame show" title="Family Board"></iframe>
+    <iframe id="screenFrameA" class="screen-frame" title="Family Board"></iframe>
     <iframe id="screenFrameB" class="screen-frame" title="Family Board"></iframe>
   </div>
   <script src="../shared/family-api.js"></script>
   <script src="../shared/screens.js"></script>
   <script src="../shared/live-reload.js"></script>
-  <script src="../shared/kiosk-navigator.js"></script>
+  <script src="../shared/kiosk-navigator.js?v=2"></script>
 </body>
 </html>
