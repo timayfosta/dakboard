@@ -631,9 +631,20 @@ def fetch_google_calendar_api() -> dict[str, Any] | None:
             raise RuntimeError("Missing googleCalendar.calendarId in shared/config.js")
         token = google_access_token(timeout=timeout)
         colors = google_event_color_map(token, timeout=timeout)
-        cal_url = f"{GOOGLE_CAL_API}/calendars/{urllib.parse.quote(calendar_id, safe='')}"
+        quoted_id = urllib.parse.quote(calendar_id, safe="")
+        cal_url = f"{GOOGLE_CAL_API}/calendars/{quoted_id}"
         calendar = _google_http_json(cal_url, token=token, timeout=timeout)
-        default_color = str(calendar.get("backgroundColor") or "") or fallback_color
+        # The calendar's color lives on the user's calendarList entry, not the calendar resource.
+        try:
+            entry = _google_http_json(
+                f"{GOOGLE_CAL_API}/users/me/calendarList/{quoted_id}", token=token, timeout=timeout
+            )
+        except Exception:  # noqa: BLE001
+            entry = {}
+        default_color = (
+            google_ui_calendar_color(str(entry.get("backgroundColor") or calendar.get("backgroundColor") or ""))
+            or fallback_color
+        )
         labels = {
             str(label.get("id")): str(label.get("backgroundColor") or "")
             for label in ((calendar.get("labelProperties") or {}).get("eventLabels") or [])
@@ -671,9 +682,11 @@ def fetch_google_calendar_api() -> dict[str, Any] | None:
                     end_val = _all_day_end(str(end.get("date")))
                 else:
                     end_val = end.get("dateTime") or start_val
+                color_id = str(item.get("colorId") or "")
                 color = (
                     labels.get(str(item.get("eventLabelId") or ""))
-                    or colors.get(str(item.get("colorId") or ""))
+                    or GOOGLE_EVENT_COLOR_HEX.get(color_id)
+                    or colors.get(color_id)
                     or default_color
                 )
                 color = normalize_event_color(color) or fallback_color
@@ -743,19 +756,54 @@ def filter_calendar_events(events: list[Any], days_ahead: int | None = None) -> 
     return kept
 
 
+# Event colorId -> the color Google Calendar actually draws (the API's /colors list is an older,
+# paler palette that doesn't match what the family sees).
 GOOGLE_EVENT_COLOR_HEX = {
-    "1": "#a4bdfc",
-    "2": "#7ae7bf",
-    "3": "#dbadff",
-    "4": "#ff887c",
-    "5": "#fbd75b",
-    "6": "#ffb878",
-    "7": "#46d6db",
-    "8": "#e1e1e1",
-    "9": "#5484ed",
-    "10": "#51b749",
-    "11": "#dc2127",
+    "1": "#7986cb",  # Lavender
+    "2": "#33b679",  # Sage
+    "3": "#8e24aa",  # Grape
+    "4": "#e67c73",  # Flamingo
+    "5": "#f6bf26",  # Banana
+    "6": "#f4511e",  # Tangerine
+    "7": "#039be5",  # Peacock
+    "8": "#616161",  # Graphite
+    "9": "#3f51b5",  # Blueberry
+    "10": "#0b8043",  # Basil
+    "11": "#d50000",  # Tomato
 }
+
+# calendarList backgroundColor (legacy palette) -> color shown in the Google Calendar UI.
+GOOGLE_CALENDAR_UI_COLOR = {
+    "#ac725e": "#795548",
+    "#d06b64": "#e67c73",
+    "#f83a22": "#d50000",
+    "#fa573c": "#f4511e",
+    "#ff7537": "#ef6c00",
+    "#ffad46": "#f09300",
+    "#42d692": "#009688",
+    "#16a765": "#0b8043",
+    "#7bd148": "#7cb342",
+    "#b3dc6c": "#c0ca33",
+    "#fbe983": "#e4c441",
+    "#fad165": "#f6bf26",
+    "#92e1c0": "#33b679",
+    "#9fe1e7": "#039be5",
+    "#9fc6e7": "#4285f4",
+    "#4986e7": "#3f51b5",
+    "#9a9cff": "#7986cb",
+    "#b99aff": "#b39ddb",
+    "#c2c2c2": "#616161",
+    "#cabdbf": "#a79b8e",
+    "#cca6ac": "#ad1457",
+    "#f691b2": "#d81b60",
+    "#cd74e6": "#8e24aa",
+    "#a47ae2": "#9e69af",
+}
+
+
+def google_ui_calendar_color(raw: str) -> str:
+    color = normalize_event_color(raw)
+    return GOOGLE_CALENDAR_UI_COLOR.get(color.lower(), color) if color else ""
 
 
 def normalize_event_color(raw: Any) -> str:
