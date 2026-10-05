@@ -11,6 +11,18 @@ if [[ -f "$ROOT/scripts/pi/kiosk.env" ]]; then
   source "$ROOT/scripts/pi/kiosk.env"
 fi
 
+# Pin Chromium to the household timezone (weather.timezone in shared/config.js). If the Pi's
+# system zone is UTC/London, evening events would otherwise render on the next day.
+if [[ -z "${FAMILY_BOARD_TZ:-}" ]]; then
+  FAMILY_BOARD_TZ="$(grep -oE 'timezone:[[:space:]]*"[^"]+"' "$ROOT/shared/config.js" 2>/dev/null | head -1 | sed -E 's/.*"([^"]+)"/\1/' || true)"
+fi
+if [[ -n "${FAMILY_BOARD_TZ:-}" && -e "/usr/share/zoneinfo/${FAMILY_BOARD_TZ}" ]]; then
+  export TZ="${FAMILY_BOARD_TZ}"
+  echo "Kiosk timezone: ${TZ}"
+else
+  echo "WARNING: household timezone '${FAMILY_BOARD_TZ:-}' not found; using system zone $(date +%Z)" >&2
+fi
+
 PORT="${FAMILY_BOARD_PORT:-8765}"
 HEALTH_URL="http://127.0.0.1:${PORT}/api/health"
 SKIP_SERVER="${FAMILY_BOARD_SKIP_SERVER:-1}"

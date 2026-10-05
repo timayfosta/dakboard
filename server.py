@@ -35,6 +35,7 @@ sys.path.insert(0, str(ROOT / "shared"))
 try:
     import db  # noqa: E402
     import deploy  # noqa: E402
+    import ical  # noqa: E402
     import portkill  # noqa: E402
     import screensaver_albums  # noqa: E402
 except ImportError as exc:
@@ -701,18 +702,23 @@ def fetch_google_calendar_api() -> dict[str, Any] | None:
         raise
 
 
+def household_tz():
+    return ical.household_tz(str(load_config_weather().get("timezone") or "America/Chicago"))
+
+
 def _parse_event_dt(value: str) -> datetime | None:
+    """Event start/end -> aware datetime. Times without an offset are household wall-clock."""
     if not value:
         return None
     text = str(value).strip()
     try:
         if len(text) == 10 and text[4] == "-":
-            return datetime.fromisoformat(f"{text}T00:00:00").replace(tzinfo=timezone.utc)
+            return datetime.fromisoformat(f"{text}T00:00:00").replace(tzinfo=household_tz())
         if text.endswith("Z"):
             return datetime.fromisoformat(text.replace("Z", "+00:00"))
         dt = datetime.fromisoformat(text)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=household_tz())
         return dt
     except ValueError:
         return None
@@ -735,50 +741,6 @@ def filter_calendar_events(events: list[Any], days_ahead: int | None = None) -> 
         if end >= now and start <= horizon:
             kept.append(item)
     return kept
-
-
-def _unfold_ics(text: str) -> str:
-    return re.sub(r"\n[ \t]", "", text.replace("\r\n", "\n"))
-
-
-def _ics_field(chunk: str, key: str) -> tuple[str, str]:
-    match = re.search(rf"^{key}(;[^:]*)?:(.*)$", chunk, re.MULTILINE | re.IGNORECASE)
-    if not match:
-        return "", ""
-    return match.group(1) or "", (match.group(2) or "").strip()
-
-
-def _parse_ics_date(value: str, params: str) -> tuple[datetime | None, bool]:
-    raw = (value or "").strip()
-    param_text = (params or "").upper()
-    if "VALUE=DATE" in param_text or re.fullmatch(r"\d{8}", raw):
-        year, month, day = int(raw[:4]), int(raw[4:6]), int(raw[6:8])
-        return datetime(year, month, day, tzinfo=timezone.utc), True
-    match = re.fullmatch(r"(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?", raw)
-    if match:
-        dt = datetime(
-            int(match.group(1)),
-            int(match.group(2)),
-            int(match.group(3)),
-            int(match.group(4)),
-            int(match.group(5)),
-            int(match.group(6)),
-            tzinfo=timezone.utc,
-        )
-        return dt, False
-    try:
-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt, False
-    except ValueError:
-        return None, False
-
-
-def _ics_dt_to_iso(dt: datetime, all_day: bool) -> str:
-    if all_day:
-        return dt.astimezone(timezone.utc).strftime("%Y-%m-%d")
-    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 GOOGLE_EVENT_COLOR_HEX = {
@@ -969,125 +931,17 @@ def enrich_event_colors(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return events
 
 
-def _expand_rrule_simple(
-    master: dict[str, Any], range_start: datetime, range_end: datetime
-) -> list[dict[str, Any]]:
-    rule_raw = str(master.get("rrule") or "")
-    if not rule_raw:
-        if master["start"] <= range_end and master["end"] >= range_start:
-            return [master]
-        return []
-
-    parts: dict[str, str] = {}
-    for segment in rule_raw.replace("RRULE:", "").split(";"):
-        if "=" not in segment:
-            continue
-        key, value = segment.split("=", 1)
-        parts[key.upper()] = value
-    freq = parts.get("FREQ", "").upper()
-    if freq not in ("DAILY", "WEEKLY"):
-        if master["start"] <= range_end and master["end"] >= range_start:
-            return [master]
-        return []
-
-    interval = max(1, int(parts.get("INTERVAL") or "1"))
-    duration = master["end"] - master["start"]
-    out: list[dict[str, Any]] = []
-    cursor = master["start"]
-    produced = 0
-    while cursor <= range_end and produced < 400:
-        if cursor >= range_start and cursor >= master["start"]:
-            row = dict(master)
-            row["start"] = cursor
-            row["end"] = cursor + duration
-            row["id"] = f"{master['id']}-{int(cursor.timestamp() * 1000)}"
-            out.append(row)
-            produced += 1
-        if freq == "DAILY":
-            cursor += timedelta(days=interval)
-        else:
-            cursor += timedelta(weeks=interval)
-    return out
-
-
 def parse_ics_events(data: bytes, days_ahead: int | None = None) -> list[dict[str, Any]]:
     cfg = load_config_calendar()
     horizon_days = days_ahead if days_ahead is not None else int(cfg.get("daysAhead") or 21)
-    now = datetime.now(timezone.utc)
-    range_start = now - timedelta(days=1)
-    range_end = now + timedelta(days=horizon_days)
-    color_map = load_calendar_color_map()
-    text = _unfold_ics(data.decode("utf-8", errors="replace"))
-    header = text.split("BEGIN:VEVENT")[0]
-    header_color = ""
-    for key in ("COLOR", "X-APPLE-CALENDAR-COLOR", "X-OUTLOOK-COLOR", "X-GOOGLE-CALENDAR-COLOR"):
-        _, val = _ics_field(header, key)
-        header_color = normalize_event_color(val)
-        if header_color:
-            break
-    if not header_color:
-        header_color = color_map.get("__default__") or normalize_event_color(
-            cfg.get("defaultEventColor")
-        )
-    events: list[dict[str, Any]] = []
-
-    for index, block in enumerate(text.split("BEGIN:VEVENT")[1:], 1):
-        chunk = block.split("END:VEVENT")[0]
-        dt_params, dt_value = _ics_field(chunk, "DTSTART")
-        if not dt_value:
-            continue
-        start, all_day = _parse_ics_date(dt_value, dt_params)
-        if not start or start > range_end:
-            continue
-        end_params, end_value = _ics_field(chunk, "DTEND")
-        if end_value:
-            end, _ = _parse_ics_date(end_value, end_params)
-        else:
-            end = start + (timedelta(days=1) if all_day else timedelta(hours=1))
-        if not end or end < range_start:
-            continue
-
-        _, summary = _ics_field(chunk, "SUMMARY")
-        _, uid = _ics_field(chunk, "UID")
-        _, location = _ics_field(chunk, "LOCATION")
-        _, rrule = _ics_field(chunk, "RRULE")
-        _, color_val = _ics_field(chunk, "COLOR")
-        if not color_val:
-            _, color_val = _ics_field(chunk, "X-GOOGLE-CALENDAR-COLOR")
-        event_id = uid or f"ics-{index}"
-        title = summary or "(No title)"
-        color = normalize_event_color(color_val) or _resolve_event_color(
-            {"id": event_id, "title": title, "color": ""}, color_map
-        ) or header_color
-        master = {
-            "id": event_id,
-            "title": title,
-            "start": start,
-            "end": end,
-            "allDay": all_day,
-            "location": location or "",
-            "color": color,
-            "rrule": rrule,
-        }
-        for row in _expand_rrule_simple(master, range_start, range_end):
-            events.append(
-                {
-                    "id": row["id"],
-                    "title": row["title"],
-                    "start": _ics_dt_to_iso(row["start"], row["allDay"]),
-                    "end": _ics_dt_to_iso(row["end"], row["allDay"]),
-                    "allDay": row["allDay"],
-                    "location": row["location"],
-                    "color": row.get("color") or "",
-                }
-            )
-
-    events.sort(key=lambda item: str(item.get("start") or ""))
-    return events
+    tz_name = str(load_config_weather().get("timezone") or "America/Chicago")
+    return ical.parse_feed(data, tz_name=tz_name, days_ahead=horizon_days)
 
 
 def ics_bytes_to_json(data: bytes) -> dict[str, Any]:
-    digest = hashlib.sha256(data).hexdigest()
+    # Include the household date so "today" moves forward even when the feed is unchanged.
+    today = datetime.now(timezone.utc).astimezone(household_tz()).date().isoformat()
+    digest = f"{hashlib.sha256(data).hexdigest()}:{today}"
     cached = _ics_json_cache.get("payload")
     if _ics_json_cache.get("digest") == digest and isinstance(cached, dict):
         return dict(cached)
@@ -2763,6 +2617,13 @@ if __name__ == "__main__":
 
     # Always run from the repo root so relative static paths work on Pi/systemd
     os.chdir(ROOT)
+
+    # Chore days, "today", and calendar windows follow the household clock, not the Pi's system zone.
+    household_zone = str(load_config_weather().get("timezone") or "")
+    if household_zone and hasattr(time, "tzset") and Path(f"/usr/share/zoneinfo/{household_zone}").exists():
+        os.environ["TZ"] = household_zone
+        time.tzset()
+    print(f"Household timezone: {household_zone or '(none)'}; server local time {datetime.now().astimezone():%Y-%m-%d %H:%M %Z}", flush=True)
     PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
     (ROOT / "data").mkdir(parents=True, exist_ok=True)
 

@@ -43,13 +43,41 @@
     return id || "";
   }
 
+  const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const DATE_PREFIX = /^(\d{4})-(\d{2})-(\d{2})/;
+
+  /* new Date("2026-10-09") is UTC midnight = the evening BEFORE in US timezones, so dates are
+     always built from their Y-M-D parts as local days. All-day events ignore any time/offset. */
+  function parseEventTime(value, allDay, isEnd) {
+    if (value instanceof Date) return new Date(value);
+    const text = String(value || "").trim();
+    const m = allDay ? text.match(DATE_PREFIX) : text.match(DATE_ONLY);
+    if (m) {
+      const d = new Date(+m[1], +m[2] - 1, +m[3]);
+      if (allDay && isEnd) {
+        // A bare end date is exclusive (Google/iCal): the event ends the day before.
+        if (DATE_ONLY.test(text)) d.setDate(d.getDate() - 1);
+        d.setHours(23, 59, 59, 0);
+      }
+      return d;
+    }
+    return new Date(text);
+  }
+
   function normalizeEvent(ev) {
+    const allDay = !!ev.allDay;
+    const start = parseEventTime(ev.start, allDay, false);
+    let end = parseEventTime(ev.end || ev.start, allDay, true);
+    if (!(end >= start)) {
+      end = new Date(start);
+      if (allDay) end.setHours(23, 59, 59, 0);
+    }
     return {
-      id: ev.id || `${ev.title}-${ev.start.getTime()}`,
+      id: ev.id || `${ev.title}-${start.getTime()}`,
       title: ev.title,
-      start: ev.start instanceof Date ? ev.start : new Date(ev.start),
-      end: ev.end instanceof Date ? ev.end : new Date(ev.end || ev.start),
-      allDay: !!ev.allDay,
+      start,
+      end,
+      allDay,
       location: ev.location || "",
       color: parseColorValue(ev.color),
     };

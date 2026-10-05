@@ -331,6 +331,16 @@
       color: rgba(255, 255, 255, 0.9);
     }
 
+    .tz-warning {
+      margin: 0 0 0.6rem;
+      padding: 0.55rem 0.8rem;
+      border-radius: 12px;
+      background: #b3261e;
+      color: #fff;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
     .empty-note {
       color: var(--ink-soft);
       font-weight: 700;
@@ -650,7 +660,7 @@
   <script src="../shared/screen-chrome.js"></script>
   <script src="../shared/touch-input-loader.js?v=4"></script>
   <script src="../shared/calendar-colors.js"></script>
-  <script src="../shared/calendar.js"></script>
+  <script src="../shared/calendar.js?v=2"></script>
   <script src="../shared/family-api.js"></script>
   <script src="../shared/list-undo.js"></script>
   <script src="../shared/display-sync.js?v=2"></script>
@@ -952,32 +962,60 @@
     let calendarSource = "";
     let calendarError = "";
 
+    function displayTimezoneWarning() {
+      const home = CFG.weather?.timezone;
+      if (!home) return "";
+      try {
+        const here = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (here === home) return "";
+        const now = new Date();
+        const wall = (tz) =>
+          new Intl.DateTimeFormat("en-US", {
+            timeZone: tz,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+          }).format(now);
+        if (wall(home) === wall(here)) return "";
+        return `<div class="tz-warning">⚠ This display's clock is set to ${here}, not ${home}. Event days and times may be wrong — restart the kiosk.</div>`;
+      } catch {
+        return "";
+      }
+    }
+
     function renderAgenda() {
       const root = document.getElementById("agendaList");
       // Pull extra events; clip/fade hides overflow instead of scrolling
       const items = FamilyCalendar.upcoming(events, 40);
+      const tzWarning = displayTimezoneWarning();
       if (!items.length) {
         if (calendarError && (calendarSource === "offline" || calendarSource === "demo")) {
-          root.innerHTML = `<div class="empty-note">Google Calendar offline<br><span style="font-size:0.75em;opacity:0.75">${calendarError}</span></div>`;
+          root.innerHTML = `${tzWarning}<div class="empty-note">Google Calendar offline<br><span style="font-size:0.75em;opacity:0.75">${calendarError}</span></div>`;
         } else {
-          root.innerHTML = `<div class="empty-note">No upcoming events</div>`;
+          root.innerHTML = `${tzWarning}<div class="empty-note">No upcoming events</div>`;
         }
         return;
       }
 
       const groups = [];
       const map = new Map();
+      const today = FamilyCalendar.startOfDay(new Date());
       items.forEach((ev) => {
-        const key = dayKey(ev.start);
+        // Multi-day events already in progress belong under Today, not the day they began.
+        const groupDay = ev.start < today ? today : FamilyCalendar.startOfDay(ev.start);
+        const key = dayKey(groupDay);
         if (!map.has(key)) {
-          const g = { key, start: FamilyCalendar.startOfDay(ev.start), events: [] };
+          const g = { key, start: groupDay, events: [] };
           map.set(key, g);
           groups.push(g);
         }
         map.get(key).events.push(ev);
       });
 
-      root.innerHTML = groups
+      root.innerHTML = tzWarning + groups
         .map((g) => {
           const head = dayHeading(g.start);
           const dateHtml = head.showDate
