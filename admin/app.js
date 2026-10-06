@@ -2195,6 +2195,14 @@
     return msg.length > 160 ? `${msg.slice(0, 157)}…` : msg;
   }
 
+  async function currentBootId() {
+    try {
+      return (await AdminAPI.health())?.bootId || "";
+    } catch {
+      return "";
+    }
+  }
+
   async function waitForDeployFinish() {
     const start = Date.now();
     const maxMs = 120000;
@@ -2210,16 +2218,17 @@
     return null;
   }
 
-  async function waitForServerRestart(statusEl, btn) {
+  async function waitForServerRestart(statusEl, btn, prevBootId = "") {
     const start = Date.now();
-    const maxMs = 45000;
+    const maxMs = 60000;
     while (Date.now() - start < maxMs) {
       if (state.stopWait) return false;
       await new Promise((r) => setTimeout(r, 1200));
       if (state.stopWait) return false;
       try {
         const health = await AdminAPI.health();
-        if (health?.ok && Number(health.version) >= REQUIRED_API_VERSION) {
+        const replaced = !prevBootId || (health?.bootId && health.bootId !== prevBootId);
+        if (health?.ok && replaced && Number(health.version) >= REQUIRED_API_VERSION) {
           if (statusEl) statusEl.textContent = "Server is back online.";
           toast("Server restarted");
           try {
@@ -3045,6 +3054,7 @@
           statusEl.classList.remove("hidden");
           statusEl.textContent = "Pulling updates…";
         }
+        const prevBootId = await currentBootId();
         try {
           const res = await AdminAPI.deploy(state.token);
           if (res.busy) {
@@ -3078,7 +3088,7 @@
           toast("Already up to date — restarting");
         }
         if (statusEl) statusEl.textContent = "Restarting… waiting for server";
-        await waitForServerRestart(statusEl, deployBtn);
+        await waitForServerRestart(statusEl, deployBtn, prevBootId);
         $("#restartServerBtn")?.removeAttribute("disabled");
       });
     }
@@ -3128,12 +3138,13 @@
           statusEl.classList.remove("hidden");
           statusEl.textContent = "Sending restart…";
         }
+        const prevBootId = await currentBootId();
         try {
           await AdminAPI.restartServer(state.token);
         } catch {
           /* connection drop is expected */
         }
-        await waitForServerRestart(statusEl, restartBtn);
+        await waitForServerRestart(statusEl, restartBtn, prevBootId);
       });
     }
 

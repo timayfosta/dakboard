@@ -2574,8 +2574,8 @@ class Handler(SimpleHTTPRequestHandler):
         send_json(self, {"ok": True, "balance": bal[kid_id], "state": db.public_state(state)})
 
     def admin_restart(self):
-        schedule_server_restart()
-        send_json(self, {"ok": True, "restarting": True})
+        result = deploy.restart_now(schedule_server_restart)
+        send_json(self, {**result, "restarting": True})
 
     def admin_stop(self):
         if not allow_laptop_stop(self):
@@ -2683,16 +2683,33 @@ if __name__ == "__main__":
         )
         raise SystemExit(1)
 
+    if deploy.defer_to_systemd(PORT):
+        raise SystemExit(0)
+
     try:
         db.load_db()
     except Exception as exc:  # noqa: BLE001
         print(f"ERROR: could not initialize data/family.json: {exc}", flush=True)
         raise SystemExit(1) from exc
 
-    try:
-        server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-        HTTP_SERVER = server
-    except OSError as exc:
+    server = None
+    for attempt in range(3):
+        try:
+            server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+            HTTP_SERVER = server
+            break
+        except OSError as exc:
+            in_use = getattr(exc, "errno", None) in (errno.EADDRINUSE, 98, 10048)
+            # The systemd unit must own the port, or deploys restart a process nobody serves from.
+            if in_use and attempt < 2 and deploy.running_under_systemd():
+                killed = portkill.kill_port(PORT)
+                print(f"Port {PORT} held by a stray copy (pids {killed}); taking over for systemd", flush=True)
+                time.sleep(2)
+                continue
+            bind_error = exc
+            break
+    if server is None:
+        exc = bind_error
         if getattr(exc, "errno", None) in (errno.EADDRINUSE, 98, 10048):
             print(
                 f"\nERROR: port {PORT} is already in use.\n"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 import socket
 import subprocess
 import sys
@@ -11,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+LAST_RESULT_FILE = ROOT / "data" / "last-deploy.json"
 _lock = threading.Lock()
 _running = False
 _last_result: dict[str, Any] | None = None
@@ -324,11 +327,75 @@ def schedule_pi_reboot(delay_s: float = 1.2) -> dict[str, Any]:
     return {"ok": True, "rebooting": True}
 
 
+def running_under_systemd() -> bool:
+    return sys.platform != "win32" and bool(os.environ.get("INVOCATION_ID"))
+
+
+def _api_unit_enabled() -> bool:
+    try:
+        return _systemctl("is-enabled", "--quiet", "family-board-api").returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _health_ok(port: int) -> bool:
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2) as resp:
+            return resp.status == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def defer_to_systemd(port: int, wait_s: float = 45.0) -> bool:
+    """True if this copy should exit because the systemd unit serves (or is about to serve) the API.
+
+    Desktop autostart / manual launches used to grab the port before the systemd unit at boot;
+    the unit then crash-looped and deploys restarted it instead of the copy actually serving the TV.
+    """
+    if sys.platform == "win32" or running_under_systemd() or os.environ.get("FAMILY_BOARD_STANDALONE"):
+        return False
+    if not _api_unit_enabled():
+        return False
+    print("family-board-api.service is enabled; waiting for it instead of starting a second copy…", flush=True)
+    deadline = time.time() + wait_s
+    while time.time() < deadline:
+        if _health_ok(port):
+            print("Family Board API is already running under systemd; this copy will exit.", flush=True)
+            return True
+        time.sleep(2)
+    print("systemd API did not come up; starting this copy as a fallback.", flush=True)
+    return False
+
+
+def schedule_self_exit(delay_s: float = 1.5) -> None:
+    """Exit after the HTTP response is sent; systemd (Restart=always) starts the freshly pulled code."""
+
+    def _run() -> None:
+        time.sleep(delay_s)
+        print("Restarting to load updated code…", flush=True)
+        os._exit(0)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def restart_now(schedule_restart_fn) -> dict[str, Any]:
+    if running_under_systemd():
+        schedule_self_exit()
+        return {"ok": True, "method": "systemd-respawn"}
+    schedule_restart_fn()
+    return {"ok": True, "method": "restart_script"}
+
+
 def restart_service(schedule_restart_fn) -> dict[str, Any]:
     if sys.platform != "win32":
         boot = enable_boot_services()
-        if boot.get("ok"):
-            return {"ok": True, "method": "ensure-boot", "boot": boot}
+        # ensure-boot only enables/starts units; an already-running API keeps its old code,
+        # so the process must still be replaced.
+        if running_under_systemd():
+            schedule_self_exit()
+            return {"ok": True, "method": "systemd-respawn", "boot": boot}
         try:
             active = _systemctl("is-active", "family-board-api")
             if active.stdout.strip() == "active":
@@ -353,7 +420,24 @@ def restart_service(schedule_restart_fn) -> dict[str, Any]:
     return {"ok": True, "method": "restart_script"}
 
 
+def _set_last_result(result: dict[str, Any]) -> None:
+    """Kept on disk too: a successful deploy replaces this process before Admin reads the result."""
+    global _last_result
+    _last_result = result
+    try:
+        LAST_RESULT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        LAST_RESULT_FILE.write_text(json.dumps({**result, "at": int(time.time() * 1000)}), encoding="utf-8")
+    except (OSError, TypeError, ValueError):
+        pass
+
+
 def get_last_result() -> dict[str, Any] | None:
+    global _last_result
+    if _last_result is None and LAST_RESULT_FILE.is_file():
+        try:
+            _last_result = json.loads(LAST_RESULT_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            _last_result = None
     return _last_result
 
 
@@ -376,9 +460,9 @@ def deploy_async(schedule_restart_fn, *, restart: bool = True) -> dict[str, Any]
                 result["ok"] = bool(pull.get("ok"))
                 if not pull.get("ok"):
                     result["error"] = pull.get("error") or pull.get("stderr") or "git sync failed"
-                _last_result = result
+                _set_last_result(result)
             except Exception as exc:  # noqa: BLE001
-                _last_result = {"ok": False, "error": str(exc)}
+                _set_last_result({"ok": False, "error": str(exc)})
             finally:
                 _running = False
 
@@ -396,5 +480,5 @@ def deploy_sync(schedule_restart_fn, *, restart: bool = True) -> dict[str, Any]:
     result["ok"] = bool(pull.get("ok"))
     if not pull.get("ok"):
         result["error"] = pull.get("error") or pull.get("stderr") or "git sync failed"
-    _last_result = result
+    _set_last_result(result)
     return result
