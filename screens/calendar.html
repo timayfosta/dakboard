@@ -660,7 +660,7 @@
   <script src="../shared/screen-chrome.js"></script>
   <script src="../shared/touch-input-loader.js?v=4"></script>
   <script src="../shared/calendar-colors.js?v=2"></script>
-  <script src="../shared/calendar.js?v=3"></script>
+  <script src="../shared/calendar.js?v=4"></script>
   <script src="../shared/family-api.js"></script>
   <script src="../shared/list-undo.js"></script>
   <script src="../shared/display-sync.js?v=2"></script>
@@ -986,52 +986,53 @@
       }
     }
 
+    let agendaHtml = "";
+
     function renderAgenda() {
       const root = document.getElementById("agendaList");
-      // Pull extra events; clip/fade hides overflow instead of scrolling
+      // Same count as before: the panel shows what fits and fades the rest. No scrolling.
       const items = FamilyCalendar.upcoming(events, 40);
       const tzWarning = displayTimezoneWarning();
+      let html;
       if (!items.length) {
         if (calendarError && (calendarSource === "offline" || calendarSource === "demo")) {
-          root.innerHTML = `${tzWarning}<div class="empty-note">Google Calendar offline<br><span style="font-size:0.75em;opacity:0.75">${calendarError}</span></div>`;
+          html = `${tzWarning}<div class="empty-note">Google Calendar offline<br><span style="font-size:0.75em;opacity:0.75">${calendarError}</span></div>`;
         } else {
-          root.innerHTML = `${tzWarning}<div class="empty-note">No upcoming events</div>`;
+          html = `${tzWarning}<div class="empty-note">No upcoming events</div>`;
         }
-        return;
-      }
+      } else {
+        const groups = [];
+        const map = new Map();
+        const today = FamilyCalendar.startOfDay(new Date());
+        items.forEach((ev) => {
+          // Multi-day events already in progress belong under Today, not the day they began.
+          const groupDay = ev.start < today ? today : FamilyCalendar.startOfDay(ev.start);
+          const key = dayKey(groupDay);
+          if (!map.has(key)) {
+            const g = { key, start: groupDay, events: [] };
+            map.set(key, g);
+            groups.push(g);
+          }
+          map.get(key).events.push(ev);
+        });
 
-      const groups = [];
-      const map = new Map();
-      const today = FamilyCalendar.startOfDay(new Date());
-      items.forEach((ev) => {
-        // Multi-day events already in progress belong under Today, not the day they began.
-        const groupDay = ev.start < today ? today : FamilyCalendar.startOfDay(ev.start);
-        const key = dayKey(groupDay);
-        if (!map.has(key)) {
-          const g = { key, start: groupDay, events: [] };
-          map.set(key, g);
-          groups.push(g);
-        }
-        map.get(key).events.push(ev);
-      });
-
-      root.innerHTML = tzWarning + groups
-        .map((g) => {
-          const head = dayHeading(g.start);
-          const dateHtml = head.showDate
-            ? `<span class="date-num">${head.dateNum}</span>`
-            : "";
-          const rows = g.events
-            .map((ev) => {
-              const color = FamilyCalendarColors.resolveColor(ev, agendaKids);
-              return `
+        html = tzWarning + groups
+          .map((g) => {
+            const head = dayHeading(g.start);
+            const dateHtml = head.showDate
+              ? `<span class="date-num">${head.dateNum}</span>`
+              : "";
+            const rows = g.events
+              .map((ev) => {
+                const color = FamilyCalendarColors.resolveColor(ev, agendaKids);
+                return `
               <li class="agenda-row${ev.allDay ? " all-day" : ""}" style="--event-color:${color}">
                 <div class="time">${formatTime(ev)}</div>
                 <div class="title">${ev.title}</div>
               </li>`;
-            })
-            .join("");
-          return `
+              })
+              .join("");
+            return `
             <section class="day-group">
               <div class="day-head">
                 <span>${head.label}</span>
@@ -1039,8 +1040,14 @@
               </div>
               <ul class="agenda-rows">${rows}</ul>
             </section>`;
-        })
-        .join("");
+          })
+          .join("");
+      }
+
+      // Identical list: leave the screen alone so a refresh does not blink.
+      if (html === agendaHtml) return;
+      agendaHtml = html;
+      root.innerHTML = html;
     }
 
     function listItemsForDisplay(items) {
@@ -1182,19 +1189,28 @@
     let monthKey = "";
 
     async function loadCalendar() {
-      const result = await FamilyCalendar.loadEvents(CFG);
+      let result;
+      try {
+        result = await FamilyCalendar.loadEvents(CFG);
+      } catch (err) {
+        console.warn("Calendar refresh failed", err);
+        return;
+      }
+      const next = result.events || [];
+      // A failed refresh keeps the events already on screen instead of blanking them.
+      if ((result.source === "offline" || result.error) && !next.length && events.length) return;
       calendarSource = result.source || "";
       calendarError = result.error || "";
       const fp = JSON.stringify(
         [calendarSource, calendarError].concat(
-          (result.events || []).map((e) => [e.id, e.title, +e.start, +e.end, e.allDay, e.color])
+          next.map((e) => [e.id, e.title, +e.start, +e.end, e.allDay, e.color])
         )
       );
       const todayKey = new Date().toDateString();
       const monthK = `${new Date().getFullYear()}-${new Date().getMonth()}`;
       if (fp !== eventsFp) {
         eventsFp = fp;
-        events = result.events;
+        events = next;
         renderAgenda();
       } else if (todayKey !== agendaDayKey) {
         renderAgenda();

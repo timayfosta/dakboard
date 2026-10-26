@@ -616,6 +616,20 @@ def _should_skip_oauth_calendar() -> bool:
     return mapping.get("__oauth__") == "1"
 
 
+def calendar_horizon(days_ahead: int | None = None) -> tuple[datetime, datetime]:
+    """Household today at midnight through the same number of days.
+
+    The end moves forward at midnight. It does not stick on the date of an older fetch,
+    and it does not shrink as the clock runs through the day.
+    """
+    cfg = load_config_calendar()
+    horizon_days = days_ahead if days_ahead is not None else int(cfg.get("daysAhead") or 21)
+    horizon_days = max(1, horizon_days)
+    local_now = datetime.now(household_tz())
+    day_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return day_start, day_start + timedelta(days=horizon_days)
+
+
 def fetch_google_calendar_api() -> dict[str, Any] | None:
     global _oauth_calendar_down_until
     if not oauth_calendar_configured():
@@ -651,9 +665,9 @@ def fetch_google_calendar_api() -> dict[str, Any] | None:
             if isinstance(label, dict) and label.get("id") and label.get("backgroundColor")
         }
 
-        now = datetime.now(timezone.utc)
-        time_min = now.isoformat().replace("+00:00", "Z")
-        time_max = (now + timedelta(days=int(cfg.get("daysAhead") or 21))).isoformat().replace("+00:00", "Z")
+        day_start, horizon = calendar_horizon()
+        time_min = day_start.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        time_max = horizon.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
         events: list[dict[str, Any]] = []
         page_token = ""
         while True:
@@ -738,11 +752,9 @@ def _parse_event_dt(value: str) -> datetime | None:
 
 
 def filter_calendar_events(events: list[Any], days_ahead: int | None = None) -> list[Any]:
-    """Keep only events still upcoming within the rolling daysAhead window."""
-    cfg = load_config_calendar()
-    horizon_days = days_ahead if days_ahead is not None else int(cfg.get("daysAhead") or 21)
+    """Keep events that have not ended and that start inside the rolling day window."""
+    _, horizon = calendar_horizon(days_ahead)
     now = datetime.now(timezone.utc)
-    horizon = now + timedelta(days=horizon_days)
     kept: list[Any] = []
     for item in events:
         if not isinstance(item, dict):
@@ -751,7 +763,7 @@ def filter_calendar_events(events: list[Any], days_ahead: int | None = None) -> 
         end = _parse_event_dt(str(item.get("end") or item.get("start") or ""))
         if not start or not end:
             continue
-        if end >= now and start <= horizon:
+        if end >= now and start < horizon:
             kept.append(item)
     return kept
 

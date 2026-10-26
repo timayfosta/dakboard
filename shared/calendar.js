@@ -368,9 +368,9 @@
   function eventsInWindow(events, daysAhead = 21) {
     const now = new Date();
     const dayStart = startOfDay(now);
-    const horizon = addDays(now, daysAhead);
+    const horizon = addDays(dayStart, daysAhead);
     return events.filter(
-      (e) => (e.end >= now || (e.allDay && e.end >= dayStart)) && e.start <= horizon
+      (e) => (e.end >= now || (e.allDay && e.end >= dayStart)) && e.start < horizon
     );
   }
 
