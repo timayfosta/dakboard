@@ -1262,6 +1262,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/health":
             head = deploy.git_head()
             identity = deploy.server_identity()
+            network = {} if sys.platform == "win32" else deploy.network_status()
             return send_json(
                 self,
                 {
@@ -1276,6 +1277,7 @@ class Handler(SimpleHTTPRequestHandler):
                         "subject": head.get("subject") or "",
                     },
                     "identity": identity,
+                    "network": network,
                     "deploy": {
                         "gitRepo": deploy.is_git_repo(),
                         "webhookConfigured": bool(load_secrets().get("deployWebhookSecret")),
@@ -1478,6 +1480,11 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.admin_deploy()
+
+        if path == "/api/admin/fix-dns":
+            if not require_admin(self):
+                return
+            return self.admin_fix_dns()
 
         if path == "/api/admin/reboot":
             if not require_admin(self):
@@ -2604,6 +2611,14 @@ class Handler(SimpleHTTPRequestHandler):
         status = 200 if result.get("ok") else 409
         send_json(self, result, status)
 
+    def admin_fix_dns(self):
+        if sys.platform == "win32":
+            return send_json(self, {"ok": False, "error": "DNS repair is Pi-only"}, 400)
+        result = deploy.repair_dns()
+        result["network"] = deploy.network_status()
+        status = 200 if result.get("ok") else 400
+        send_json(self, result, status)
+
     def admin_reboot(self):
         result = deploy.schedule_pi_reboot()
         status = 200 if result.get("ok") else 400
@@ -2742,6 +2757,25 @@ if __name__ == "__main__":
     print(f"Family API    -> http://127.0.0.1:{PORT}/api/family/state", flush=True)
     print(f"Calendar API  -> http://127.0.0.1:{PORT}/api/calendar", flush=True)
     print(f"Root          -> {ROOT}", flush=True)
+
+    # Pi: heal github.com DNS in the background so Pull updates keeps working after Wi‑Fi blips.
+    if sys.platform != "win32":
+        def _heal_dns() -> None:
+            try:
+                net = deploy.network_status()
+                if net.get("githubResolves"):
+                    return
+                print("github.com DNS broken at startup — attempting repair…", flush=True)
+                result = deploy.repair_dns()
+                print(
+                    "DNS repair: "
+                    + ("ok" if result.get("ok") else (result.get("error") or "failed")),
+                    flush=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"DNS repair skipped: {exc}", flush=True)
+
+        threading.Thread(target=_heal_dns, daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

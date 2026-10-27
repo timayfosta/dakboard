@@ -156,6 +156,134 @@ def _checkout_branch_for_upstream(upstream: str) -> None:
         _run_git(["git", "checkout", "-B", local_branch, upstream], timeout=30)
 
 
+def _github_resolves() -> bool:
+    try:
+        socket.getaddrinfo("github.com", 443)
+        return True
+    except OSError:
+        return False
+
+
+def _lookup_github_ip_doh() -> str | None:
+    """Resolve github.com via Cloudflare DoH (IP URL — works when DNS is broken)."""
+    import json as _json
+    import urllib.request
+
+    req = urllib.request.Request(
+        "https://1.1.1.1/dns-query?name=github.com&type=A",
+        headers={"Accept": "application/dns-json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = _json.load(resp)
+    except Exception:  # noqa: BLE001
+        return None
+    for ans in data.get("Answer") or []:
+        if ans.get("type") == 1 and ans.get("data"):
+            return str(ans["data"]).strip() or None
+    return None
+
+
+def _pin_github_hosts(ip: str) -> dict[str, Any]:
+    """Best-effort hosts pin via the passwordless DNS wrapper (fix-dns.sh does the real work)."""
+    if not ip or sys.platform == "win32":
+        return {"ok": False, "error": "hosts pin not available"}
+    dns_wrapper = Path("/usr/local/sbin/family-board-dns")
+    script = ROOT / "scripts" / "pi" / "fix-dns.sh"
+    try:
+        if dns_wrapper.is_file():
+            proc = _run_sudo([str(dns_wrapper)], timeout=60)
+        elif script.is_file():
+            proc = _run_sudo(["bash", str(script)], timeout=60)
+        else:
+            return {"ok": False, "error": "fix-dns helper missing"}
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return {"ok": False, "error": str(exc)}
+    out = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    if not _github_resolves():
+        return {"ok": False, "error": out or "hosts pin failed", "ip": ip}
+    return {"ok": True, "ip": ip, "stdout": out}
+
+
+def network_status() -> dict[str, Any]:
+    """Lightweight connectivity report for Admin health (no repairs)."""
+    github = _github_resolves()
+    dns_wrapper = Path("/usr/local/sbin/family-board-dns").is_file()
+    boot_wrapper = Path("/usr/local/sbin/family-board-boot").is_file()
+    return {
+        "githubResolves": github,
+        "dnsFixInstalled": dns_wrapper,
+        "bootFixInstalled": boot_wrapper,
+        "canAutoRepairDns": dns_wrapper or boot_wrapper,
+    }
+
+
+def repair_dns() -> dict[str, Any]:
+    """Public entry: repair github.com resolution (Admin button + deploy preflight)."""
+    return _repair_github_dns(force=True)
+
+
+def _repair_github_dns(*, force: bool = False) -> dict[str, Any]:
+    """When the Pi's DNS cannot resolve github.com, git fetch dies before any pull."""
+    if sys.platform == "win32":
+        return {"ok": True, "skipped": True, "reason": "windows"}
+
+    if _github_resolves() and not force:
+        return {"ok": True, "skipped": True}
+
+    dns_wrapper = Path("/usr/local/sbin/family-board-dns")
+    boot_wrapper = Path("/usr/local/sbin/family-board-boot")
+    script = ROOT / "scripts" / "pi" / "fix-dns.sh"
+    outs: list[str] = []
+
+    try:
+        if dns_wrapper.is_file():
+            proc = _run_sudo([str(dns_wrapper)], timeout=60)
+            outs.append(((proc.stdout or "") + (proc.stderr or "")).strip())
+        elif script.is_file():
+            proc = _run_sudo(["bash", str(script)], timeout=60)
+            outs.append(((proc.stdout or "") + (proc.stderr or "")).strip())
+            # First boot may not have installed the DNS sudoers line yet — ensure-boot does.
+            if proc.returncode != 0 and boot_wrapper.is_file() and not _github_resolves():
+                boot = _run_sudo([str(boot_wrapper)], timeout=90)
+                outs.append(((boot.stdout or "") + (boot.stderr or "")).strip())
+        elif boot_wrapper.is_file():
+            proc = _run_sudo([str(boot_wrapper)], timeout=90)
+            outs.append(((proc.stdout or "") + (proc.stderr or "")).strip())
+        else:
+            return {
+                "ok": False,
+                "error": "DNS cannot resolve github.com and fix-dns.sh is missing",
+            }
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return {"ok": False, "error": str(exc)}
+
+    if _github_resolves():
+        return {"ok": True, "stdout": "\n".join(x for x in outs if x), "repaired": True}
+
+    # Last resort: DoH lookup by IP + pin /etc/hosts (needs passwordless sudo for bash -c,
+    # which only works after write-sudoers; try anyway for older sudoers that allow all).
+    ip = _lookup_github_ip_doh() or "140.82.112.4"
+    pin = _pin_github_hosts(ip)
+    if pin.get("ok") and _github_resolves():
+        return {
+            "ok": True,
+            "stdout": "\n".join(x for x in outs if x),
+            "repaired": True,
+            "pinned": pin,
+        }
+
+    combined = "\n".join(x for x in outs if x)
+    return {
+        "ok": False,
+        "error": "DNS cannot resolve github.com",
+        "stderr": combined
+        or pin.get("error")
+        or "On the Pi once: sudo bash ~/family-board-src/scripts/pi/fix-dns.sh && sudo bash ~/family-board-src/scripts/pi/ensure-boot.sh",
+        "network": network_status(),
+    }
+
+
 def _git_sync_python() -> dict[str, Any]:
     """Python fallback — same behavior as scripts/git_sync.sh (no merge/pull)."""
     if not is_git_repo():
@@ -166,10 +294,26 @@ def _git_sync_python() -> dict[str, Any]:
 
     _abort_git_operations()
 
+    dns = _repair_github_dns()
+    if not dns.get("ok"):
+        return {
+            "ok": False,
+            "error": "git fetch failed — DNS",
+            "stderr": dns.get("stderr")
+            or dns.get("error")
+            or "Could not resolve host: github.com",
+        }
+
     fetch = _run_git(["git", "fetch", "--prune", "origin"], timeout=90)
     if fetch.returncode != 0:
         err = (fetch.stderr or fetch.stdout or "git fetch failed").strip()
-        return {"ok": False, "error": "git fetch failed", "stderr": err}
+        if "Could not resolve host" in err or "name resolution" in err.lower():
+            dns = _repair_github_dns()
+            if dns.get("ok"):
+                fetch = _run_git(["git", "fetch", "--prune", "origin"], timeout=90)
+                err = (fetch.stderr or fetch.stdout or "git fetch failed").strip()
+        if fetch.returncode != 0:
+            return {"ok": False, "error": "git fetch failed", "stderr": err}
 
     upstream = _resolve_upstream()
     if not upstream:

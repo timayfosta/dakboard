@@ -2100,7 +2100,8 @@
         ${
           identityBits().isLaptop
             ? `<button class="btn secondary block" type="button" id="restartServerBtn">Restart laptop server</button>`
-            : `<button class="btn secondary block" type="button" id="startTunnelBtn">Start Cloudflare tunnel</button>
+            : `<button class="btn secondary block" type="button" id="fixDnsBtn">Repair GitHub DNS</button>
+        <button class="btn secondary block" type="button" id="startTunnelBtn">Start Cloudflare tunnel</button>
         <button class="btn secondary block" type="button" id="restartServerBtn">Restart only</button>
         <button class="btn danger block" type="button" id="rebootPiBtn" style="margin-top:0.55rem">Reboot Raspberry Pi</button>`
         }
@@ -2150,8 +2151,18 @@
       if (notice) notice.innerHTML = identityNoticeHtml(health);
       const git = health?.git || {};
       const d = health?.deploy || {};
+      const net = health?.network || {};
       const bits = [];
       bits.push(d.gitRepo ? "git repo ready" : "not a git repo — auto-pull won't work");
+      if (Object.prototype.hasOwnProperty.call(net, "githubResolves")) {
+        bits.push(
+          net.githubResolves
+            ? "github.com DNS ok"
+            : net.canAutoRepairDns
+              ? "github.com DNS broken — tap Repair GitHub DNS"
+              : "github.com DNS broken — run sudo bash scripts/pi/fix-dns.sh on the Pi once"
+        );
+      }
       bits.push(d.webhookConfigured ? "webhook secret set" : "no webhook secret yet");
       const last = d.last;
       if (last?.ok === false) bits.push(`last deploy failed: ${last.error || last.pull?.stderr || "unknown"}`);
@@ -2182,6 +2193,14 @@
     const msg = String(raw).trim();
     if (msg.includes("already in progress")) {
       return "Deploy already running — wait a few seconds and try again";
+    }
+    if (
+      msg.includes("Could not resolve host") ||
+      msg.includes("git fetch failed — DNS") ||
+      msg.includes("DNS cannot resolve github.com") ||
+      msg.toLowerCase().includes("name resolution")
+    ) {
+      return "Pi cannot resolve github.com (DNS). Tap Repair GitHub DNS, or on the Pi once: sudo bash ~/family-board-src/scripts/pi/fix-dns.sh && sudo bash ~/family-board-src/scripts/pi/ensure-boot.sh";
     }
     if (msg.includes("local variable 'out'") || msg.includes('local variable "out"')) {
       return "Broken deploy on the Pi — SSH: cd ~/family-board-src && git fetch origin && git reset --hard origin/master && sudo systemctl restart family-board-api";
@@ -3050,6 +3069,7 @@
         const statusEl = $("#restartStatus");
         deployBtn.disabled = true;
         $("#restartServerBtn")?.setAttribute("disabled", "true");
+        $("#fixDnsBtn")?.setAttribute("disabled", "true");
         if (statusEl) {
           statusEl.classList.remove("hidden");
           statusEl.textContent = "Pulling updates…";
@@ -3061,6 +3081,7 @@
             toast("Deploy already running");
             deployBtn.disabled = false;
             $("#restartServerBtn")?.removeAttribute("disabled");
+            $("#fixDnsBtn")?.removeAttribute("disabled");
             if (statusEl) statusEl.classList.add("hidden");
             return;
           }
@@ -3068,6 +3089,7 @@
           toast(apiErrorMessage(err));
           deployBtn.disabled = false;
           $("#restartServerBtn")?.removeAttribute("disabled");
+          $("#fixDnsBtn")?.removeAttribute("disabled");
           if (statusEl) statusEl.classList.add("hidden");
           return;
         }
@@ -3080,6 +3102,7 @@
           toast(msg);
           deployBtn.disabled = false;
           $("#restartServerBtn")?.removeAttribute("disabled");
+          $("#fixDnsBtn")?.removeAttribute("disabled");
           return;
         }
         if (deployResult.pull?.dirtyBeforeSync) {
@@ -3090,6 +3113,45 @@
         if (statusEl) statusEl.textContent = "Restarting… waiting for server";
         await waitForServerRestart(statusEl, deployBtn, prevBootId);
         $("#restartServerBtn")?.removeAttribute("disabled");
+        $("#fixDnsBtn")?.removeAttribute("disabled");
+      });
+    }
+
+    const fixDnsBtn = $("#fixDnsBtn");
+    if (fixDnsBtn) {
+      fixDnsBtn.addEventListener("click", async () => {
+        const statusEl = $("#restartStatus");
+        fixDnsBtn.disabled = true;
+        if (statusEl) {
+          statusEl.classList.remove("hidden");
+          statusEl.textContent = "Repairing GitHub DNS…";
+        }
+        try {
+          const res = await AdminAPI.fixDns(state.token);
+          await fillDeployMeta();
+          if (res.ok) {
+            toast(res.skipped ? "github.com already resolves" : "DNS repaired — try Pull updates");
+            if (statusEl) {
+              statusEl.textContent = res.skipped
+                ? "github.com DNS ok"
+                : "DNS repaired — tap Pull updates & restart now";
+            }
+          } else {
+            const msg =
+              res.error ||
+              res.stderr ||
+              "DNS repair needs a one-time sudo on the Pi: sudo bash ~/family-board-src/scripts/pi/fix-dns.sh && sudo bash ~/family-board-src/scripts/pi/ensure-boot.sh";
+            toast(msg);
+            if (statusEl) statusEl.textContent = msg;
+          }
+        } catch (err) {
+          const msg =
+            apiErrorMessage(err) ||
+            "DNS repair failed — on the Pi: sudo bash ~/family-board-src/scripts/pi/fix-dns.sh";
+          toast(msg);
+          if (statusEl) statusEl.textContent = msg;
+        }
+        fixDnsBtn.disabled = false;
       });
     }
 

@@ -25,14 +25,19 @@ echo "User: ${TARGET_USER}"
 
 chmod +x "${ROOT}/scripts/pi/"*.sh "${ROOT}/scripts/git_sync.sh" 2>/dev/null || true
 
+# Repair DNS before anything else — git fetch needs github.com.
+if [[ -f "${ROOT}/scripts/pi/fix-dns.sh" ]]; then
+  bash "${ROOT}/scripts/pi/fix-dns.sh" || true
+fi
+
+if [[ -f "${ROOT}/scripts/pi/write-sudoers.sh" ]]; then
+  bash "${ROOT}/scripts/pi/write-sudoers.sh" "${TARGET_USER}" "${ROOT}" || true
+fi
 if [[ -x "${ROOT}/scripts/pi/write-api-service.sh" ]]; then
-  bash "${ROOT}/scripts/pi/write-api-service.sh" "${TARGET_USER}" "${ROOT}"
+  bash "${ROOT}/scripts/pi/write-api-service.sh" "${TARGET_USER}" "${ROOT}" || true
 fi
 if [[ -x "${ROOT}/scripts/pi/write-kiosk-service.sh" ]]; then
-  bash "${ROOT}/scripts/pi/write-kiosk-service.sh" "${TARGET_USER}" "${ROOT}" "${HOME_DIR}"
-fi
-if [[ -x "${ROOT}/scripts/pi/write-sudoers.sh" ]]; then
-  bash "${ROOT}/scripts/pi/write-sudoers.sh" "${TARGET_USER}" "${ROOT}"
+  bash "${ROOT}/scripts/pi/write-kiosk-service.sh" "${TARGET_USER}" "${ROOT}" "${HOME_DIR}" || true
 fi
 
 cf_bin() {

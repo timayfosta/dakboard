@@ -11,6 +11,7 @@ TARGET_USER="${1:?usage: write-sudoers.sh <user> <app_dir>}"
 APP_DIR="${2:?}"
 WRAPPER=/usr/local/sbin/family-board-boot
 REBOOT=/usr/local/sbin/family-board-reboot
+DNSFIX=/usr/local/sbin/family-board-dns
 
 cat > "${WRAPPER}" <<EOF
 #!/bin/bash
@@ -27,8 +28,14 @@ exec /sbin/reboot
 EOF
 chmod 755 "${REBOOT}"
 
+cat > "${DNSFIX}" <<EOF
+#!/bin/bash
+exec /bin/bash ${APP_DIR}/scripts/pi/fix-dns.sh
+EOF
+chmod 755 "${DNSFIX}"
+
 cat > /etc/sudoers.d/family-board <<EOF
-${TARGET_USER} ALL=(root) NOPASSWD: ${WRAPPER}, ${REBOOT}
+${TARGET_USER} ALL=(root) NOPASSWD: ${WRAPPER}, ${REBOOT}, ${DNSFIX}
 EOF
 chmod 440 /etc/sudoers.d/family-board
 
@@ -36,4 +43,4 @@ if command -v visudo >/dev/null 2>&1; then
   visudo -cf /etc/sudoers.d/family-board >/dev/null
 fi
 
-echo "Sudoers: ${TARGET_USER} may run ${WRAPPER} without a password"
+echo "Sudoers: ${TARGET_USER} may run ${WRAPPER}, ${REBOOT}, ${DNSFIX} without a password"

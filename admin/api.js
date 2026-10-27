@@ -65,6 +65,7 @@ const API = {
     API.request("/api/admin/stop", { method: "POST", token, body: {} }),
   deploy: (token) => API.request("/api/admin/deploy", { method: "POST", token, body: {} }),
   deployStatus: (token) => API.request("/api/admin/deploy/status", { token }),
+  fixDns: (token) => API.request("/api/admin/fix-dns", { method: "POST", token, body: {} }),
   rebootPi: (token) => API.request("/api/admin/reboot", { method: "POST", token, body: {} }),
   startTunnel: (token) => API.request("/api/admin/tunnel-start", { method: "POST", token, body: {} }),
   unlockFiles: (token, password) =>
