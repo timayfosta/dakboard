@@ -53,8 +53,9 @@ window.FAMILY_CONFIG = {
   googleCalendar: {
     apiKey: "AIzaSyAXYnqlAwVT6TVS3QQ1bC548MzG58Ymfcg",
     calendarId: "family00724596334294402291@group.calendar.google.com",
-    maxUpcoming: 15,
-    daysAhead: 21,
+    maxUpcoming: 40,
+    /* Rolling window from household midnight: today through today+daysAhead (inclusive). */
+    daysAhead: 42,
     defaultEventColor: "#7986CB",
     /*
      * Private calendar (recommended): leave calendar private and use a

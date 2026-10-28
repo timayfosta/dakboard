@@ -189,7 +189,7 @@ def main() -> None:
             + urllib.parse.urlencode(
                 {
                     "timeMin": now.isoformat().replace("+00:00", "Z"),
-                    "timeMax": (now + timedelta(days=21)).isoformat().replace("+00:00", "Z"),
+                    "timeMax": (now + timedelta(days=43)).isoformat().replace("+00:00", "Z"),
                     "singleEvents": "true",
                     "maxResults": "250",
                 }

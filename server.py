@@ -618,17 +618,19 @@ def _should_skip_oauth_calendar() -> bool:
 
 
 def calendar_horizon(days_ahead: int | None = None) -> tuple[datetime, datetime]:
-    """Household today at midnight through the same number of days.
+    """Household today at midnight through the end of (today + daysAhead).
 
-    The end moves forward at midnight. It does not stick on the date of an older fetch,
-    and it does not shrink as the clock runs through the day.
+    Returns (day_start, exclusive_end). Events with start < exclusive_end are in range,
+    so the day that is exactly daysAhead ahead is included. The window advances at
+    midnight; it does not stick on an older fetch date or shrink during the day.
     """
     cfg = load_config_calendar()
-    horizon_days = days_ahead if days_ahead is not None else int(cfg.get("daysAhead") or 21)
+    horizon_days = days_ahead if days_ahead is not None else int(cfg.get("daysAhead") or 42)
     horizon_days = max(1, horizon_days)
     local_now = datetime.now(household_tz())
     day_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return day_start, day_start + timedelta(days=horizon_days)
+    # +1 so "daysAhead: 21" includes the whole 21st day out, not just up to that midnight.
+    return day_start, day_start + timedelta(days=horizon_days + 1)
 
 
 def fetch_google_calendar_api() -> dict[str, Any] | None:
@@ -994,7 +996,7 @@ def enrich_event_colors(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def parse_ics_events(data: bytes, days_ahead: int | None = None) -> list[dict[str, Any]]:
     cfg = load_config_calendar()
-    horizon_days = days_ahead if days_ahead is not None else int(cfg.get("daysAhead") or 21)
+    horizon_days = days_ahead if days_ahead is not None else int(cfg.get("daysAhead") or 42)
     tz_name = str(load_config_weather().get("timezone") or "America/Chicago")
     return ical.parse_feed(data, tz_name=tz_name, days_ahead=horizon_days)
 

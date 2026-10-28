@@ -637,10 +637,15 @@ def parse_feed(
 
     now_utc = (now or datetime.now(UTC)).astimezone(UTC)
     today_local = now_utc.astimezone(home).date()
+    day_start_local = datetime.combine(today_local, time(0, 0), tzinfo=home)
     range_start_day = today_local - timedelta(days=days_back)
-    range_start_utc = datetime.combine(range_start_day, time(0, 0)).replace(tzinfo=home).astimezone(UTC)
-    range_end_utc = now_utc + timedelta(days=days_ahead)
-    range_end_day = range_end_utc.astimezone(home).date()
+    range_start_utc = datetime.combine(range_start_day, time(0, 0), tzinfo=home).astimezone(UTC)
+    # Match server calendar_horizon: include the full calendar day that is days_ahead out
+    # (exclusive end = midnight after that day). Do not use now+N hours — that drops
+    # afternoon/evening events on the last day as the clock runs.
+    exclusive_end_local = day_start_local + timedelta(days=max(1, days_ahead) + 1)
+    range_end_utc = exclusive_end_local.astimezone(UTC)
+    range_end_day = (exclusive_end_local - timedelta(seconds=1)).date()
 
     masters: list[Component] = []
     overrides: dict[str, dict[str, Component]] = {}

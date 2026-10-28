@@ -275,7 +275,7 @@
     return occurrences;
   }
 
-  function parseIcs(text, daysAhead = 21) {
+  function parseIcs(text, daysAhead = 42) {
     const flat = unfoldIcsLines(text);
     const header = flat.split("BEGIN:VEVENT")[0] || "";
     const headerColor = (() => {
@@ -289,7 +289,8 @@
     })();
     const blocks = flat.split("BEGIN:VEVENT").slice(1);
     const rangeStart = addDays(startOfDay(new Date()), -1);
-    const rangeEnd = addDays(new Date(), daysAhead);
+    // Exclusive end: midnight after the last included day (today + daysAhead).
+    const rangeEnd = addDays(startOfDay(new Date()), Math.max(1, daysAhead) + 1);
     const events = [];
 
     blocks.forEach((block, i) => {
@@ -365,10 +366,11 @@
     return events.sort((a, b) => a.start - b.start);
   }
 
-  function eventsInWindow(events, daysAhead = 21) {
+  function eventsInWindow(events, daysAhead = 42) {
     const now = new Date();
     const dayStart = startOfDay(now);
-    const horizon = addDays(dayStart, daysAhead);
+    // Exclusive end so the full last day (today + daysAhead) stays in range.
+    const horizon = addDays(dayStart, Math.max(1, daysAhead) + 1);
     return events.filter(
       (e) => (e.end >= now || (e.allDay && e.end >= dayStart)) && e.start < horizon
     );
@@ -424,7 +426,7 @@
   }
 
   async function fetchViaProxy(cfg) {
-    const { proxyUrl, daysAhead = 21 } = cfg.googleCalendar || {};
+    const { proxyUrl, daysAhead = 42 } = cfg.googleCalendar || {};
     if (!proxyUrl) return null;
 
     // Keep the proxy URL clean — extra query params are unused and can confuse tunnels
@@ -512,13 +514,13 @@
   }
 
   async function fetchGooglePublicApi(cfg) {
-    const { apiKey, calendarId, daysAhead = 21, maxUpcoming = 15, proxyUrl } = cfg.googleCalendar || {};
+    const { apiKey, calendarId, daysAhead = 42, maxUpcoming = 40, proxyUrl } = cfg.googleCalendar || {};
     // Private calendars use the iCal proxy — public API key calls return 400/404 and confuse errors
     if (proxyUrl) return null;
     if (!apiKey || !calendarId) return null;
 
     const timeMin = new Date().toISOString();
-    const timeMax = addDays(new Date(), daysAhead).toISOString();
+    const timeMax = addDays(startOfDay(new Date()), Math.max(1, daysAhead) + 1).toISOString();
     const params = new URLSearchParams({
       key: apiKey,
       timeMin,
