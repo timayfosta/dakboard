@@ -1410,24 +1410,26 @@ button.item {
 
 .pi-term-out {
   margin: 0;
+  height: min(55vh, 22rem);
   min-height: 14rem;
-  max-height: 55vh;
-  overflow: auto;
-  padding: 0.65rem 0.75rem;
+  padding: 0.35rem;
   border-radius: 10px;
   background: #0b0f14;
-  color: #d7e0ea;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-word;
   border: 1px solid var(--line);
-  outline: none;
+  overflow: hidden;
 }
 
-.pi-term-out:focus {
+.pi-term-out:focus-within {
   border-color: var(--coral);
+}
+
+.pi-term-out .xterm {
+  height: 100%;
+  padding: 0.25rem 0.35rem;
+}
+
+.pi-term-out .xterm-viewport {
+  overflow-y: auto !important;
 }
 
 .pi-term-hint {

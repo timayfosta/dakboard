@@ -37,7 +37,7 @@
     health: null,
     stopWait: false,
     receiptKidId: "",
-    term: { sessionId: "", seq: 0, text: "", polling: false },
+    term: { sessionId: "", seq: 0, raw: "", polling: false },
     moreFolds: (() => {
       try {
         const raw = JSON.parse(sessionStorage.getItem("family-admin-more-folds") || "{}");
@@ -49,6 +49,8 @@
   };
   let listPollTimer = null;
   let termPollTimer = null;
+  let piTermInstance = null;
+  let piTermDataDisposable = null;
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -1809,36 +1811,99 @@
     }
   }
 
-  function stripAnsi(text) {
-    return String(text || "")
-      .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
-      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
-      .replace(/\x1b[()][0-9A-Z]/g, "")
-      .replace(/\r\n/g, "\n")
-      .replace(/[^\n]\r/g, "");
+  function disposePiTermUi() {
+    try {
+      piTermDataDisposable?.dispose?.();
+    } catch {}
+    piTermDataDisposable = null;
+    try {
+      piTermInstance?.dispose?.();
+    } catch {}
+    piTermInstance = null;
+    const host = $("#piTermOut");
+    if (host) {
+      host.innerHTML = "";
+      delete host.dataset.xtermMounted;
+    }
   }
 
-  function stopPiTerminal() {
+  function termSizeFromHost(host) {
+    const w = Math.max(host?.clientWidth || 640, 240);
+    const h = Math.max(host?.clientHeight || 280, 160);
+    return {
+      cols: Math.max(40, Math.min(160, Math.floor((w - 16) / 8.4))),
+      rows: Math.max(12, Math.min(50, Math.floor((h - 12) / 17))),
+    };
+  }
+
+  function ensurePiTermUi() {
+    const host = $("#piTermOut");
+    if (!host) return null;
+    if (!window.Terminal) {
+      host.textContent = "Terminal library failed to load — refresh Admin.";
+      return null;
+    }
+    if (piTermInstance && host.dataset.xtermMounted === "1" && host.querySelector(".xterm")) {
+      return piTermInstance;
+    }
+    disposePiTermUi();
+    const size = termSizeFromHost(host);
+    const term = new window.Terminal({
+      cursorBlink: true,
+      cursorStyle: "block",
+      fontSize: 13,
+      lineHeight: 1.2,
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+      theme: {
+        background: "#0b0f14",
+        foreground: "#d7e0ea",
+        cursor: "#f0f4f8",
+        cursorAccent: "#0b0f14",
+        selectionBackground: "#3d4f66",
+      },
+      cols: size.cols,
+      rows: size.rows,
+      scrollback: 4000,
+      convertEol: false,
+      allowProposedApi: true,
+    });
+    term.open(host);
+    host.dataset.xtermMounted = "1";
+    if (state.term?.raw) term.write(state.term.raw);
+    piTermDataDisposable = term.onData((data) => {
+      if (!state.term?.sessionId || !state.filesToken) return;
+      AdminAPI.terminalInput(state.token, state.filesToken, state.term.sessionId, data)
+        .then(() => pollPiTerminal())
+        .catch((err) => toast(apiErrorMessage(err) || "Input failed"));
+    });
+    piTermInstance = term;
+    queueMicrotask(() => term.focus());
+    return term;
+  }
+
+  function stopPiTerminal({ keepUi = false } = {}) {
     if (termPollTimer) {
       clearInterval(termPollTimer);
       termPollTimer = null;
     }
     const sid = state.term?.sessionId;
-    state.term = { sessionId: "", seq: 0, text: state.term?.text || "", polling: false };
+    state.term = {
+      sessionId: "",
+      seq: 0,
+      raw: keepUi ? state.term?.raw || "" : "",
+      polling: false,
+    };
     if (sid && state.filesToken) {
       AdminAPI.terminalClose(state.token, state.filesToken, sid).catch(() => {});
     }
+    if (!keepUi) disposePiTermUi();
   }
 
-  function appendTermText(chunk) {
-    const clean = stripAnsi(chunk);
-    if (!clean) return;
-    state.term.text = `${state.term.text || ""}${clean}`.slice(-120000);
-    const out = $("#piTermOut");
-    if (out) {
-      out.textContent = state.term.text;
-      out.scrollTop = out.scrollHeight;
-    }
+  function writeTermOutput(chunk) {
+    if (!chunk) return;
+    state.term.raw = `${state.term.raw || ""}${chunk}`.slice(-200000);
+    const term = ensurePiTermUi();
+    term?.write(chunk);
   }
 
   async function pollPiTerminal() {
@@ -1850,39 +1915,46 @@
         state.term.sessionId,
         state.term.seq || 0
       );
-      if (res.output) appendTermText(res.output);
+      if (res.output) writeTermOutput(res.output);
       state.term.seq = res.seq || state.term.seq;
       if (res.alive === false) {
-        appendTermText("\n[session ended]\n");
-        stopPiTerminal();
+        writeTermOutput("\r\n\x1b[90m[session ended]\x1b[0m\r\n");
+        stopPiTerminal({ keepUi: true });
         const openBtn = $("#piTermOpenBtn");
         if (openBtn) openBtn.textContent = "Open terminal";
         $("#piTermCloseBtn")?.setAttribute("disabled", "true");
       }
     } catch (err) {
-      appendTermText(`\n[${apiErrorMessage(err) || "terminal poll failed"}]\n`);
-      stopPiTerminal();
+      writeTermOutput(`\r\n\x1b[31m[${apiErrorMessage(err) || "terminal poll failed"}]\x1b[0m\r\n`);
+      stopPiTerminal({ keepUi: true });
     }
   }
 
   async function openPiTerminal() {
     if (!state.filesToken) return;
     stopPiTerminal();
-    state.term.text = "";
-    const out = $("#piTermOut");
-    if (out) out.textContent = "Connecting…\n";
+    state.term = { sessionId: "", seq: 0, raw: "", polling: false };
+    const host = $("#piTermOut");
+    const term = ensurePiTermUi();
+    if (!term) {
+      toast("Terminal library failed to load — refresh Admin");
+      return;
+    }
+    term.reset();
+    term.write("Connecting…\r\n");
+    const size = termSizeFromHost(host);
     try {
-      const res = await AdminAPI.terminalOpen(state.token, state.filesToken, { cols: 100, rows: 28 });
+      const res = await AdminAPI.terminalOpen(state.token, state.filesToken, size);
       if (!res.ok || !res.sessionId) throw new Error(res.error || "Could not open terminal");
-      state.term = { sessionId: res.sessionId, seq: 0, text: "", polling: true };
-      if (out) out.textContent = "";
+      state.term = { sessionId: res.sessionId, seq: 0, raw: "", polling: true };
+      term.reset();
       $("#piTermOpenBtn") && ($("#piTermOpenBtn").textContent = "Reconnect");
       $("#piTermCloseBtn")?.removeAttribute("disabled");
-      out?.focus();
-      termPollTimer = setInterval(pollPiTerminal, 250);
+      term.focus();
+      termPollTimer = setInterval(pollPiTerminal, 200);
       pollPiTerminal();
     } catch (err) {
-      if (out) out.textContent = apiErrorMessage(err) || "Could not open terminal";
+      term.writeln(apiErrorMessage(err) || "Could not open terminal");
       toast(apiErrorMessage(err) || "Could not open terminal");
     }
   }
@@ -1902,7 +1974,7 @@
   }
 
   function lockFiles() {
-    stopPiTerminal();
+    stopPiTerminal({ keepUi: false });
     state.filesUnlocked = false;
     state.filesToken = "";
     state.adminFiles = [];
@@ -2232,8 +2304,8 @@
             <button type="button" class="btn secondary" id="piTermOpenBtn">${state.term?.sessionId ? "Reconnect" : "Open terminal"}</button>
             <button type="button" class="btn ghost" id="piTermCloseBtn" ${state.term?.sessionId ? "" : "disabled"}>Close</button>
           </div>
-          <pre class="pi-term-out" id="piTermOut" tabindex="0" aria-label="Pi terminal">${escapeHtml(state.term?.text || "")}</pre>
-          <p class="muted pi-term-hint">Click the black area, then type. Ctrl+C / Ctrl+D work.</p>
+          <div class="pi-term-out" id="piTermOut" aria-label="Pi terminal"></div>
+          <p class="muted pi-term-hint">Click the terminal, then type. Backspace, arrows, and Ctrl+C work like a normal shell.</p>
         </div>
         <button type="button" class="btn ghost block" id="lockFilesBtn" style="margin-top:0.75rem">Lock files</button>`
             : `
@@ -3189,53 +3261,13 @@
     $("#piTermOpenBtn")?.addEventListener("click", () => openPiTerminal());
     $("#piTermCloseBtn")?.addEventListener("click", () => {
       stopPiTerminal();
-      appendTermText("\n[closed]\n");
       const openBtn = $("#piTermOpenBtn");
       if (openBtn) openBtn.textContent = "Open terminal";
       $("#piTermCloseBtn")?.setAttribute("disabled", "true");
     });
 
-    const termOut = $("#piTermOut");
-    if (termOut && !termOut.dataset.bound) {
-      termOut.dataset.bound = "1";
-      termOut.addEventListener("keydown", async (e) => {
-        if (!state.term?.sessionId) return;
-        e.preventDefault();
-        let data = "";
-        if (e.key === "Enter") data = "\r";
-        else if (e.key === "Backspace") data = "\x7f";
-        else if (e.key === "Tab") data = "\t";
-        else if (e.key === "Escape") data = "\x1b";
-        else if (e.key === "ArrowUp") data = "\x1b[A";
-        else if (e.key === "ArrowDown") data = "\x1b[B";
-        else if (e.key === "ArrowRight") data = "\x1b[C";
-        else if (e.key === "ArrowLeft") data = "\x1b[D";
-        else if (e.ctrlKey && e.key.length === 1) {
-          const code = e.key.toLowerCase().charCodeAt(0) - 96;
-          if (code >= 1 && code <= 26) data = String.fromCharCode(code);
-        } else if (e.key.length === 1 && !e.metaKey && !e.altKey) {
-          data = e.key;
-        }
-        if (!data) return;
-        try {
-          await AdminAPI.terminalInput(state.token, state.filesToken, state.term.sessionId, data);
-          pollPiTerminal();
-        } catch (err) {
-          toast(apiErrorMessage(err) || "Input failed");
-        }
-      });
-      termOut.addEventListener("paste", async (e) => {
-        if (!state.term?.sessionId) return;
-        e.preventDefault();
-        const text = e.clipboardData?.getData("text") || "";
-        if (!text) return;
-        try {
-          await AdminAPI.terminalInput(state.token, state.filesToken, state.term.sessionId, text);
-          pollPiTerminal();
-        } catch (err) {
-          toast(apiErrorMessage(err) || "Paste failed");
-        }
-      });
+    if (state.term?.sessionId || state.term?.raw) {
+      ensurePiTermUi();
     }
 
     $("#copyFileBtn")?.addEventListener("click", async () => {
