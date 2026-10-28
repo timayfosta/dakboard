@@ -37,6 +37,7 @@
     health: null,
     stopWait: false,
     receiptKidId: "",
+    term: { sessionId: "", seq: 0, text: "", polling: false },
     moreFolds: (() => {
       try {
         const raw = JSON.parse(sessionStorage.getItem("family-admin-more-folds") || "{}");
@@ -47,6 +48,7 @@
     })(),
   };
   let listPollTimer = null;
+  let termPollTimer = null;
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -1807,7 +1809,100 @@
     }
   }
 
+  function stripAnsi(text) {
+    return String(text || "")
+      .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
+      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
+      .replace(/\x1b[()][0-9A-Z]/g, "")
+      .replace(/\r\n/g, "\n")
+      .replace(/[^\n]\r/g, "");
+  }
+
+  function stopPiTerminal() {
+    if (termPollTimer) {
+      clearInterval(termPollTimer);
+      termPollTimer = null;
+    }
+    const sid = state.term?.sessionId;
+    state.term = { sessionId: "", seq: 0, text: state.term?.text || "", polling: false };
+    if (sid && state.filesToken) {
+      AdminAPI.terminalClose(state.token, state.filesToken, sid).catch(() => {});
+    }
+  }
+
+  function appendTermText(chunk) {
+    const clean = stripAnsi(chunk);
+    if (!clean) return;
+    state.term.text = `${state.term.text || ""}${clean}`.slice(-120000);
+    const out = $("#piTermOut");
+    if (out) {
+      out.textContent = state.term.text;
+      out.scrollTop = out.scrollHeight;
+    }
+  }
+
+  async function pollPiTerminal() {
+    if (!state.term?.sessionId || !state.filesToken) return;
+    try {
+      const res = await AdminAPI.terminalPoll(
+        state.token,
+        state.filesToken,
+        state.term.sessionId,
+        state.term.seq || 0
+      );
+      if (res.output) appendTermText(res.output);
+      state.term.seq = res.seq || state.term.seq;
+      if (res.alive === false) {
+        appendTermText("\n[session ended]\n");
+        stopPiTerminal();
+        const openBtn = $("#piTermOpenBtn");
+        if (openBtn) openBtn.textContent = "Open terminal";
+        $("#piTermCloseBtn")?.setAttribute("disabled", "true");
+      }
+    } catch (err) {
+      appendTermText(`\n[${apiErrorMessage(err) || "terminal poll failed"}]\n`);
+      stopPiTerminal();
+    }
+  }
+
+  async function openPiTerminal() {
+    if (!state.filesToken) return;
+    stopPiTerminal();
+    state.term.text = "";
+    const out = $("#piTermOut");
+    if (out) out.textContent = "Connecting…\n";
+    try {
+      const res = await AdminAPI.terminalOpen(state.token, state.filesToken, { cols: 100, rows: 28 });
+      if (!res.ok || !res.sessionId) throw new Error(res.error || "Could not open terminal");
+      state.term = { sessionId: res.sessionId, seq: 0, text: "", polling: true };
+      if (out) out.textContent = "";
+      $("#piTermOpenBtn") && ($("#piTermOpenBtn").textContent = "Reconnect");
+      $("#piTermCloseBtn")?.removeAttribute("disabled");
+      out?.focus();
+      termPollTimer = setInterval(pollPiTerminal, 250);
+      pollPiTerminal();
+    } catch (err) {
+      if (out) out.textContent = apiErrorMessage(err) || "Could not open terminal";
+      toast(apiErrorMessage(err) || "Could not open terminal");
+    }
+  }
+
+  async function refreshKioskCtlMeta() {
+    const el = $("#kioskCtlMeta");
+    if (!el || !state.filesToken) return;
+    try {
+      const res = await AdminAPI.kioskStatus(state.token, state.filesToken);
+      const k = res?.services?.kiosk || {};
+      const on = k.active === "active" ? "running" : k.active || "off";
+      const en = k.enabled === "enabled" ? "starts on boot" : "not on boot";
+      el.textContent = `Kiosk ${on} · ${en}`;
+    } catch (err) {
+      el.textContent = apiErrorMessage(err) || "Can't read kiosk status";
+    }
+  }
+
   function lockFiles() {
+    stopPiTerminal();
     state.filesUnlocked = false;
     state.filesToken = "";
     state.adminFiles = [];
@@ -2126,9 +2221,23 @@
         <p class="muted">Open the project folder on the Pi. Copy, paste, and save files from here — including when you are away from home.</p>
         <div class="file-list" id="adminFileList">${renderFileButtons()}</div>
         ${renderFileEditor()}
+        <h3 class="more-subhead">Pi kiosk</h3>
+        <p class="muted" id="kioskCtlMeta">Checking kiosk…</p>
+        <button type="button" class="btn danger block" id="stopKioskBtn">Close kiosk (do not restart)</button>
+        <button type="button" class="btn secondary block" id="startKioskBtn" style="margin-top:0.45rem">Start kiosk</button>
+        <h3 class="more-subhead">Pi terminal</h3>
+        <p class="muted">Shell on the Raspberry Pi from this laptop. Runs on the Pi behind this password.</p>
+        <div class="pi-term" id="piTerm">
+          <div class="pi-term-toolbar">
+            <button type="button" class="btn secondary" id="piTermOpenBtn">${state.term?.sessionId ? "Reconnect" : "Open terminal"}</button>
+            <button type="button" class="btn ghost" id="piTermCloseBtn" ${state.term?.sessionId ? "" : "disabled"}>Close</button>
+          </div>
+          <pre class="pi-term-out" id="piTermOut" tabindex="0" aria-label="Pi terminal">${escapeHtml(state.term?.text || "")}</pre>
+          <p class="muted pi-term-hint">Click the black area, then type. Ctrl+C / Ctrl+D work.</p>
+        </div>
         <button type="button" class="btn ghost block" id="lockFilesBtn" style="margin-top:0.75rem">Lock files</button>`
             : `
-        <p class="muted">File access is hidden until you unlock it.</p>
+        <p class="muted">File access, kiosk controls, and Pi terminal stay hidden until you unlock.</p>
         <form id="filesUnlockForm" class="files-unlock">
           <label class="field">
             <span>Password</span>
@@ -3018,6 +3127,91 @@
       lockFiles();
       renderTab();
     });
+
+    if (state.filesUnlocked) {
+      refreshKioskCtlMeta();
+    }
+
+    $("#stopKioskBtn")?.addEventListener("click", async () => {
+      if (!confirm("Close the TV kiosk now and leave it closed?\n\n(API / Admin stay up. Use Start kiosk when you want the board back.)")) {
+        return;
+      }
+      const btn = $("#stopKioskBtn");
+      if (btn) btn.disabled = true;
+      try {
+        const res = await AdminAPI.kioskControl(state.token, "stop", state.filesToken);
+        toast(res.ok ? "Kiosk closed" : res.error || "Could not stop kiosk");
+        await refreshKioskCtlMeta();
+      } catch (err) {
+        toast(apiErrorMessage(err) || "Could not stop kiosk");
+      }
+      if (btn) btn.disabled = false;
+    });
+
+    $("#startKioskBtn")?.addEventListener("click", async () => {
+      const btn = $("#startKioskBtn");
+      if (btn) btn.disabled = true;
+      try {
+        const res = await AdminAPI.kioskControl(state.token, "start", state.filesToken);
+        toast(res.ok ? "Kiosk starting" : res.error || "Could not start kiosk");
+        await refreshKioskCtlMeta();
+      } catch (err) {
+        toast(apiErrorMessage(err) || "Could not start kiosk");
+      }
+      if (btn) btn.disabled = false;
+    });
+
+    $("#piTermOpenBtn")?.addEventListener("click", () => openPiTerminal());
+    $("#piTermCloseBtn")?.addEventListener("click", () => {
+      stopPiTerminal();
+      appendTermText("\n[closed]\n");
+      const openBtn = $("#piTermOpenBtn");
+      if (openBtn) openBtn.textContent = "Open terminal";
+      $("#piTermCloseBtn")?.setAttribute("disabled", "true");
+    });
+
+    const termOut = $("#piTermOut");
+    if (termOut && !termOut.dataset.bound) {
+      termOut.dataset.bound = "1";
+      termOut.addEventListener("keydown", async (e) => {
+        if (!state.term?.sessionId) return;
+        e.preventDefault();
+        let data = "";
+        if (e.key === "Enter") data = "\r";
+        else if (e.key === "Backspace") data = "\x7f";
+        else if (e.key === "Tab") data = "\t";
+        else if (e.key === "Escape") data = "\x1b";
+        else if (e.key === "ArrowUp") data = "\x1b[A";
+        else if (e.key === "ArrowDown") data = "\x1b[B";
+        else if (e.key === "ArrowRight") data = "\x1b[C";
+        else if (e.key === "ArrowLeft") data = "\x1b[D";
+        else if (e.ctrlKey && e.key.length === 1) {
+          const code = e.key.toLowerCase().charCodeAt(0) - 96;
+          if (code >= 1 && code <= 26) data = String.fromCharCode(code);
+        } else if (e.key.length === 1 && !e.metaKey && !e.altKey) {
+          data = e.key;
+        }
+        if (!data) return;
+        try {
+          await AdminAPI.terminalInput(state.token, state.filesToken, state.term.sessionId, data);
+          pollPiTerminal();
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Input failed");
+        }
+      });
+      termOut.addEventListener("paste", async (e) => {
+        if (!state.term?.sessionId) return;
+        e.preventDefault();
+        const text = e.clipboardData?.getData("text") || "";
+        if (!text) return;
+        try {
+          await AdminAPI.terminalInput(state.token, state.filesToken, state.term.sessionId, text);
+          pollPiTerminal();
+        } catch (err) {
+          toast(apiErrorMessage(err) || "Paste failed");
+        }
+      });
+    }
 
     $("#copyFileBtn")?.addEventListener("click", async () => {
       const text = $("#adminFileText")?.value || "";

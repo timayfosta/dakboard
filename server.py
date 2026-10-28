@@ -36,6 +36,7 @@ try:
     import db  # noqa: E402
     import deploy  # noqa: E402
     import ical  # noqa: E402
+    import pi_terminal  # noqa: E402
     import portkill  # noqa: E402
     import screensaver_albums  # noqa: E402
 except ImportError as exc:
@@ -1331,6 +1332,25 @@ class Handler(SimpleHTTPRequestHandler):
             return self.screensaver_manifest()
         if path == "/api/screensaver/photo":
             return self.screensaver_photo(parsed.query)
+        if path == "/api/admin/terminal/poll":
+            if not require_files_access(self):
+                return
+            qs = urllib.parse.parse_qs(parsed.query)
+            sid = (qs.get("sessionId") or [""])[0]
+            after = 0
+            try:
+                after = int((qs.get("after") or ["0"])[0] or 0)
+            except ValueError:
+                after = 0
+            result = pi_terminal.poll(sid, after)
+            status = 200 if result.get("ok") else 404
+            return send_json(self, result, status)
+        if path == "/api/admin/kiosk/status":
+            if not require_files_access(self):
+                return
+            if sys.platform == "win32":
+                return send_json(self, {"ok": False, "error": "Kiosk control is Pi-only"}, 400)
+            return send_json(self, {"ok": True, "services": deploy.boot_status()})
         if path == "/api/admin/browse":
             if not require_files_access(self):
                 return
@@ -1495,6 +1515,26 @@ class Handler(SimpleHTTPRequestHandler):
             if not require_admin(self):
                 return
             return self.admin_tunnel_start()
+        if path == "/api/admin/kiosk":
+            if not require_files_access(self):
+                return
+            return self.admin_kiosk(payload)
+        if path == "/api/admin/terminal/open":
+            if not require_files_access(self):
+                return
+            return self.admin_terminal_open(payload)
+        if path == "/api/admin/terminal/input":
+            if not require_files_access(self):
+                return
+            return self.admin_terminal_input(payload)
+        if path == "/api/admin/terminal/resize":
+            if not require_files_access(self):
+                return
+            return self.admin_terminal_resize(payload)
+        if path == "/api/admin/terminal/close":
+            if not require_files_access(self):
+                return
+            return self.admin_terminal_close(payload)
         if path == "/api/admin/files/unlock":
             if not require_admin(self):
                 return
@@ -2628,6 +2668,46 @@ class Handler(SimpleHTTPRequestHandler):
         result = deploy.enable_boot_services()
         status = 200 if result.get("ok") else 400
         send_json(self, {**result, "boot": result.get("services") or deploy.boot_status()}, status)
+
+    def admin_kiosk(self, payload: dict):
+        if sys.platform == "win32":
+            return send_json(self, {"ok": False, "error": "Kiosk control is Pi-only"}, 400)
+        action = str(payload.get("action") or "").strip().lower()
+        result = deploy.kiosk_control(action)
+        status = 200 if result.get("ok") else 400
+        send_json(self, result, status)
+
+    def admin_terminal_open(self, payload: dict):
+        try:
+            cols = int(payload.get("cols") or 100)
+            rows = int(payload.get("rows") or 28)
+        except (TypeError, ValueError):
+            cols, rows = 100, 28
+        result = pi_terminal.open_session(cols=cols, rows=rows)
+        status = 200 if result.get("ok") else 400
+        send_json(self, result, status)
+
+    def admin_terminal_input(self, payload: dict):
+        sid = str(payload.get("sessionId") or "")
+        data = str(payload.get("data") or "")
+        result = pi_terminal.write_input(sid, data)
+        status = 200 if result.get("ok") else 404
+        send_json(self, result, status)
+
+    def admin_terminal_resize(self, payload: dict):
+        sid = str(payload.get("sessionId") or "")
+        try:
+            cols = int(payload.get("cols") or 100)
+            rows = int(payload.get("rows") or 28)
+        except (TypeError, ValueError):
+            cols, rows = 100, 28
+        result = pi_terminal.resize(sid, cols, rows)
+        status = 200 if result.get("ok") else 404
+        send_json(self, result, status)
+
+    def admin_terminal_close(self, payload: dict):
+        sid = str(payload.get("sessionId") or "")
+        send_json(self, pi_terminal.close_session(sid))
 
     def deploy_webhook(self):
         secret = load_secrets().get("deployWebhookSecret") or ""

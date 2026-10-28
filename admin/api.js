@@ -80,6 +80,31 @@ const API = {
     API.request(`/api/admin/browse/file?path=${encodeURIComponent(path || "")}`, { token, filesToken }),
   saveBrowseFile: (token, path, content, filesToken) =>
     API.request("/api/admin/browse/file", { method: "POST", token, body: { path, content }, filesToken }),
+  kioskControl: (token, action, filesToken) =>
+    API.request("/api/admin/kiosk", { method: "POST", token, filesToken, body: { action } }),
+  kioskStatus: (token, filesToken) =>
+    API.request("/api/admin/kiosk/status", { token, filesToken }),
+  terminalOpen: (token, filesToken, body = {}) =>
+    API.request("/api/admin/terminal/open", { method: "POST", token, filesToken, body }),
+  terminalInput: (token, filesToken, sessionId, data) =>
+    API.request("/api/admin/terminal/input", {
+      method: "POST",
+      token,
+      filesToken,
+      body: { sessionId, data },
+    }),
+  terminalPoll: (token, filesToken, sessionId, after) =>
+    API.request(
+      `/api/admin/terminal/poll?sessionId=${encodeURIComponent(sessionId || "")}&after=${encodeURIComponent(after || 0)}`,
+      { token, filesToken }
+    ),
+  terminalClose: (token, filesToken, sessionId) =>
+    API.request("/api/admin/terminal/close", {
+      method: "POST",
+      token,
+      filesToken,
+      body: { sessionId },
+    }),
 };
 
 window.AdminAPI = API;

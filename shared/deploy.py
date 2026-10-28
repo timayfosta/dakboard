@@ -415,6 +415,42 @@ def boot_status() -> dict[str, Any]:
         return {}
 
 
+def kiosk_control(action: str) -> dict[str, Any]:
+    """Stop or start the Chromium kiosk without restarting the API."""
+    if sys.platform == "win32":
+        return {"ok": False, "error": "Kiosk control is Pi-only"}
+    act = (action or "").strip().lower()
+    if act not in {"start", "stop", "status"}:
+        return {"ok": False, "error": "action must be start, stop, or status"}
+
+    wrapper = Path("/usr/local/sbin/family-board-kiosk")
+    script = ROOT / "scripts" / "pi" / "kiosk-ctl.sh"
+    try:
+        if wrapper.is_file():
+            proc = _run_sudo([str(wrapper), act], timeout=45)
+        elif script.is_file():
+            proc = _run_sudo(["bash", str(script), act], timeout=45)
+        else:
+            # Last resort: systemctl without the wrapper (often needs password).
+            if act == "status":
+                return {"ok": True, "services": boot_status()}
+            proc = _run_sudo(["systemctl", act, "family-board-kiosk"], timeout=45)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return {"ok": False, "error": str(exc)}
+
+    out = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    status = boot_status()
+    if proc.returncode != 0 and act != "status":
+        return {
+            "ok": False,
+            "error": out
+            or "sudo failed — run Start Cloudflare tunnel / ensure-boot once to install kiosk helpers",
+            "returncode": proc.returncode,
+            "services": status,
+        }
+    return {"ok": True, "action": act, "stdout": out, "services": status}
+
+
 def enable_boot_services() -> dict[str, Any]:
     """Enable API + kiosk + Cloudflare tunnel for every power-on, then start them."""
     if sys.platform == "win32":
