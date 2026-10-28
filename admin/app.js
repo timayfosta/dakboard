@@ -2250,6 +2250,29 @@
       )}`;
   }
 
+  function lastDeploySummary(last, net = {}) {
+    if (!last) return "";
+    if (last.deploying || last.busy) return "pull in progress…";
+    const err = String(last.error || last.pull?.error || last.pull?.stderr || "").trim();
+    const dnsFail =
+      /could not resolve host|git fetch failed — dns|dns cannot resolve github/i.test(err) ||
+      /name resolution/i.test(err);
+    if (last.ok === false) {
+      if (dnsFail && net.githubResolves) {
+        return "earlier pull failed (DNS) — DNS is OK now; tap Pull updates";
+      }
+      if (dnsFail) return "last pull failed: cannot reach github.com (DNS)";
+      const short = err.split("\n")[0].slice(0, 100);
+      return `last pull failed: ${short || "unknown"}`;
+    }
+    if (last.ok && last.pull?.alreadyUpToDate) return "last pull: already up to date";
+    if (last.ok) {
+      const sha = last.pull?.sha || "";
+      return sha ? `last pull ok (${sha})` : "last pull ok";
+    }
+    return "";
+  }
+
   async function fillDeployMeta() {
     const el = $("#deployMeta");
     if (!el) return;
@@ -2262,6 +2285,10 @@
       const d = health?.deploy || {};
       const net = health?.network || {};
       const bits = [];
+      // Running code ≠ last pull result. Show both so a stale failure does not look like "updated + failed".
+      if (git.sha) {
+        bits.push(`running ${git.sha}${git.dirty ? " (local edits)" : ""}`);
+      }
       bits.push(d.gitRepo ? "git repo ready" : "not a git repo — auto-pull won't work");
       if (Object.prototype.hasOwnProperty.call(net, "githubResolves")) {
         bits.push(
@@ -2272,10 +2299,8 @@
               : "github.com DNS broken — run sudo bash scripts/pi/fix-dns.sh on the Pi once"
         );
       }
-      bits.push(d.webhookConfigured ? "webhook secret set" : "no webhook secret yet");
-      const last = d.last;
-      if (last?.ok === false) bits.push(`last deploy failed: ${last.error || last.pull?.stderr || "unknown"}`);
-      else if (last?.pull?.alreadyUpToDate) bits.push("last pull: already up to date");
+      const lastLine = lastDeploySummary(d.last, net);
+      if (lastLine) bits.push(lastLine);
       const boot = d.boot || {};
       const fmt = (u) => {
         if (!u) return "";

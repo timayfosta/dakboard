@@ -646,6 +646,8 @@ def deploy_async(schedule_restart_fn, *, restart: bool = True) -> dict[str, Any]
             finally:
                 _running = False
 
+    # Replace stale last-deploy.json immediately so Admin does not keep showing an old failure.
+    _set_last_result({"ok": True, "deploying": True, "busy": True})
     threading.Thread(target=_run, daemon=True).start()
     return {"ok": True, "deploying": True}
 
