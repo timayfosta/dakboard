@@ -745,15 +745,19 @@
                 ? "Extra"
                 : row.type === "noneDone"
                   ? "No chores"
+                : row.type === "incomplete"
+                  ? "Missed"
+                : row.type === "skip"
+                  ? "Skipped"
                 : row.type === "redeem"
                   ? "Reward"
                   : row.type === "adjust"
                     ? "Adjustment"
                     : "Chore";
             const tone =
-              row.type === "consequence" || row.type === "noneDone" || stars < 0
+              row.type === "consequence" || row.type === "noneDone" || row.type === "incomplete" || stars < 0
                 ? "consequence"
-                : row.type === "chore" || row.type === "bonus" || !row.type
+                : row.type === "chore" || row.type === "bonus" || row.type === "skip" || !row.type
                   ? "chore"
                   : "good";
             const amt = stars < 0 ? `−★${Math.abs(stars)}` : stars > 0 ? `+★${stars}` : "★0";

@@ -122,16 +122,14 @@ def default_state() -> dict[str, Any]:
         "consequenceHits": [],
         "bonusHits": [],
         "starLog": [],
-        "noneDoneApplied": {},
+        "incompleteApplied": {},
         "whiteboard": {"version": 1, "strokes": [], "updatedAt": 0},
         "screensaverPhotos": [],
         "settings": {
             "allDoneBonus": 3,
-            "noneDonePenalty": {
-                "enabled": False,
-                "stars": 0,
+            "incompletePenalty": {
+                "enabled": True,
                 "applyTime": "21:00",
-                "byKid": {},
             },
             "familyName": "Family Board",
             "rotation": {
@@ -388,6 +386,35 @@ def completion_stars(entry: Any, chore: dict[str, Any]) -> int:
     return 0
 
 
+def completion_status(entry: Any) -> str | None:
+    """Return 'done', 'skipped', or None if there is no completion entry."""
+    if entry is True or isinstance(entry, (int, float)):
+        return "done"
+    if not isinstance(entry, dict) or not entry:
+        return None
+    raw = str(entry.get("status") or "").strip().lower()
+    if raw == "skipped":
+        return "skipped"
+    if raw == "done" or entry.get("stars") is not None or entry.get("at") is not None or entry.get("late") is not None:
+        return "done"
+    if entry:
+        return "done"
+    return None
+
+
+def completion_is_done(entry: Any) -> bool:
+    return completion_status(entry) == "done"
+
+
+def completion_is_skipped(entry: Any) -> bool:
+    return completion_status(entry) == "skipped"
+
+
+def completion_is_cleared(entry: Any) -> bool:
+    """Done or skipped — chore is off the active list."""
+    return completion_status(entry) in ("done", "skipped")
+
+
 def apply_star_delta(balance: int, delta: int) -> tuple[int, int]:
     """Apply a star change and clamp at 0. Returns (new_balance, applied_delta)."""
     current = int(balance or 0)
@@ -604,39 +631,56 @@ def prune_redemptions(state: dict[str, Any]) -> bool:
     return True
 
 
-def default_none_done_penalty() -> dict[str, Any]:
+def default_incomplete_penalty() -> dict[str, Any]:
     return {
-        "enabled": False,
-        "stars": 0,
+        "enabled": True,
         "applyTime": "21:00",
-        "byKid": {},
     }
 
 
-def merged_none_done_penalty(raw: dict[str, Any] | None = None) -> dict[str, Any]:
-    defaults = default_none_done_penalty()
+def migrate_incomplete_penalty_settings(state: dict[str, Any]) -> bool:
+    """Move legacy noneDonePenalty → incompletePenalty. Returns True if state changed."""
+    settings = state.setdefault("settings", {})
+    if not isinstance(settings, dict):
+        state["settings"] = {}
+        settings = state["settings"]
+        dirty = True
+    else:
+        dirty = False
+
+    if "incompletePenalty" not in settings or not isinstance(settings.get("incompletePenalty"), dict):
+        legacy = settings.get("noneDonePenalty") if isinstance(settings.get("noneDonePenalty"), dict) else {}
+        apply_time = parse_due_time(legacy.get("applyTime")) or "21:00"
+        # New behavior is on by default; keep legacy applyTime if present.
+        settings["incompletePenalty"] = {
+            "enabled": True,
+            "applyTime": apply_time,
+        }
+        dirty = True
+
+    if "noneDonePenalty" in settings:
+        del settings["noneDonePenalty"]
+        dirty = True
+
+    if "noneDoneApplied" in state:
+        del state["noneDoneApplied"]
+        dirty = True
+
+    if "incompleteApplied" not in state or not isinstance(state.get("incompleteApplied"), dict):
+        state["incompleteApplied"] = {}
+        dirty = True
+
+    return dirty
+
+
+def merged_incomplete_penalty(raw: dict[str, Any] | None = None) -> dict[str, Any]:
+    defaults = default_incomplete_penalty()
     src = raw if isinstance(raw, dict) else {}
-    by_kid: dict[str, int] = {}
-    raw_kids = src.get("byKid") if isinstance(src.get("byKid"), dict) else {}
-    for kid_id, value in raw_kids.items():
-        key = str(kid_id or "").strip()
-        if not key or value in (None, ""):
-            continue
-        by_kid[key] = clamp_int(value, 0, 0, STAR_MAX)
     apply_time = parse_due_time(src.get("applyTime")) or defaults["applyTime"]
     return {
         "enabled": bool(src.get("enabled", defaults["enabled"])),
-        "stars": clamp_int(src.get("stars"), defaults["stars"], 0, STAR_MAX),
         "applyTime": apply_time,
-        "byKid": by_kid,
     }
-
-
-def none_done_stars_for_kid(settings: dict[str, Any], kid_id: str) -> int:
-    by_kid = settings.get("byKid") or {}
-    if kid_id in by_kid:
-        return clamp_int(by_kid.get(kid_id), 0, 0, STAR_MAX)
-    return clamp_int(settings.get("stars"), 0, 0, STAR_MAX)
 
 
 def kid_chores_due_on(state: dict[str, Any], kid_id: str, day: Any) -> list[dict[str, Any]]:
@@ -651,45 +695,39 @@ def kid_chores_due_on(state: dict[str, Any], kid_id: str, day: Any) -> list[dict
     return due
 
 
-def kid_completed_any_on(state: dict[str, Any], kid_id: str, day: str) -> bool:
+def completion_entry_for(state: dict[str, Any], day: str, chore_id: str, kid_id: str) -> Any:
     bucket = (state.get("completions") or {}).get(day) or {}
     if not isinstance(bucket, dict):
-        return False
-    suffix = f":{kid_id}"
-    for key, entry in bucket.items():
-        if not str(key).endswith(suffix):
-            continue
-        if entry:
-            return True
-    return False
+        return None
+    return bucket.get(f"{chore_id}:{kid_id}")
 
 
-def prune_none_done_applied(state: dict[str, Any], keep_days: int = 21) -> bool:
-    raw = state.get("noneDoneApplied")
+def prune_incomplete_applied(state: dict[str, Any], keep_days: int = 21) -> bool:
+    raw = state.get("incompleteApplied")
     if not isinstance(raw, dict):
-        state["noneDoneApplied"] = {}
+        state["incompleteApplied"] = {}
         return True
     cutoff = date.today() - timedelta(days=keep_days)
     kept: dict[str, list[str]] = {}
-    for day, kids in raw.items():
+    for day, keys in raw.items():
         try:
             when = date.fromisoformat(str(day)[:10])
         except ValueError:
             continue
         if when < cutoff:
             continue
-        kept[str(day)[:10]] = [str(kid) for kid in (kids or []) if kid]
+        kept[str(day)[:10]] = [str(key) for key in (keys or []) if key]
     if kept != raw:
-        state["noneDoneApplied"] = kept
+        state["incompleteApplied"] = kept
         return True
     return False
 
 
-def apply_none_done_penalties(state: dict[str, Any], when: datetime | None = None) -> bool:
-    """Deduct stars when a child finished no chores by the admin cutoff (or overnight)."""
-    settings = merged_none_done_penalty((state.get("settings") or {}).get("noneDonePenalty"))
+def apply_incomplete_penalties(state: dict[str, Any], when: datetime | None = None) -> bool:
+    """At cutoff, deduct each still-open chore's star value (skipped/done are exempt)."""
+    settings = merged_incomplete_penalty((state.get("settings") or {}).get("incompletePenalty"))
     if not settings["enabled"]:
-        return prune_none_done_applied(state)
+        return prune_incomplete_applied(state)
 
     now = when or datetime.now()
     today = now.date()
@@ -705,10 +743,10 @@ def apply_none_done_penalties(state: dict[str, Any], when: datetime | None = Non
     if apply_mins is not None and now_mins >= apply_mins:
         days.append(today_s)
 
-    applied_map = state.setdefault("noneDoneApplied", {})
+    applied_map = state.setdefault("incompleteApplied", {})
     if not isinstance(applied_map, dict):
         applied_map = {}
-        state["noneDoneApplied"] = applied_map
+        state["incompleteApplied"] = applied_map
 
     dirty = False
     bal = state.setdefault("balances", {})
@@ -716,35 +754,49 @@ def apply_none_done_penalties(state: dict[str, Any], when: datetime | None = Non
     stamped = now_ms()
 
     for day in days:
-        already = {str(kid) for kid in (applied_map.get(day) or [])}
-        day_kids = list(already)
+        already = {str(key) for key in (applied_map.get(day) or [])}
+        day_keys = list(already)
         for kid in state.get("kids") or []:
             if not isinstance(kid, dict) or kid.get("active") is False:
                 continue
             kid_id = str(kid.get("id") or "").strip()
-            if not kid_id or kid_id in already:
+            if not kid_id:
                 continue
-            stars = none_done_stars_for_kid(settings, kid_id)
-            if stars <= 0 or not kid_chores_due_on(state, kid_id, day):
-                day_kids.append(kid_id)
-                dirty = True
-                continue
-            if kid_completed_any_on(state, kid_id, day):
-                day_kids.append(kid_id)
-                dirty = True
-                continue
+            for chore in kid_chores_due_on(state, kid_id, day):
+                chore_id = str(chore.get("id") or "").strip()
+                if not chore_id:
+                    continue
+                key = f"{chore_id}:{kid_id}"
+                if key in already:
+                    continue
+                entry = completion_entry_for(state, day, chore_id, kid_id)
+                if completion_is_cleared(entry):
+                    day_keys.append(key)
+                    already.add(key)
+                    dirty = True
+                    continue
 
-            current = int(bal.get(kid_id) or 0)
-            new_bal, applied = apply_star_delta(current, -stars)
-            bal[kid_id] = new_bal
-            taken = abs(applied)
-            if taken:
+                penalty = max(0, chore_star_value(chore))
+                day_keys.append(key)
+                already.add(key)
+                dirty = True
+                if penalty <= 0:
+                    continue
+
+                current = int(bal.get(kid_id) or 0)
+                new_bal, applied = apply_star_delta(current, -penalty)
+                bal[kid_id] = new_bal
+                taken = abs(applied)
+                if not taken:
+                    continue
+
+                title = f"Missed: {chore.get('title') or 'Chore'}"
                 hit = {
                     "id": _id("hit"),
                     "kidId": kid_id,
-                    "title": "No chores done",
-                    "reason": "No chores done",
-                    "icon": "⚠️",
+                    "title": title,
+                    "reason": title,
+                    "icon": chore.get("icon") or "⚠️",
                     "stars": taken,
                     "kind": "bad",
                     "at": stamped,
@@ -753,21 +805,19 @@ def apply_none_done_penalties(state: dict[str, Any], when: datetime | None = Non
                 append_star_log(
                     state,
                     kidId=kid_id,
-                    type="noneDone",
-                    title="No chores done",
-                    icon="⚠️",
+                    type="incomplete",
+                    title=title,
+                    icon=chore.get("icon") or "⚠️",
                     stars=-taken,
                     at=stamped,
                     day=day,
-                    ref=f"noneDone:{day}",
+                    ref=f"incomplete:{chore_id}",
                 )
-            day_kids.append(kid_id)
-            dirty = True
-        applied_map[day] = day_kids
+        applied_map[day] = day_keys
 
     if dirty:
         state["consequenceHits"] = recent_consequence_hits(state)
-    if prune_none_done_applied(state):
+    if prune_incomplete_applied(state):
         dirty = True
     return dirty
 
@@ -850,9 +900,11 @@ def prepare_state(state: dict[str, Any]) -> bool:
     if "bonusHits" not in state:
         state["bonusHits"] = []
         dirty = True
+    if migrate_incomplete_penalty_settings(state):
+        dirty = True
     if migrate_star_log(state):
         dirty = True
-    if apply_none_done_penalties(state):
+    if apply_incomplete_penalties(state):
         dirty = True
     if rollover_completions(state):
         dirty = True
@@ -907,9 +959,10 @@ def merged_settings(state: dict[str, Any]) -> dict[str, Any]:
         ss["idleMinutes"] = 5
     settings["rotation"] = merged_rotation((state.get("settings") or {}).get("rotation"))
     settings["kioskTheme"] = "day" if settings.get("kioskTheme") == "day" else "night"
-    settings["noneDonePenalty"] = merged_none_done_penalty(
-        (state.get("settings") or {}).get("noneDonePenalty")
+    settings["incompletePenalty"] = merged_incomplete_penalty(
+        (state.get("settings") or {}).get("incompletePenalty")
     )
+    settings.pop("noneDonePenalty", None)
     return settings
 
 

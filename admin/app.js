@@ -968,6 +968,8 @@
   function receiptKindLabel(row) {
     if (row.type === "consequence" || row.type === "bonus") return "Extra";
     if (row.type === "noneDone") return "No chores";
+    if (row.type === "incomplete") return "Missed";
+    if (row.type === "skip") return "Skipped";
     if (row.type === "redeem") return "Reward";
     if (row.type === "adjust") return "Adjustment";
     return "Chore";
@@ -975,7 +977,8 @@
 
   function receiptTone(row) {
     const stars = Number(row.stars || 0);
-    if (row.type === "consequence" || row.type === "noneDone") return "bad";
+    if (row.type === "consequence" || row.type === "noneDone" || row.type === "incomplete") return "bad";
+    if (row.type === "skip") return "good";
     if (stars < 0) return "bad";
     if (row.type === "chore" || row.type === "bonus" || !row.type) return "good";
     return stars >= 0 ? "good" : "bad";
@@ -1123,7 +1126,7 @@
     const checkStyleLabel = (id) => CHECK_STYLES.find((s) => s.id === id)?.label || "Circle";
     const lastStars = lastChoreStars();
     return `
-      ${renderNoneDoneCard(d)}
+      ${renderIncompletePenaltyCard(d)}
       <section class="card">
         <h2>Add chore</h2>
         <form id="choreForm">
@@ -1233,65 +1236,32 @@
       </section>`;
   }
 
-  function noneDoneSettings(d) {
+  function incompletePenaltySettings(d) {
     return {
-      enabled: false,
-      stars: 0,
+      enabled: true,
       applyTime: "21:00",
-      byKid: {},
-      ...(d?.settings?.noneDonePenalty || {}),
+      ...(d?.settings?.incompletePenalty || {}),
     };
   }
 
-  function renderNoneDoneCard(d) {
-    const nd = noneDoneSettings(d);
-    const kids = (d.kids || []).filter((k) => k.active !== false);
-    const byKid = nd.byKid || {};
-    const kidRows = kids
-      .map((k) => {
-        const override = Object.prototype.hasOwnProperty.call(byKid, k.id) ? String(byKid[k.id]) : "";
-        return `
-          <label class="none-done-kid">
-            <span>${k.emoji ? `${k.emoji} ` : ""}${k.name}</span>
-            <input
-              type="number"
-              min="0"
-              max="999"
-              step="1"
-              inputmode="numeric"
-              name="noneDone_${k.id}"
-              data-none-done-kid="${k.id}"
-              value="${escAttr(override)}"
-              placeholder="${escAttr(String(nd.stars || 0))}"
-            />
-          </label>`;
-      })
-      .join("");
+  function renderIncompletePenaltyCard(d) {
+    const ip = incompletePenaltySettings(d);
     return `
       <section class="card">
-        <h2>No chores done</h2>
-        <form id="noneDoneForm">
+        <h2>Missed chore penalty</h2>
+        <form id="incompletePenaltyForm">
           <label class="night-toggle">
-            <input type="checkbox" name="enabled" ${nd.enabled ? "checked" : ""} />
-            <span>Deduct stars when a child finishes nothing</span>
+            <input type="checkbox" name="enabled" ${ip.enabled ? "checked" : ""} />
+            <span>Deduct each unfinished chore's stars at cutoff</span>
           </label>
-          <p class="muted field-hint">Admin only. The TV cannot change this. At the time below, any child who still has zero chores done loses stars.</p>
+          <p class="muted field-hint">Admin only. At the time below, every chore that is still open (not completed and not skipped) deducts that chore's star value from the child. Skipped chores have no penalty.</p>
           <div class="ss-grid">
             <label>
-              Default stars to take
-              <input type="number" name="stars" min="0" max="999" step="1" inputmode="numeric" value="${escAttr(String(nd.stars || 0))}" />
-            </label>
-            <label>
               Apply at
-              <input type="time" name="applyTime" value="${escAttr(nd.applyTime || "21:00")}" />
+              <input type="time" name="applyTime" value="${escAttr(ip.applyTime || "21:00")}" />
             </label>
           </div>
-          <div class="field">
-            <label>Per child</label>
-            <p class="field-hint">Leave blank to use the default. 0 means no deduction for that child.</p>
-            <div class="none-done-kids">${kidRows || `<p class="muted">Add kids first.</p>`}</div>
-          </div>
-          <button class="btn block" type="submit">Save no-chores penalty</button>
+          <button class="btn block" type="submit">Save missed-chore penalty</button>
         </form>
       </section>`;
   }
@@ -2646,29 +2616,21 @@
 
     $("#cancelChoreEdit")?.addEventListener("click", () => resetChoreForm());
 
-    const noneDoneForm = $("#noneDoneForm");
-    if (noneDoneForm) {
-      noneDoneForm.addEventListener("submit", async (e) => {
+    const incompletePenaltyForm = $("#incompletePenaltyForm");
+    if (incompletePenaltyForm) {
+      incompletePenaltyForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const fd = new FormData(noneDoneForm);
-        const btn = noneDoneForm.querySelector('button[type="submit"]');
-        const byKid = {};
-        noneDoneForm.querySelectorAll("[data-none-done-kid]").forEach((input) => {
-          const raw = String(input.value ?? "").trim();
-          if (raw === "") return;
-          byKid[input.dataset.noneDoneKid] = parseStars(raw, 0);
-        });
+        const fd = new FormData(incompletePenaltyForm);
+        const btn = incompletePenaltyForm.querySelector('button[type="submit"]');
         try {
           if (btn) btn.disabled = true;
           await AdminAPI.saveSettings(state.token, {
-            noneDonePenalty: {
+            incompletePenalty: {
               enabled: fd.has("enabled"),
-              stars: parseStars(fd.get("stars"), 0),
               applyTime: fd.get("applyTime") || "21:00",
-              byKid,
             },
           });
-          toast("No-chores penalty saved");
+          toast("Missed-chore penalty saved");
           await refresh();
         } catch (err) {
           toast(apiErrorMessage(err));

@@ -259,6 +259,23 @@
       color: var(--on-accent);
     }
 
+    .chore.skipped {
+      border-color: var(--hairline-strong);
+      background: color-mix(in srgb, var(--surface-2) 80%, var(--ink-soft));
+      opacity: 0.72;
+    }
+
+    .chore.skipped .chore-text h3 {
+      text-decoration: none;
+      color: var(--ink-soft);
+    }
+
+    .chore.skipped .check {
+      background: var(--track);
+      border-color: var(--hairline-strong);
+      color: var(--ink-soft);
+    }
+
     .chore.consequence {
       cursor: default;
       border-color: color-mix(in srgb, var(--alert) 60%, transparent);
@@ -773,6 +790,13 @@
 
     .modal-card.win { border-color: var(--sunny); }
     .modal-card.remind { border-color: var(--alert-soft); text-align: left; }
+    .modal-card.resolve { border-color: var(--mint); text-align: center; }
+
+    .resolve-actions {
+      display: grid;
+      gap: 0.55rem;
+      margin-top: 0.35rem;
+    }
 
     @keyframes modal-in {
       from { opacity: 0; transform: scale(0.94) translateY(8px); }
@@ -820,6 +844,24 @@
       font-weight: 800;
       font-size: 0.95rem;
     }
+
+    .modal-card #resolveComplete {
+      background: var(--mint);
+    }
+
+    .modal-card .resolve-skip {
+      background: var(--surface);
+      color: var(--ink-soft);
+      border: 1px solid var(--line);
+    }
+
+    .modal-card .resolve-cancel {
+      background: transparent;
+      color: var(--ink-soft);
+      border: 1px solid transparent;
+      font-weight: 700;
+      opacity: 0.85;
+    }
   </style>
 </head>
 <body class="tv-stage">
@@ -848,7 +890,7 @@
       <section class="quest" aria-label="Chore list">
         <ul class="chore-list active-list" id="activeChores"></ul>
         <div class="done-zone" id="doneZone" hidden>
-          <div class="done-zone-label">Done ✓</div>
+          <div class="done-zone-label">Done / Skipped</div>
           <ul class="chore-list done-list" id="doneChores"></ul>
         </div>
         <div class="all-grid" id="allGrid" hidden></div>
@@ -876,6 +918,18 @@
         <p id="remindBody"></p>
         <ul id="remindList"></ul>
         <button type="button" id="remindClose">Got it!</button>
+      </div>
+    </div>
+
+    <div class="reminder-overlay" id="resolveOverlay">
+      <div class="modal-card resolve">
+        <h3 id="resolveTitle">Quest</h3>
+        <p id="resolveBody">Mark this quest complete, or skip it with no star change.</p>
+        <div class="resolve-actions">
+          <button type="button" id="resolveComplete">Complete</button>
+          <button type="button" class="resolve-skip" id="resolveSkip">Skip</button>
+          <button type="button" class="resolve-cancel" id="resolveCancel">Cancel</button>
+        </div>
       </div>
     </div>
   </div>
@@ -921,6 +975,7 @@
       kidId: null,
       viewAll: true,
       busy: false,
+      resolve: null,
       fingerprints: { kids: "", chores: "", all: "", data: "" },
     };
 
@@ -985,23 +1040,50 @@
       return true;
     }
 
+    function completionEntry(choreId, kidId) {
+      return state.data?.completions?.[`${choreId}:${kidId}`];
+    }
+
+    function completionStatus(choreId, kidId) {
+      const entry = completionEntry(choreId, kidId);
+      if (!entry) return null;
+      if (entry === true || typeof entry === "number") return "done";
+      const raw = String(entry.status || "").toLowerCase();
+      if (raw === "skipped") return "skipped";
+      return "done";
+    }
+
     function isDone(choreId, kidId) {
-      return !!state.data?.completions?.[`${choreId}:${kidId}`];
+      return completionStatus(choreId, kidId) === "done";
+    }
+
+    function isSkipped(choreId, kidId) {
+      return completionStatus(choreId, kidId) === "skipped";
+    }
+
+    function isCleared(choreId, kidId) {
+      const status = completionStatus(choreId, kidId);
+      return status === "done" || status === "skipped";
     }
 
     function incompleteChores(kidId) {
-      return choresForKid(kidId).filter((c) => !isDone(c.id, kidId));
+      return choresForKid(kidId).filter((c) => !isCleared(c.id, kidId));
     }
 
     function completedChores(kidId) {
       return choresForKid(kidId).filter((c) => isDone(c.id, kidId));
     }
 
+    function skippedChores(kidId) {
+      return choresForKid(kidId).filter((c) => isSkipped(c.id, kidId));
+    }
+
     function splitChores(kidId) {
       const all = choresForKid(kidId);
-      const todo = all.filter((c) => !isDone(c.id, kidId));
+      const todo = all.filter((c) => !isCleared(c.id, kidId));
       const done = all.filter((c) => isDone(c.id, kidId));
-      return { todo, done };
+      const skipped = all.filter((c) => isSkipped(c.id, kidId));
+      return { todo, done, skipped };
     }
 
     function consequenceHitsForKid(kidId) {
@@ -1082,12 +1164,12 @@
     function progress(kidId) {
       const all = choresForKid(kidId);
       const remaining = incompleteChores(kidId).length;
-      const done = all.length - remaining;
+      const cleared = all.length - remaining;
       return {
-        done,
+        done: cleared,
         total: all.length,
         remaining,
-        pct: all.length ? done / all.length : 0,
+        pct: all.length ? cleared / all.length : 0,
       };
     }
 
@@ -1259,9 +1341,10 @@
 
     function checkReminders() {
       if (!state.data || state.viewAll) return;
+      if (document.getElementById("resolveOverlay")?.classList.contains("show")) return;
 
       for (const kid of activeKids()) {
-        const overdue = choresForKid(kid.id).filter((c) => !isDone(c.id, kid.id) && isPastDue(c));
+        const overdue = choresForKid(kid.id).filter((c) => !isCleared(c.id, kid.id) && isPastDue(c));
         const fresh = overdue.filter((c) => !localStorage.getItem(remindKey(kid.id, c.id)));
         if (!fresh.length) continue;
 
@@ -1283,9 +1366,10 @@
       }
     }
 
-    function checkMark(chore, done) {
+    function checkMark(chore, status) {
       const style = chore.checkStyle || "circle";
-      if (!done) {
+      if (status === "skipped") return "–";
+      if (status !== "done") {
         const empty = { circle: "", square: "", star: "☆", heart: "♡", diamond: "◇" };
         return empty[style] || "";
       }
@@ -1298,78 +1382,108 @@
       return Number.isFinite(n) ? n : 1;
     }
 
-    function choreRowHtml(chore, kidId, done) {
+    function choreRowHtml(chore, kidId, status) {
       const style = chore.checkStyle || "circle";
-      const late = !done && isPastDue(chore);
+      const cleared = status === "done" || status === "skipped";
+      const late = !cleared && isPastDue(chore);
       const icon = (() => {
         const raw = String(chore.icon || "").trim();
         return !raw || raw.toLowerCase() === "none" ? "" : raw;
       })();
+      const statusClass = status === "done" ? " done" : status === "skipped" ? " skipped" : "";
+      const detail =
+        status === "skipped"
+          ? `<span class="stars-badge">★ 0</span> · Skipped — no penalty`
+          : `<span class="stars-badge${choreStarsNow(chore, cleared) < 0 ? " neg" : ""}">${formatStarAmount(choreStarsNow(chore, cleared))}</span> · ${choreDescription(chore, cleared)}`;
       return `
-        <li class="chore${done ? " done" : ""}${late ? " late" : ""}${icon ? "" : " no-icon"}" data-id="${chore.id}" data-kid="${kidId}" role="button" tabindex="0" aria-pressed="${done}">
+        <li class="chore${statusClass}${late ? " late" : ""}${icon ? "" : " no-icon"}" data-id="${chore.id}" data-kid="${kidId}" data-status="${status || "open"}" role="button" tabindex="0" aria-pressed="${cleared}">
           ${icon ? `<div class="chore-ico"><span class="emoji">${icon}</span></div>` : ""}
           <div class="chore-text">
             <h3>${chore.title}</h3>
-            <p><span class="stars-badge${choreStarsNow(chore, done) < 0 ? " neg" : ""}">${formatStarAmount(choreStarsNow(chore, done))}</span> · ${choreDescription(chore, done)}</p>
+            <p>${detail}</p>
           </div>
-          <div class="check check-${style}">${checkMark(chore, done)}</div>
+          <div class="check check-${style}">${checkMark(chore, status)}</div>
         </li>`;
     }
 
-    async function toggleChore(choreId, kidId, el) {
+    function closeResolveModal() {
+      document.getElementById("resolveOverlay").classList.remove("show");
+      state.resolve = null;
+    }
+
+    function openResolveModal(choreId, kidId) {
+      const chore = (state.data?.chores || []).find((c) => c.id === choreId);
+      if (!chore) return;
+      state.resolve = { choreId, kidId };
+      const icon = String(chore.icon || "").trim();
+      document.getElementById("resolveTitle").textContent =
+        `${icon && icon.toLowerCase() !== "none" ? `${icon} ` : ""}${chore.title}`;
+      document.getElementById("resolveBody").textContent =
+        `Complete for ${formatStarAmount(choreStarsNow(chore, false))}, or skip with no star change.`;
+      document.getElementById("resolveOverlay").classList.add("show");
+    }
+
+    function applyResolveState(res) {
+      state.data = res.state;
+      state.fingerprints.data = fingerprint({
+        kids: state.data.kids,
+        chores: state.data.chores,
+        balances: state.data.balances,
+        completions: state.data.completions,
+        consequenceHits: state.data.consequenceHits,
+        bonusHits: state.data.bonusHits,
+        today: state.data.today,
+      });
+      state.fingerprints.kids = "";
+      state.fingerprints.chores = "";
+      state.fingerprints.all = "";
+    }
+
+    async function resolveChore(choreId, kidId, action, el) {
       if (state.busy) return;
       state.busy = true;
-      const wasDone = el?.classList.contains("done");
       try {
         let animPromise = Promise.resolve();
-        if (el) {
-          const chore = (state.data?.chores || []).find((c) => c.id === el.dataset.id);
-          if (!wasDone) {
-            el.querySelector(".check").textContent = checkMark(chore || {}, true);
-            el.classList.add("done");
+        if (el && (action === "complete" || action === "skip" || action === "unskip" || action === "toggle")) {
+          const chore = (state.data?.chores || []).find((c) => c.id === choreId) || {};
+          if (action === "complete" || action === "skip") {
+            el.querySelector(".check").textContent = checkMark(chore, action === "skip" ? "skipped" : "done");
+            el.classList.add(action === "skip" ? "skipped" : "done");
             animPromise = playChoreMove(el, true);
-          } else {
-            el.querySelector(".check").textContent = checkMark(chore || {}, false);
-            el.classList.remove("done");
+          } else if (action === "unskip" || (action === "toggle" && el.classList.contains("done"))) {
+            el.querySelector(".check").textContent = checkMark(chore, null);
+            el.classList.remove("done", "skipped");
             animPromise = playChoreMove(el, false);
           }
         }
 
-        const [res] = await Promise.all([FamilyAPI.toggleChore(choreId, kidId), animPromise]);
-        state.data = res.state;
-        state.fingerprints.data = fingerprint({
-          kids: state.data.kids,
-          chores: state.data.chores,
-          balances: state.data.balances,
-          completions: state.data.completions,
-          consequenceHits: state.data.consequenceHits,
-          bonusHits: state.data.bonusHits,
-          today: state.data.today,
-        });
-        state.fingerprints.kids = "";
-        state.fingerprints.chores = "";
-        state.fingerprints.all = "";
+        const [res] = await Promise.all([FamilyAPI.resolveChore(choreId, kidId, action), animPromise]);
+        applyResolveState(res);
 
-        if (res.done && el) {
+        if (res.done && action === "complete") {
           const earned = Number(res.starsEarned) || 0;
           if (earned > 0) {
-            FamilyFX.starBurst(document.getElementById("fxRoot"), el);
-            FamilyFX.floatLabel(el, res.late ? `+${earned}★ late` : `+${earned}★`);
+            if (el) {
+              FamilyFX.starBurst(document.getElementById("fxRoot"), el);
+              FamilyFX.floatLabel(el, res.late ? `+${earned}★ late` : `+${earned}★`);
+            }
             cheer(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
           } else if (earned < 0) {
-            FamilyFX.floatLabel(el, res.late ? `${earned}★ late` : `${earned}★`);
+            if (el) FamilyFX.floatLabel(el, res.late ? `${earned}★ late` : `${earned}★`);
             cheer("Late — stars taken");
           } else if (res.late) {
-            FamilyFX.floatLabel(el, "0★ late");
+            if (el) FamilyFX.floatLabel(el, "0★ late");
             cheer("Finished late");
           } else {
             cheer(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
           }
+        } else if (res.skipped && action === "skip") {
+          cheer("Skipped");
         }
 
         renderAll(true);
         const kid = activeKids().find((k) => k.id === kidId);
-        if (kid) maybeCelebrate(kid);
+        if (kid && (action === "complete" || action === "skip")) maybeCelebrate(kid);
       } catch (err) {
         cheer("Can't sync — is the server running?");
         console.warn(err);
@@ -1379,10 +1493,25 @@
       }
     }
 
+    function onChoreActivate(el) {
+      const choreId = el.dataset.id;
+      const kidId = el.dataset.kid;
+      const status = el.dataset.status || completionStatus(choreId, kidId) || "open";
+      if (status === "done") {
+        resolveChore(choreId, kidId, "toggle", el);
+        return;
+      }
+      if (status === "skipped") {
+        resolveChore(choreId, kidId, "unskip", el);
+        return;
+      }
+      openResolveModal(choreId, kidId);
+    }
+
     function bindChore(el) {
       if (el.dataset.bound === "1") return;
       el.dataset.bound = "1";
-      const run = () => toggleChore(el.dataset.id, el.dataset.kid, el);
+      const run = () => onChoreActivate(el);
       el.addEventListener("click", run);
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -1417,12 +1546,14 @@
         return;
       }
 
-      const { todo, done } = splitChores(kid.id);
+      const { todo, done, skipped } = splitChores(kid.id);
+      const cleared = [...done, ...skipped];
       const hits = consequenceHitsForKid(kid.id);
       const bonuses = bonusHitsForKid(kid.id);
       const fp = fingerprint([
         ...todo.map((c) => [c.id, isPastDue(c)]),
-        ...done.map((c) => c.id),
+        ...done.map((c) => ["done", c.id]),
+        ...skipped.map((c) => ["skipped", c.id]),
         ...hits.map((h) => h.id),
         ...bonuses.map((h) => h.id),
       ]);
@@ -1431,16 +1562,19 @@
 
       if (todo.length || hits.length || bonuses.length) {
         activeList.innerHTML = [
-          ...todo.map((c) => choreRowHtml(c, kid.id, false)),
+          ...todo.map((c) => choreRowHtml(c, kid.id, null)),
           ...bonuses.map((hit) => bonusRowHtml(hit)),
           ...hits.map((hit) => consequenceRowHtml(hit)),
         ].join("");
       } else {
-        activeList.innerHTML = `<li class="empty"><div class="big">${done.length ? "🎉" : "✨"}</div>${done.length ? "All quests complete!" : "No quests yet"}</li>`;
+        activeList.innerHTML = `<li class="empty"><div class="big">${cleared.length ? "🎉" : "✨"}</div>${cleared.length ? "All quests complete!" : "No quests yet"}</li>`;
       }
 
-      doneZone.hidden = !done.length;
-      doneList.innerHTML = done.map((c) => choreRowHtml(c, kid.id, true)).join("");
+      doneZone.hidden = !cleared.length;
+      doneList.innerHTML = [
+        ...done.map((c) => choreRowHtml(c, kid.id, "done")),
+        ...skipped.map((c) => choreRowHtml(c, kid.id, "skipped")),
+      ].join("");
 
       activeList.querySelectorAll(".chore:not(.consequence):not(.bonus)").forEach(bindChore);
       doneList.querySelectorAll(".chore").forEach(bindChore);
@@ -1466,7 +1600,7 @@
           const hits = consequenceHitsForKid(kid.id);
           const bonuses = bonusHitsForKid(kid.id);
           const rows = [
-            ...todo.map((c) => choreRowHtml(c, kid.id, false)),
+            ...todo.map((c) => choreRowHtml(c, kid.id, null)),
             ...bonuses.map((hit) => bonusRowHtml(hit)),
             ...hits.map((hit) => consequenceRowHtml(hit)),
           ];
@@ -1644,6 +1778,34 @@
 
     document.getElementById("remindClose").addEventListener("click", () => {
       document.getElementById("reminderOverlay").classList.remove("show");
+    });
+
+    document.getElementById("resolveCancel").addEventListener("click", () => {
+      closeResolveModal();
+    });
+
+    document.getElementById("resolveOverlay").addEventListener("click", (e) => {
+      if (e.target.id === "resolveOverlay") closeResolveModal();
+    });
+
+    document.getElementById("resolveComplete").addEventListener("click", async () => {
+      const pending = state.resolve;
+      if (!pending) return;
+      closeResolveModal();
+      const el = document.querySelector(
+        `.chore[data-id="${pending.choreId}"][data-kid="${pending.kidId}"]:not(.done):not(.skipped)`
+      );
+      await resolveChore(pending.choreId, pending.kidId, "complete", el);
+    });
+
+    document.getElementById("resolveSkip").addEventListener("click", async () => {
+      const pending = state.resolve;
+      if (!pending) return;
+      closeResolveModal();
+      const el = document.querySelector(
+        `.chore[data-id="${pending.choreId}"][data-kid="${pending.kidId}"]:not(.done):not(.skipped)`
+      );
+      await resolveChore(pending.choreId, pending.kidId, "skip", el);
     });
 
     ScreenChrome.init();

@@ -9,15 +9,21 @@
     return res.json();
   }
 
-  async function toggleChore(choreId, kidId) {
+  async function toggleChore(choreId, kidId, action) {
+    const body = { choreId, kidId };
+    if (action) body.action = action;
     const res = await fetch("/api/family/chores/toggle", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ choreId, kidId }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Toggle failed");
     return data;
+  }
+
+  async function resolveChore(choreId, kidId, action) {
+    return toggleChore(choreId, kidId, action);
   }
 
   function isKioskDisplay() {
@@ -101,6 +107,7 @@
   window.FamilyAPI = {
     getState,
     toggleChore,
+    resolveChore,
     toggleListItem,
     addListItem,
     restoreListItem,

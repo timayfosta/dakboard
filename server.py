@@ -2371,25 +2371,16 @@ class Handler(SimpleHTTPRequestHandler):
                 ),
                 "screens": merged_screens,
             }
-        nd = payload.get("noneDonePenalty")
-        if isinstance(nd, dict):
-            current = settings.get("noneDonePenalty") or {}
-            raw_kids = nd.get("byKid") if "byKid" in nd else current.get("byKid")
-            by_kid = {}
-            if isinstance(raw_kids, dict):
-                for kid_id, value in raw_kids.items():
-                    key = str(kid_id or "").strip()
-                    if not key or value in (None, ""):
-                        continue
-                    by_kid[key] = db.clamp_int(value, 0, 0, db.STAR_MAX)
-            settings["noneDonePenalty"] = {
-                "enabled": bool(nd.get("enabled", current.get("enabled", False))),
-                "stars": db.clamp_int(nd.get("stars", current.get("stars", 0)), 0, 0, db.STAR_MAX),
+        incomplete = payload.get("incompletePenalty")
+        if isinstance(incomplete, dict):
+            current = settings.get("incompletePenalty") or {}
+            settings["incompletePenalty"] = {
+                "enabled": bool(incomplete.get("enabled", current.get("enabled", True))),
                 "applyTime": self._normalize_time(
-                    nd.get("applyTime"), current.get("applyTime", "21:00")
+                    incomplete.get("applyTime"), current.get("applyTime", "21:00")
                 ),
-                "byKid": by_kid,
             }
+            settings.pop("noneDonePenalty", None)
         db.save_db(state)
         send_json(self, {"ok": True, "settings": db.public_state(state)["settings"]})
 
@@ -2545,27 +2536,45 @@ class Handler(SimpleHTTPRequestHandler):
         if not chore:
             return send_json(self, {"error": "Chore not found"}, 404)
 
+        action = str(payload.get("action") or "toggle").strip().lower()
+        if action not in ("toggle", "complete", "skip", "unskip"):
+            return send_json(self, {"error": "Invalid action"}, 400)
+
         day = db.today_key()
         bucket = state.setdefault("completions", {}).setdefault(day, {})
         key = f"{chore_id}:{kid_id}"
         bal = state.setdefault("balances", {})
         bal[kid_id] = int(bal.get(kid_id) or 0)
+        entry = bucket.get(key)
+        status = db.completion_status(entry)
+        stamped = db.now_ms()
+        stars_earned = 0
+        late = False
+        done = False
+        skipped = False
 
-        if bucket.get(key):
+        def clear_done_entry():
+            nonlocal stars_earned
+            if not db.completion_is_done(bucket.get(key)):
+                return
             refund = db.completion_stars(bucket.get(key), chore)
             del bucket[key]
-            new_bal, _applied = db.apply_star_delta(bal[kid_id], -refund)
+            new_bal, applied = db.apply_star_delta(bal[kid_id], -refund)
             bal[kid_id] = new_bal
+            stars_earned = applied
             db.remove_star_log(state, ref=f"chore:{chore_id}", kid_id=kid_id, day=day)
-            done = False
-            stars_earned = 0
-            late = False
-        else:
+
+        def mark_done():
+            nonlocal stars_earned, late, done
             quoted, late = db.chore_stars_for_now(chore)
-            stamped = db.now_ms()
             new_bal, stars_earned = db.apply_star_delta(bal[kid_id], quoted)
             bal[kid_id] = new_bal
-            bucket[key] = {"stars": stars_earned, "late": late, "at": stamped}
+            bucket[key] = {
+                "stars": stars_earned,
+                "late": late,
+                "at": stamped,
+                "status": "done",
+            }
             db.append_star_log(
                 state,
                 kidId=kid_id,
@@ -2580,14 +2589,73 @@ class Handler(SimpleHTTPRequestHandler):
             )
             done = True
 
+        def mark_skipped():
+            nonlocal skipped, done
+            bucket[key] = {
+                "stars": 0,
+                "late": False,
+                "at": stamped,
+                "status": "skipped",
+            }
+            db.remove_star_log(state, ref=f"skip:{chore_id}", kid_id=kid_id, day=day)
+            db.append_star_log(
+                state,
+                kidId=kid_id,
+                type="skip",
+                title=chore.get("title") or "Chore",
+                icon=chore.get("icon") or "",
+                stars=0,
+                late=False,
+                at=stamped,
+                day=day,
+                ref=f"skip:{chore_id}",
+            )
+            skipped = True
+            done = False
+
+        if action == "complete":
+            if status == "done":
+                done = True
+                late = bool(isinstance(entry, dict) and entry.get("late"))
+                stars_earned = 0
+            else:
+                if status == "skipped":
+                    del bucket[key]
+                    db.remove_star_log(state, ref=f"skip:{chore_id}", kid_id=kid_id, day=day)
+                mark_done()
+        elif action == "skip":
+            if status == "skipped":
+                skipped = True
+            else:
+                if status == "done":
+                    clear_done_entry()
+                    stars_earned = 0
+                mark_skipped()
+        elif action == "unskip":
+            if status == "skipped":
+                del bucket[key]
+                db.remove_star_log(state, ref=f"skip:{chore_id}", kid_id=kid_id, day=day)
+            # else no-op
+        else:
+            # toggle: complete ↔ undo complete; ignore skipped
+            if status == "skipped":
+                skipped = True
+            elif status == "done":
+                clear_done_entry()
+                stars_earned = 0
+            else:
+                mark_done()
+
         db.save_db(state)
         send_json(
             self,
             {
                 "done": done,
+                "skipped": skipped,
                 "balance": bal[kid_id],
                 "starsEarned": stars_earned,
                 "late": late,
+                "action": action,
                 "state": db.public_state(state),
             },
         )
