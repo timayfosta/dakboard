@@ -1455,7 +1455,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             return self.consequence_apply(payload)
         if path == "/api/family/extra-hits/clear":
-            if not require_admin(self):
+            # Kiosk may dismiss a single board hit (same LAN trust as chore toggle).
+            # Clearing all extras still requires admin.
+            hit_id = str(payload.get("id") or payload.get("hitId") or "").strip()
+            if not hit_id and not require_admin(self):
                 return
             return self.extra_hits_clear(payload)
         if path == "/api/family/consequences":
@@ -2374,8 +2377,16 @@ class Handler(SimpleHTTPRequestHandler):
         incomplete = payload.get("incompletePenalty")
         if isinstance(incomplete, dict):
             current = settings.get("incompletePenalty") or {}
+            if "enabled" in incomplete:
+                enabled = incomplete.get("enabled")
+                if isinstance(enabled, str):
+                    enabled = enabled.strip().lower() in ("1", "true", "yes", "on")
+                else:
+                    enabled = bool(enabled)
+            else:
+                enabled = bool(current.get("enabled", True))
             settings["incompletePenalty"] = {
-                "enabled": bool(incomplete.get("enabled", current.get("enabled", True))),
+                "enabled": enabled,
                 "applyTime": self._normalize_time(
                     incomplete.get("applyTime"), current.get("applyTime", "21:00")
                 ),

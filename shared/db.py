@@ -387,7 +387,7 @@ def completion_stars(entry: Any, chore: dict[str, Any]) -> int:
 
 
 def completion_status(entry: Any) -> str | None:
-    """Return 'done', 'skipped', or None if there is no completion entry."""
+    """Return 'done', 'skipped', 'missed', or None if there is no completion entry."""
     if entry is True or isinstance(entry, (int, float)):
         return "done"
     if not isinstance(entry, dict) or not entry:
@@ -395,6 +395,8 @@ def completion_status(entry: Any) -> str | None:
     raw = str(entry.get("status") or "").strip().lower()
     if raw == "skipped":
         return "skipped"
+    if raw == "missed":
+        return "missed"
     if raw == "done" or entry.get("stars") is not None or entry.get("at") is not None or entry.get("late") is not None:
         return "done"
     if entry:
@@ -410,9 +412,13 @@ def completion_is_skipped(entry: Any) -> bool:
     return completion_status(entry) == "skipped"
 
 
+def completion_is_missed(entry: Any) -> bool:
+    return completion_status(entry) == "missed"
+
+
 def completion_is_cleared(entry: Any) -> bool:
-    """Done or skipped — chore is off the active list."""
-    return completion_status(entry) in ("done", "skipped")
+    """Done, skipped, or missed — chore is off the active list."""
+    return completion_status(entry) in ("done", "skipped", "missed")
 
 
 def apply_star_delta(balance: int, delta: int) -> tuple[int, int]:
@@ -673,12 +679,31 @@ def migrate_incomplete_penalty_settings(state: dict[str, Any]) -> bool:
     return dirty
 
 
+def _coerced_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value in (None, ""):
+        return default
+    if isinstance(value, (int, float)):
+        return value != 0
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "on"):
+        return True
+    if text in ("0", "false", "no", "off"):
+        return False
+    return default
+
+
 def merged_incomplete_penalty(raw: dict[str, Any] | None = None) -> dict[str, Any]:
     defaults = default_incomplete_penalty()
     src = raw if isinstance(raw, dict) else {}
     apply_time = parse_due_time(src.get("applyTime")) or defaults["applyTime"]
+    if "enabled" in src:
+        enabled = _coerced_bool(src.get("enabled"), defaults["enabled"])
+    else:
+        enabled = defaults["enabled"]
     return {
-        "enabled": bool(src.get("enabled", defaults["enabled"])),
+        "enabled": enabled,
         "applyTime": apply_time,
     }
 
@@ -723,11 +748,77 @@ def prune_incomplete_applied(state: dict[str, Any], keep_days: int = 21) -> bool
     return False
 
 
+def _mark_chore_missed(
+    state: dict[str, Any],
+    *,
+    day: str,
+    chore: dict[str, Any],
+    kid_id: str,
+    taken: int,
+    stamped: int,
+) -> None:
+    """Record a missed chore so it leaves the active list."""
+    chore_id = str(chore.get("id") or "").strip()
+    if not chore_id:
+        return
+    bucket = state.setdefault("completions", {}).setdefault(day, {})
+    bucket[f"{chore_id}:{kid_id}"] = {
+        "stars": -abs(int(taken or 0)),
+        "late": False,
+        "at": stamped,
+        "status": "missed",
+    }
+
+
+def repair_stuck_incomplete_markers(state: dict[str, Any]) -> bool:
+    """Mark already-penalized open chores as missed so they leave the board."""
+    applied_map = state.get("incompleteApplied")
+    if not isinstance(applied_map, dict) or not applied_map:
+        return False
+    today_s = today_key()
+    yesterday_s = (date.today() - timedelta(days=1)).isoformat()
+    last_chore_day = str((state.get("meta") or {}).get("lastChoreDay") or "")
+    days = [today_s]
+    if last_chore_day != today_s:
+        days.append(yesterday_s)
+
+    dirty = False
+    stamped = now_ms()
+    chores = {
+        str(c.get("id") or ""): c
+        for c in (state.get("chores") or [])
+        if isinstance(c, dict) and c.get("id")
+    }
+    for day in days:
+        for key in list(applied_map.get(day) or []):
+            key_s = str(key)
+            if ":" not in key_s:
+                continue
+            chore_id, kid_id = key_s.rsplit(":", 1)
+            entry = completion_entry_for(state, day, chore_id, kid_id)
+            if completion_is_cleared(entry):
+                continue
+            chore = chores.get(chore_id) or {"id": chore_id, "title": "Chore"}
+            _mark_chore_missed(
+                state,
+                day=day,
+                chore=chore,
+                kid_id=kid_id,
+                taken=0,
+                stamped=stamped,
+            )
+            dirty = True
+    return dirty
+
+
 def apply_incomplete_penalties(state: dict[str, Any], when: datetime | None = None) -> bool:
     """At cutoff, deduct each still-open chore's star value (skipped/done are exempt)."""
+    dirty = repair_stuck_incomplete_markers(state)
     settings = merged_incomplete_penalty((state.get("settings") or {}).get("incompletePenalty"))
     if not settings["enabled"]:
-        return prune_incomplete_applied(state)
+        if prune_incomplete_applied(state):
+            dirty = True
+        return dirty
 
     now = when or datetime.now()
     today = now.date()
@@ -748,7 +839,6 @@ def apply_incomplete_penalties(state: dict[str, Any], when: datetime | None = No
         applied_map = {}
         state["incompleteApplied"] = applied_map
 
-    dirty = False
     bal = state.setdefault("balances", {})
     bad_hits = state.setdefault("consequenceHits", [])
     stamped = now_ms()
@@ -756,6 +846,7 @@ def apply_incomplete_penalties(state: dict[str, Any], when: datetime | None = No
     for day in days:
         already = {str(key) for key in (applied_map.get(day) or [])}
         day_keys = list(already)
+        day_bucket = state.setdefault("completions", {}).setdefault(day, {})
         for kid in state.get("kids") or []:
             if not isinstance(kid, dict) or kid.get("active") is False:
                 continue
@@ -769,7 +860,7 @@ def apply_incomplete_penalties(state: dict[str, Any], when: datetime | None = No
                 key = f"{chore_id}:{kid_id}"
                 if key in already:
                     continue
-                entry = completion_entry_for(state, day, chore_id, kid_id)
+                entry = day_bucket.get(key)
                 if completion_is_cleared(entry):
                     day_keys.append(key)
                     already.add(key)
@@ -780,15 +871,22 @@ def apply_incomplete_penalties(state: dict[str, Any], when: datetime | None = No
                 day_keys.append(key)
                 already.add(key)
                 dirty = True
-                if penalty <= 0:
-                    continue
 
-                current = int(bal.get(kid_id) or 0)
-                new_bal, applied = apply_star_delta(current, -penalty)
-                bal[kid_id] = new_bal
-                taken = abs(applied)
-                if not taken:
-                    continue
+                taken = 0
+                if penalty > 0:
+                    # Missed chores always take the full star value, even into debt.
+                    current = int(bal.get(kid_id) or 0)
+                    bal[kid_id] = current - penalty
+                    taken = penalty
+
+                _mark_chore_missed(
+                    state,
+                    day=day,
+                    chore=chore,
+                    kid_id=kid_id,
+                    taken=taken,
+                    stamped=stamped,
+                )
 
                 title = f"Missed: {chore.get('title') or 'Chore'}"
                 hit = {
@@ -797,22 +895,25 @@ def apply_incomplete_penalties(state: dict[str, Any], when: datetime | None = No
                     "title": title,
                     "reason": title,
                     "icon": chore.get("icon") or "⚠️",
-                    "stars": taken,
+                    "stars": taken if taken > 0 else penalty,
                     "kind": "bad",
+                    "source": "incomplete",
+                    "choreId": chore_id,
                     "at": stamped,
                 }
                 bad_hits.append(hit)
-                append_star_log(
-                    state,
-                    kidId=kid_id,
-                    type="incomplete",
-                    title=title,
-                    icon=chore.get("icon") or "⚠️",
-                    stars=-taken,
-                    at=stamped,
-                    day=day,
-                    ref=f"incomplete:{chore_id}",
-                )
+                if taken > 0:
+                    append_star_log(
+                        state,
+                        kidId=kid_id,
+                        type="incomplete",
+                        title=title,
+                        icon=chore.get("icon") or "⚠️",
+                        stars=-taken,
+                        at=stamped,
+                        day=day,
+                        ref=f"incomplete:{chore_id}",
+                    )
         applied_map[day] = day_keys
 
     if dirty:

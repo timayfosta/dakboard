@@ -277,10 +277,14 @@
     }
 
     .chore.consequence {
-      cursor: default;
+      cursor: pointer;
       border-color: color-mix(in srgb, var(--alert) 60%, transparent);
       background: color-mix(in srgb, var(--alert) 16%, var(--surface-2));
       opacity: 1;
+    }
+
+    .chore.consequence:active {
+      transform: scale(0.99);
     }
 
     .chore.consequence .chore-text h3 {
@@ -299,10 +303,32 @@
     }
 
     .chore.bonus {
-      cursor: default;
+      cursor: pointer;
       border-color: color-mix(in srgb, var(--mint) 60%, transparent);
       background: color-mix(in srgb, var(--mint) 16%, var(--surface-2));
       opacity: 1;
+    }
+
+    .chore.bonus:active {
+      transform: scale(0.99);
+    }
+
+    .chore.missed {
+      border-color: color-mix(in srgb, var(--alert) 45%, transparent);
+      background: color-mix(in srgb, var(--alert) 10%, var(--surface-2));
+      opacity: 0.78;
+      cursor: default;
+    }
+
+    .chore.missed .chore-text h3 {
+      text-decoration: none;
+      color: var(--ink-soft);
+    }
+
+    .chore.missed .check {
+      background: var(--alert);
+      border-color: var(--alert);
+      color: #fff;
     }
 
     .chore.bonus .chore-text h3 {
@@ -890,7 +916,7 @@
       <section class="quest" aria-label="Chore list">
         <ul class="chore-list active-list" id="activeChores"></ul>
         <div class="done-zone" id="doneZone" hidden>
-          <div class="done-zone-label">Done / Skipped</div>
+          <div class="done-zone-label">Done / Skipped / Missed</div>
           <ul class="chore-list done-list" id="doneChores"></ul>
         </div>
         <div class="all-grid" id="allGrid" hidden></div>
@@ -1050,6 +1076,7 @@
       if (entry === true || typeof entry === "number") return "done";
       const raw = String(entry.status || "").toLowerCase();
       if (raw === "skipped") return "skipped";
+      if (raw === "missed") return "missed";
       return "done";
     }
 
@@ -1061,9 +1088,13 @@
       return completionStatus(choreId, kidId) === "skipped";
     }
 
+    function isMissed(choreId, kidId) {
+      return completionStatus(choreId, kidId) === "missed";
+    }
+
     function isCleared(choreId, kidId) {
       const status = completionStatus(choreId, kidId);
-      return status === "done" || status === "skipped";
+      return status === "done" || status === "skipped" || status === "missed";
     }
 
     function incompleteChores(kidId) {
@@ -1078,12 +1109,17 @@
       return choresForKid(kidId).filter((c) => isSkipped(c.id, kidId));
     }
 
+    function missedChores(kidId) {
+      return choresForKid(kidId).filter((c) => isMissed(c.id, kidId));
+    }
+
     function splitChores(kidId) {
       const all = choresForKid(kidId);
       const todo = all.filter((c) => !isCleared(c.id, kidId));
       const done = all.filter((c) => isDone(c.id, kidId));
       const skipped = all.filter((c) => isSkipped(c.id, kidId));
-      return { todo, done, skipped };
+      const missed = all.filter((c) => isMissed(c.id, kidId));
+      return { todo, done, skipped, missed };
     }
 
     function consequenceHitsForKid(kidId) {
@@ -1105,12 +1141,15 @@
 
     function consequenceRowHtml(hit) {
       const icon = extraHitIcon(hit);
+      const label = hit.source === "incomplete" || String(hit.title || "").startsWith("Missed:")
+        ? "Missed · tap × to clear"
+        : "Extra · tap × to clear";
       return `
-        <li class="chore consequence${icon ? "" : " no-icon"}" data-hit="${hit.id}" aria-label="Extra">
+        <li class="chore consequence${icon ? "" : " no-icon"}" data-hit="${hit.id}" role="button" tabindex="0" aria-label="Clear ${extraHitReason(hit)}">
           ${icon ? `<div class="chore-ico"><span class="emoji">${icon}</span></div>` : ""}
           <div class="chore-text">
             <h3>${extraHitReason(hit)}</h3>
-            <p><span class="stars-badge">★ ${Number(hit.stars) || 0}</span> · Extra</p>
+            <p><span class="stars-badge">★ ${Number(hit.stars) || 0}</span> · ${label}</p>
           </div>
           <div class="check check-circle">×</div>
         </li>`;
@@ -1119,11 +1158,11 @@
     function bonusRowHtml(hit) {
       const icon = extraHitIcon(hit);
       return `
-        <li class="chore bonus${icon ? "" : " no-icon"}" data-hit="${hit.id}" aria-label="Extra">
+        <li class="chore bonus${icon ? "" : " no-icon"}" data-hit="${hit.id}" role="button" tabindex="0" aria-label="Clear ${extraHitReason(hit)}">
           ${icon ? `<div class="chore-ico"><span class="emoji">${icon}</span></div>` : ""}
           <div class="chore-text">
             <h3>${extraHitReason(hit)}</h3>
-            <p><span class="stars-badge">★ ${Number(hit.stars) || 0}</span> · Extra</p>
+            <p><span class="stars-badge">★ ${Number(hit.stars) || 0}</span> · Extra · tap to clear</p>
           </div>
           <div class="check check-circle">★</div>
         </li>`;
@@ -1369,6 +1408,7 @@
     function checkMark(chore, status) {
       const style = chore.checkStyle || "circle";
       if (status === "skipped") return "–";
+      if (status === "missed") return "×";
       if (status !== "done") {
         const empty = { circle: "", square: "", star: "☆", heart: "♡", diamond: "◇" };
         return empty[style] || "";
@@ -1384,19 +1424,23 @@
 
     function choreRowHtml(chore, kidId, status) {
       const style = chore.checkStyle || "circle";
-      const cleared = status === "done" || status === "skipped";
+      const cleared = status === "done" || status === "skipped" || status === "missed";
       const late = !cleared && isPastDue(chore);
       const icon = (() => {
         const raw = String(chore.icon || "").trim();
         return !raw || raw.toLowerCase() === "none" ? "" : raw;
       })();
-      const statusClass = status === "done" ? " done" : status === "skipped" ? " skipped" : "";
+      const statusClass =
+        status === "done" ? " done" : status === "skipped" ? " skipped" : status === "missed" ? " missed" : "";
       const detail =
         status === "skipped"
           ? `<span class="stars-badge">★ 0</span> · Skipped — no penalty`
+          : status === "missed"
+            ? `<span class="stars-badge neg">${formatStarAmount(-Math.abs(choreStars(chore)))}</span> · Missed — stars deducted`
           : `<span class="stars-badge${choreStarsNow(chore, cleared) < 0 ? " neg" : ""}">${formatStarAmount(choreStarsNow(chore, cleared))}</span> · ${choreDescription(chore, cleared)}`;
+      const interactive = status !== "missed";
       return `
-        <li class="chore${statusClass}${late ? " late" : ""}${icon ? "" : " no-icon"}" data-id="${chore.id}" data-kid="${kidId}" data-status="${status || "open"}" role="button" tabindex="0" aria-pressed="${cleared}">
+        <li class="chore${statusClass}${late ? " late" : ""}${icon ? "" : " no-icon"}" data-id="${chore.id}" data-kid="${kidId}" data-status="${status || "open"}" role="${interactive ? "button" : "listitem"}" ${interactive ? 'tabindex="0"' : ""} aria-pressed="${cleared}">
           ${icon ? `<div class="chore-ico"><span class="emoji">${icon}</span></div>` : ""}
           <div class="chore-text">
             <h3>${chore.title}</h3>
@@ -1497,6 +1541,7 @@
       const choreId = el.dataset.id;
       const kidId = el.dataset.kid;
       const status = el.dataset.status || completionStatus(choreId, kidId) || "open";
+      if (status === "missed") return;
       if (status === "done") {
         resolveChore(choreId, kidId, "toggle", el);
         return;
@@ -1512,6 +1557,39 @@
       if (el.dataset.bound === "1") return;
       el.dataset.bound = "1";
       const run = () => onChoreActivate(el);
+      el.addEventListener("click", run);
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          run();
+        }
+      });
+    }
+
+    async function clearBoardHit(hitId, el) {
+      if (state.busy || !hitId) return;
+      state.busy = true;
+      try {
+        if (el) {
+          el.style.opacity = "0.4";
+        }
+        const res = await FamilyAPI.clearExtraHit(hitId);
+        applyResolveState(res);
+        cheer("Cleared");
+        renderAll(true);
+      } catch (err) {
+        cheer("Can't clear — is the server running?");
+        console.warn(err);
+        renderAll(true);
+      } finally {
+        state.busy = false;
+      }
+    }
+
+    function bindExtraHit(el) {
+      if (el.dataset.bound === "1") return;
+      el.dataset.bound = "1";
+      const run = () => clearBoardHit(el.dataset.hit, el);
       el.addEventListener("click", run);
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -1546,14 +1624,15 @@
         return;
       }
 
-      const { todo, done, skipped } = splitChores(kid.id);
-      const cleared = [...done, ...skipped];
+      const { todo, done, skipped, missed } = splitChores(kid.id);
+      const cleared = [...done, ...skipped, ...missed];
       const hits = consequenceHitsForKid(kid.id);
       const bonuses = bonusHitsForKid(kid.id);
       const fp = fingerprint([
         ...todo.map((c) => [c.id, isPastDue(c)]),
         ...done.map((c) => ["done", c.id]),
         ...skipped.map((c) => ["skipped", c.id]),
+        ...missed.map((c) => ["missed", c.id]),
         ...hits.map((h) => h.id),
         ...bonuses.map((h) => h.id),
       ]);
@@ -1574,10 +1653,12 @@
       doneList.innerHTML = [
         ...done.map((c) => choreRowHtml(c, kid.id, "done")),
         ...skipped.map((c) => choreRowHtml(c, kid.id, "skipped")),
+        ...missed.map((c) => choreRowHtml(c, kid.id, "missed")),
       ].join("");
 
       activeList.querySelectorAll(".chore:not(.consequence):not(.bonus)").forEach(bindChore);
-      doneList.querySelectorAll(".chore").forEach(bindChore);
+      activeList.querySelectorAll(".chore.consequence, .chore.bonus").forEach(bindExtraHit);
+      doneList.querySelectorAll(".chore:not(.missed)").forEach(bindChore);
     }
 
     function renderAllGrid(force) {
@@ -1618,6 +1699,7 @@
         .join("");
 
       grid.querySelectorAll(".chore:not(.consequence):not(.bonus)").forEach(bindChore);
+      grid.querySelectorAll(".chore.consequence, .chore.bonus").forEach(bindExtraHit);
     }
 
     function fitProfileChips(root) {

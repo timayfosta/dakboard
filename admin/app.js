@@ -1237,28 +1237,29 @@
   }
 
   function incompletePenaltySettings(d) {
+    const raw = d?.settings?.incompletePenalty || {};
     return {
-      enabled: true,
-      applyTime: "21:00",
-      ...(d?.settings?.incompletePenalty || {}),
+      enabled: raw.enabled !== false && raw.enabled !== "false" && raw.enabled !== 0 && raw.enabled !== "0",
+      applyTime: raw.applyTime || "21:00",
     };
   }
 
   function renderIncompletePenaltyCard(d) {
     const ip = incompletePenaltySettings(d);
+    const on = !!ip.enabled;
     return `
       <section class="card">
         <h2>Missed chore penalty</h2>
         <form id="incompletePenaltyForm">
           <label class="night-toggle">
-            <input type="checkbox" name="enabled" ${ip.enabled ? "checked" : ""} />
-            <span>Deduct each unfinished chore's stars at cutoff</span>
+            <input type="checkbox" name="enabled" id="incompletePenaltyEnabled" ${on ? "checked" : ""} />
+            <span><strong>Penalty ${on ? "ON" : "OFF"}</strong> — ${on ? "unfinished chores lose stars at cutoff" : "no automatic star deductions"}</span>
           </label>
-          <p class="muted field-hint">Admin only. At the time below, every chore that is still open (not completed and not skipped) deducts that chore's star value from the child. Skipped chores have no penalty.</p>
+          <p class="muted field-hint">Uncheck to turn the feature completely off. When on, every chore still open at cutoff (not completed and not skipped) deducts that chore's star value. Skipped chores have no penalty.</p>
           <div class="ss-grid">
             <label>
               Apply at
-              <input type="time" name="applyTime" value="${escAttr(ip.applyTime || "21:00")}" />
+              <input type="time" name="applyTime" id="incompletePenaltyTime" value="${escAttr(ip.applyTime || "21:00")}" ${on ? "" : "disabled"} />
             </label>
           </div>
           <button class="btn block" type="submit">Save missed-chore penalty</button>
@@ -2618,19 +2619,35 @@
 
     const incompletePenaltyForm = $("#incompletePenaltyForm");
     if (incompletePenaltyForm) {
+      const enabledInput = incompletePenaltyForm.querySelector("#incompletePenaltyEnabled");
+      const timeInput = incompletePenaltyForm.querySelector("#incompletePenaltyTime");
+      const syncIncompletePenaltyUi = () => {
+        const on = !!enabledInput?.checked;
+        if (timeInput) timeInput.disabled = !on;
+        const label = enabledInput?.closest("label")?.querySelector("span");
+        if (label) {
+          label.innerHTML = on
+            ? "<strong>Penalty ON</strong> — unfinished chores lose stars at cutoff"
+            : "<strong>Penalty OFF</strong> — no automatic star deductions";
+        }
+      };
+      enabledInput?.addEventListener("change", syncIncompletePenaltyUi);
+      syncIncompletePenaltyUi();
+
       incompletePenaltyForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const fd = new FormData(incompletePenaltyForm);
         const btn = incompletePenaltyForm.querySelector('button[type="submit"]');
+        const enabled = !!enabledInput?.checked;
         try {
           if (btn) btn.disabled = true;
           await AdminAPI.saveSettings(state.token, {
             incompletePenalty: {
-              enabled: fd.has("enabled"),
-              applyTime: fd.get("applyTime") || "21:00",
+              enabled,
+              applyTime: fd.get("applyTime") || timeInput?.value || "21:00",
             },
           });
-          toast("Missed-chore penalty saved");
+          toast(enabled ? "Missed-chore penalty ON" : "Missed-chore penalty OFF");
           await refresh();
         } catch (err) {
           toast(apiErrorMessage(err));

@@ -26,6 +26,17 @@
     return toggleChore(choreId, kidId, action);
   }
 
+  async function clearExtraHit(hitId) {
+    const res = await fetch("/api/family/extra-hits/clear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hitId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Clear failed");
+    return data;
+  }
+
   function isKioskDisplay() {
     return (
       document.body.classList.contains("kiosk") ||
@@ -108,6 +119,7 @@
     getState,
     toggleChore,
     resolveChore,
+    clearExtraHit,
     toggleListItem,
     addListItem,
     restoreListItem,
