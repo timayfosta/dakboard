@@ -5,6 +5,7 @@
   const isKiosk = new URLSearchParams(location.search).has("kiosk");
   const POLL_MS = inEmbed || inFrame || isKiosk ? 5000 : 2000;
   let lastRevision = -1;
+  let lastToday = "";
   let syncing = false;
   let showSyncTimer = null;
 
@@ -51,13 +52,18 @@
     try {
       const res = await fetch("/api/family/revision", { cache: "no-store" });
       if (!res.ok) return;
-      const { revision } = await res.json();
-      if (revision === lastRevision) return;
+      const payload = await res.json();
+      const revision = payload.revision;
+      const today = payload.today || "";
+      const dayChanged = !!(today && lastToday && today !== lastToday);
+      if (today) lastToday = today;
+      if (revision === lastRevision && !dayChanged) return;
       lastRevision = revision;
 
       if (!window.FamilyAPI?.getState) return;
       const scope = detectScope();
       const data = await FamilyAPI.getState(scope === "full" ? undefined : { scope });
+      if (data?.today) lastToday = data.today;
       window.dispatchEvent(new CustomEvent("family-state-update", { detail: data }));
       window.dispatchEvent(
         new CustomEvent("family-settings-update", { detail: data.settings || {} })

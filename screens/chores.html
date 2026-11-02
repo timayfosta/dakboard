@@ -347,7 +347,26 @@
     }
 
     .chore.late {
-      border-color: color-mix(in srgb, var(--gold-ink) 45%, transparent);
+      border-color: color-mix(in srgb, var(--alert) 55%, transparent);
+      background: color-mix(in srgb, var(--alert) 12%, var(--surface-2));
+    }
+
+    .chore.late .check {
+      border-color: var(--alert);
+      color: var(--alert);
+    }
+
+    .late-pill {
+      display: inline-block;
+      margin-left: 0.35rem;
+      padding: 0.08rem 0.4rem;
+      border-radius: 999px;
+      font-size: 0.72em;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      vertical-align: middle;
+      background: var(--alert);
+      color: #fff;
     }
 
     .chore.is-leaving,
@@ -1439,11 +1458,12 @@
             ? `<span class="stars-badge neg">${formatStarAmount(-Math.abs(choreStars(chore)))}</span> · Missed — stars deducted`
           : `<span class="stars-badge${choreStarsNow(chore, cleared) < 0 ? " neg" : ""}">${formatStarAmount(choreStarsNow(chore, cleared))}</span> · ${choreDescription(chore, cleared)}`;
       const interactive = status !== "missed";
+      const titleExtra = late ? `<span class="late-pill">LATE</span>` : status === "missed" ? `<span class="late-pill">MISSED</span>` : "";
       return `
         <li class="chore${statusClass}${late ? " late" : ""}${icon ? "" : " no-icon"}" data-id="${chore.id}" data-kid="${kidId}" data-status="${status || "open"}" role="${interactive ? "button" : "listitem"}" ${interactive ? 'tabindex="0"' : ""} aria-pressed="${cleared}">
           ${icon ? `<div class="chore-ico"><span class="emoji">${icon}</span></div>` : ""}
           <div class="chore-text">
-            <h3>${chore.title}</h3>
+            <h3>${chore.title}${titleExtra}</h3>
             <p>${detail}</p>
           </div>
           <div class="check check-${style}">${checkMark(chore, status)}</div>
@@ -1806,6 +1826,7 @@
     }
 
     function applyState(data, forceRender) {
+      const dayChanged = !!(state.data?.today && data?.today && state.data.today !== data.today);
       const nextFp = fingerprint({
         kids: data.kids,
         chores: data.chores,
@@ -1815,9 +1836,9 @@
         bonusHits: data.bonusHits,
         today: data.today,
       });
-      if (!forceRender && nextFp === state.fingerprints.data) return;
+      if (!forceRender && !dayChanged && nextFp === state.fingerprints.data) return;
       state.fingerprints.data = nextFp;
-      if (state.data?.today && state.data.today !== data.today) {
+      if (dayChanged) {
         Object.keys(localStorage).forEach((k) => {
           if (k.startsWith("fb-chore-win:") || k.startsWith("fb-chore-remind:")) {
             if (!k.includes(data.today)) localStorage.removeItem(k);
@@ -1825,12 +1846,12 @@
         });
       }
       state.data = data;
-      if (forceRender) {
+      if (forceRender || dayChanged) {
         state.fingerprints.kids = "";
         state.fingerprints.chores = "";
         state.fingerprints.all = "";
       }
-      renderAll(forceRender);
+      renderAll(forceRender || dayChanged);
     }
 
     async function load(forceRender) {

@@ -229,10 +229,28 @@ def load_db() -> dict[str, Any]:
 
 
 def peek_revision() -> int:
+    """Return revision, running day rollover / missed-chore penalties first.
+
+    Kiosk displays poll this endpoint; without prepare_state here, a quiet night
+    never bumps revision, so chores never reset and 21:00 penalties never apply.
+    """
     with _lock:
-        if _cache_state is None:
-            _load_unlocked()
+        state = _load_unlocked()
+        if prepare_state(state):
+            _save_unlocked(state)
         return _cache_revision
+
+
+def revision_snapshot() -> dict[str, Any]:
+    """Revision plus today key so clients can force-refresh on calendar day change."""
+    with _lock:
+        state = _load_unlocked()
+        if prepare_state(state):
+            _save_unlocked(state)
+        return {
+            "revision": _cache_revision,
+            "today": today_key(),
+        }
 
 
 def get_lists_snapshot() -> dict[str, Any]:
